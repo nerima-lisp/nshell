@@ -1,0 +1,1523 @@
+{
+ "description": "nshell v0.7.0 (main 083f1603) を SBCL 2.6.9 でビルドし、各 input をスクリプトファイルとして `nshell FILE` で実行した結果。HOME/XDG は一時ディレクトリ、NO_COLOR=1、LANG=C.UTF-8、stdin は /dev/null。$WORK は作業ディレクトリ。",
+ "count": 151,
+ "cases": [
+  {
+   "id": "sort-in-value",
+   "src": "(echo ,(sort (list 3 1 2) (function <)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: source: incomplete reader input\nsource: $WORK/case.nsh: source: incomplete reader input\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "find-in-value",
+   "src": "(echo ,(find 2 (list 1 2 3)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "length-in-value",
+   "src": "(echo ,(length (list 1 2 3)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "3\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "format-top",
+   "src": "(format t \"fmt-ok~%\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "fmt-ok\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "print-top",
+   "src": "(print 42)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "\n42 42\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "sleep-head",
+   "src": "(sleep 0)\n(echo after-sleep)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "after-sleep\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "set-builtin",
+   "src": "(set x 1)\n(echo $x)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "toplevel-value",
+   "src": "(+ 1 2)\n(list 1 2)\n(echo end)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "3\n(1 2)\nend\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "case-cmd",
+   "src": "(echo Hello WORLD)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "Hello WORLD\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "case-if",
+   "src": "(IF t (echo upper-if) (echo no))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "upper-if\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "case-keyword",
+   "src": "(echo ,(getf (list :Name 1 :name 2) :name))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "kw-arg",
+   "src": "(echo :foo :Bar)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "foo Bar\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "num-arg",
+   "src": "(echo 1.50 007 1/2 #x10 1e3)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "1.50 007 1/2 #x10 1e3\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "nil-t",
+   "src": "(echo nil t NIL)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "nil t NIL\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "quote-arg",
+   "src": "(echo 'x '(a b))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "escaped-sym",
+   "src": "(echo |Foo Bar| a\\ b)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "Foo Bar a\\ b\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dash-arg",
+   "src": "(echo -n dash-ok)\n(echo)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "-n dash-ok\n\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "string-nointerp",
+   "src": "(echo \"home=$HOME\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "home=$HOME\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "string-escapes",
+   "src": "(echo \"a\\nb\" \"t\\tx\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "anb ttx\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dollar-list",
+   "src": "(set xs a b c)\n(echo $xs)\n(^printf \"[%s]\" $xs)\n(echo)\n(^printf \"[%s]\" \"$xs\")\n(echo)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a b c\n[a b c]\n[$xs]\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dollar-undefined",
+   "src": "(echo \"<\" $NOPE_UNDEF \">\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "<  >\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dollar-env",
+   "src": "(echo $HOME)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "$WORK/home\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dollar-braced",
+   "src": "(echo ${HOME})\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "argv-top",
+   "src": "(echo $argv)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "let-dollar",
+   "src": "(let ((n 3)) (echo $n ,n))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "3 3\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "unquote-list",
+   "src": "(^printf \"[%s]\" ,(list 1 2 3))\n(echo)\n(^printf \"[%s]\" ,@(list 1 2 3))\n(echo)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "unquote-atoms",
+   "src": "(echo ,nil ,t ,:kw ,\"str\" ,1.5 ,#\\a)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": " T kw str 1.5 a\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "unquote-string-spaces",
+   "src": "(^printf \"[%s]\" ,\"a b\")\n(echo)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "[a b]\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "glob",
+   "src": "(echo *.txt)\n(echo \"*.txt\")\n(echo ,\"*.txt\")\n",
+   "files": {
+    "a.txt": "",
+    "b.txt": ""
+   },
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a.txt b.txt\n*.txt\n*.txt\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "tilde",
+   "src": "(echo ~ ~/x \"~\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "$WORK/home $WORK/home/x ~\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "redir-1",
+   "src": "(echo hi > out1.txt)\n(^cat out1.txt)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "hi\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "redir-2",
+   "src": "(echo hi (> \"out2.txt\"))\n(^cat out2.txt)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The value\n                                              \"out2.txt\"\n                                            is not of type\n                                              REAL\n                                            when binding SB-KERNEL::N1\nsource: $WORK/case.nsh: The value\n                                              \"out2.txt\"\n                                            is not of type\n                                              REAL\n                                            when binding SB-KERNEL::N1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "redir-3",
+   "src": "(> out3.txt (echo hi))\n(^cat out3.txt)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "hi\nsource: $WORK/case.nsh: The value\n                                              \"\"\n                                            is not of type\n                                              REAL\n                                            when binding SB-KERNEL::N1\nsource: $WORK/case.nsh: The value\n                                              \"\"\n                                            is not of type\n                                              REAL\n                                            when binding SB-KERNEL::N1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "redir-stderr",
+   "src": "(^ls /nonexistent 2> err.txt)\n(^wc -l err.txt)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "1 err.txt\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "pipe-sexp",
+   "src": "(| (echo hi) (tr a-z A-Z))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "HI\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "pipe-sexp-ext",
+   "src": "(| (echo hi) (^tr a-z A-Z))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "HI\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "pipe-amp",
+   "src": "(|& (^ls /nonexistent) (^wc -l))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "pipe-mixed-1",
+   "src": "echo hi | (tr a-z A-Z)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Command execution plan failed during :WAIT: Condition NSHELL.APPLICATION:BYTE-STREAM-EXECUTION-ERROR was signalled.\nsource: $WORK/case.nsh: Command execution plan failed during :WAIT: Condition NSHELL.APPLICATION:BYTE-STREAM-EXECUTION-ERROR was signalled.\n",
+    "stderr": "nshell: (tr a-z A-Z): command not found\n"
+   }
+  },
+  {
+   "id": "pipe-mixed-2",
+   "src": "(echo hi) | tr a-z A-Z\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: source: incomplete reader input\nsource: $WORK/case.nsh: source: incomplete reader input\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cmd-in-value",
+   "src": "(echo ,(echo inner))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\nsource: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cmd-let",
+   "src": "(let ((x (echo inner2))) (echo got ,x))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "inner2\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cmd-capture-dollar",
+   "src": "(echo $(echo cap))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\nsource: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cmd-capture-bare",
+   "src": "echo $(echo cap2) \"q $(echo cap3)\"\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "cap2 q cap3\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "test-pos",
+   "src": "(if (test -e case.nsh) (echo yes) (echo no))\n(if (false) (echo wrong) (echo right))\n(and (true) (echo and-ok))\n(or (false) (echo or-ok))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "yes\nright\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "status-var",
+   "src": "(false)\n(echo s=$status q=$?)\n(true)\n(echo s=$status)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "s=1 q=1\ns=0\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "eq-status",
+   "src": "(echo ,(= (false) 1))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "T\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-seq",
+   "src": "echo a; echo b\nfalse && echo x || echo y\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a\nb\ny\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-fish-if",
+   "src": "if test 1 = 1\n echo fish-if\nend\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 127,
+    "stdout": "fish-if\n",
+    "stderr": "nshell: if: command not found\nnshell: end: command not found\n"
+   }
+  },
+  {
+   "id": "bare-posix-if",
+   "src": "if true; then echo posix-if; fi\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 127,
+    "stdout": "",
+    "stderr": "nshell: if: command not found\nnshell: then: command not found\nnshell: fi: command not found\n"
+   }
+  },
+  {
+   "id": "bare-for",
+   "src": "for i in 1 2\n echo i=$i\nend\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 127,
+    "stdout": "i=\n",
+    "stderr": "nshell: for: command not found\nnshell: end: command not found\n"
+   }
+  },
+  {
+   "id": "bare-assign",
+   "src": "FOO=bar sh -c \"echo foo=\\$FOO\"\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "foo=bar\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-paren-mid",
+   "src": "echo (+ 1 2)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "\n",
+    "stderr": "nshell: +: command not found\n"
+   }
+  },
+  {
+   "id": "bare-leading-space",
+   "src": "   (echo leading-space)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "leading-space\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-heredoc",
+   "src": "cat <<EOF\nline1\nEOF\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "line1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-herestring",
+   "src": "cat <<< here\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "here\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-background",
+   "src": "sleep 0 &\nwait\necho bg-ok\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "bg-ok\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-comment",
+   "src": "echo c1 # comment\n# whole\necho c2\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "c1\nc2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "sexp-comments",
+   "src": "(echo s1) ; c\n#| block |#\n(echo s2)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "s1\ns2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "defun-args",
+   "src": "(defun f (a b) (echo a=$a b=$b))\n(f 1 2)\nf 3 4\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a=1 b=2\na=3 b=4\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "defun-rest",
+   "src": "(defun g (&rest xs) (echo ,@xs))\n(g x y z)\ng p q\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "  \np q\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "defun-return",
+   "src": "(defun h () 42)\n(echo ,(h))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "42\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "defun-shadow-ls",
+   "src": "(defun ls () (echo my-ls))\n(ls)\nls\n(^ls -d .)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "my-ls\nmy-ls\n.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "err-unknown",
+   "src": "(nosuchcmd-xyz)\n(echo after)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "after\n",
+    "stderr": "nshell: nosuchcmd-xyz: command not found\n"
+   }
+  },
+  {
+   "id": "err-unbalanced",
+   "src": "(echo a\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "nshell: $WORK/case.nsh:1:8: syntax error [7,7): Expected a datum.\n"
+   }
+  },
+  {
+   "id": "err-lisp",
+   "src": "(echo ,(car 1))\n(echo after-lisp-error)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The value\n                                              1\n                                            is not of type\n                                              LIST\n                                            when binding LIST\nsource: $WORK/case.nsh: The value\n                                              1\n                                            is not of type\n                                              LIST\n                                            when binding LIST\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "err-where",
+   "src": "(echo ,(where '((:a 1)) (> :a 0)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "nshell: $WORK/case.nsh:1:1: syntax error [0,0): WHERE supports only (= :keyword value), got (> :|a| 0)\n"
+   }
+  },
+  {
+   "id": "eval-string",
+   "src": "(eval \"echo E1\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "E1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "alias-sexp",
+   "src": "alias ll 'echo LL'\n(ll)\nll\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "LL\nLL\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cd-pwd",
+   "src": "(cd /tmp)\n(pwd)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "/tmp\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "value-pipe",
+   "src": "(echo ,(to-json (-> '((:a 1) (:a 2)) (select :a))))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The value\n                                              :|a|\n                                            is not of type\n                                              (OR NULL STRING REAL\n                                                  (SATISFIES\n                                                   NSHELL.USER::%PROPER-LIST-P))\nsource: $WORK/case.nsh: The value\n                                              :|a|\n                                            is not of type\n                                              (OR NULL STRING REAL\n                                                  (SATISFIES\n                                                   NSHELL.USER::%PROPER-LIST-P))\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "json-roundtrip",
+   "src": "(echo ,(to-json (from-json \"{\\\"k\\\":[1,2]}\")))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "{\"k\":[1,2]}\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "multiline",
+   "src": "(echo\n  multi\n  line)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "multi line\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "progn-mixed",
+   "src": "(progn (echo p1) (echo p2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "p1\np2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "loop-cmd",
+   "src": "(loop for i from 1 to 2 do (echo i ,i))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "nshell: $WORK/case.nsh:1:1: syntax error [0,39): unknown LOOP keyword: NSHELL.USER::|for| current LOOP context: NSHELL.USER::|for| NSHELL.USER::|i|.\n"
+   }
+  },
+  {
+   "id": "dotimes-dollar",
+   "src": "(dotimes (i 2) (echo $i))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "0\n1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "lt-host",
+   "src": "(echo ,(< 1 2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "T\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "gt-if",
+   "src": "(if (> 2 1) (echo gt-yes) (echo gt-no))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "gt-yes\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "lt-if",
+   "src": "(if (< 1 2) (echo lt-yes) (echo lt-no))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "lt-yes\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "fn-quote",
+   "src": "(echo ,(mapcar #'1+ (list 1 2)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "splice",
+   "src": "(^printf \"[%s]\" ,@(list 1 2 3))\n(echo)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "[1][2][3]\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "splice-str",
+   "src": "(^printf \"[%s]\" ,@(list \"a b\" \"c\"))\n(echo)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "[a b][c]\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "quote-sym",
+   "src": "(echo 'x)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "x\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "quote-list",
+   "src": "(echo '(a b))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cmd-value",
+   "src": "(let ((x (true))) (echo ,(type-of x) ,x))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cmd-value-false",
+   "src": "(let ((x (false))) (echo ,(type-of x) ,x))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-FAILED was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-FAILED was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "and-cmd",
+   "src": "(and (true) (echo and-ok))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "or-cmd",
+   "src": "(or (false) (echo or-ok))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "and-in-if",
+   "src": "(if (and (true) (true)) (echo both))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "both\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "not-cmd",
+   "src": "(if (not (false)) (echo not-ok))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "not-ok\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "when-cmd-body",
+   "src": "(when t (echo w1) (echo w2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "w1\nw2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "progn-value",
+   "src": "(echo ,(progn 1 2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cl-sort-top",
+   "src": "(sort (list 3 1 2) #'<)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cl-last",
+   "src": "(echo ,(last (list 1 2 3)))\n(last (list 1 2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "string-upcase",
+   "src": "(echo ,(string-upcase \"abc\"))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "ABC\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "loop-upper",
+   "src": "(LOOP FOR i FROM 1 TO 2 DO (echo i ,i))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\nsource: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\n",
+    "stderr": "; in: LET ()\n;     (NSHELL.USER::|echo| NSHELL.USER::|i| ,NSHELL.USER::|i|)\n; \n; caught STYLE-WARNING:\n;   undefined function: NSHELL.USER::|echo|\n; \n; compilation unit finished\n;   Undefined function:\n;     |echo|\n;   caught 1 STYLE-WARNING condition\n"
+   }
+  },
+  {
+   "id": "kw-host",
+   "src": "(echo ,(getf (list :name \"n\") :name))\n(echo ,(position 2 (list 1 2) :test (function =)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "n\nsource: $WORK/case.nsh: Unknown &KEY argument: :|test|\nsource: $WORK/case.nsh: Unknown &KEY argument: :|test|\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "kw-host-upper",
+   "src": "(echo ,(position 2 (list 1 2) :TEST (function =)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "defun-sym-args",
+   "src": "(defun g2 (a) (echo got=$a))\n(g2 sym)\n(g2 \"str\")\n(g2 ,(+ 1 1))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "got=\ngot=str\nsource: $WORK/case.nsh: The value\n                                              ,(+ 1 1)\n                                            is not of type\n                                              (OR STRING CHARACTER NUMBER\n                                                  (AND SYMBOL (NOT (EQL NIL))))\nsource: $WORK/case.nsh: The value\n                                              ,(+ 1 1)\n                                            is not of type\n                                              (OR STRING CHARACTER NUMBER\n                                                  (AND SYMBOL (NOT (EQL NIL))))\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "defun-lisp-call",
+   "src": "(defun sq (n) (* n n))\n(echo ,(sq 3))\n(sq 4)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "9\n16\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "var-set-sexp-list",
+   "src": "(set xs a b)\n(echo ,(type-of xs))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "var-dollar-in-value",
+   "src": "(set v hello)\n(echo ,(string-upcase $v))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The function NSHELL.USER::UNQUOTE\n                                            is undefined.\nsource: $WORK/case.nsh: The function NSHELL.USER::UNQUOTE\n                                            is undefined.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dollar-in-host",
+   "src": "(set v hello)\n(if (string= $v \"hello\") (echo eq))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-FAILED was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-FAILED was signalled.\n",
+    "stderr": "nshell: $: command not found\n"
+   }
+  },
+  {
+   "id": "redir-append",
+   "src": "(echo a > o.txt)\n(echo b >> o.txt)\n(^cat o.txt)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a\nb\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "redir-in",
+   "src": "(^cat < in.txt)\n",
+   "files": {
+    "in.txt": "from-in\n"
+   },
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "from-in\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "redir-2to1",
+   "src": "(^ls /nonexistent 2>&1 > o2.txt)\n(^cat o2.txt)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "/usr/bin/ls: cannot access '/nonexistent': No such file or directory\n/usr/bin/ls: cannot access '2>&1': No such file or directory\n"
+   }
+  },
+  {
+   "id": "redir-str-target",
+   "src": "(echo hi > \"out file.txt\")\n(^cat \"out file.txt\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "hi\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "redir-value-target",
+   "src": "(echo hi > ,(concatenate (quote string) \"o\" \"3.txt\"))\n(^cat o3.txt)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: source: incomplete reader input\nsource: $WORK/case.nsh: source: incomplete reader input\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bg-sexp",
+   "src": "(sleep 0 &)\n(echo after-bg)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "after-bg\n",
+    "stderr": "/usr/bin/sleep: invalid time interval ‘&’\nTry '/usr/bin/sleep --help' for more information.\n"
+   }
+  },
+  {
+   "id": "procsub-sexp",
+   "src": "(^cat <(echo ps))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "ps\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "procsub-bare",
+   "src": "cat <(echo psb)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "psb\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-fish-subst",
+   "src": "echo (echo fs)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "fs\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-var-list",
+   "src": "set ys a b c\necho $ys[2]\n(echo $ys[2])\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "\n\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-dquote",
+   "src": "set n world\necho \"hi $n\" 'hi $n'\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "hi world hi $n\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-backslash",
+   "src": "echo a\\ b\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a b\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bare-math",
+   "src": "echo $((1 + 2 * 3))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "7\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "brace",
+   "src": "echo {a,b}c\n(echo {a,b}c)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "ac bc\n{a \n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "exit-code-script",
+   "src": "(false)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "errexit-like",
+   "src": "(handler-case (progn (^false) (echo after-false)) (command-failed () (echo caught)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "caught\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "handler-upper",
+   "src": "(handler-case (^false) (COMMAND-FAILED () (echo caught-upper)))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "caught-upper\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "str-split",
+   "src": "(echo ,(join-strings (split-string \"a,b\" \",\") \"-\"))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a-b\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "regex",
+   "src": "(echo ,(regex-match-p \"^a\" \"abc\"))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "T\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "unicode",
+   "src": "(echo 日本語 \"かな\")\n(echo ,(length \"日本\"))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "日本語 かな\n2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "comma-in-word",
+   "src": "(echo a,b)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a \n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dollar-word",
+   "src": "(echo price$5)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "price$5\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "semicolon-word",
+   "src": "(echo a;b)\n(echo c)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "nshell: $WORK/case.nsh:1:11: syntax error [10,10): Expected a datum.\n"
+   }
+  },
+  {
+   "id": "hash-word",
+   "src": "(echo a#b)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a#b\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "pipe-char-word",
+   "src": "(echo a|b)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 2,
+    "stdout": "",
+    "stderr": "nshell: $WORK/case.nsh:1:7: syntax error [6,10): Unterminated escaped symbol.\n"
+   }
+  },
+  {
+   "id": "amp-word",
+   "src": "(echo a&b)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a&b\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dot-word",
+   "src": "(echo . .. ./x)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": ". .. ./x\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "colon-word",
+   "src": "(echo a:b http://x.y/z)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "a:b http://x.y/z\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "nested-cmd-arg",
+   "src": "(echo (echo nested))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\nsource: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "nested-lisp-arg",
+   "src": "(echo (+ 1 2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "3\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "set-list-bare",
+   "src": "set ys a b c\nprintf \"[%s]\" $ys\necho\ncount $ys\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "[a b c]\n1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "set-list-sexp",
+   "src": "(set ys a b c)\n(count $ys)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "1\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "argv-index-fn",
+   "src": "(defun f2 (&rest r) (echo $argv[1]))\nf2 p q\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "p\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "bang",
+   "src": "! false && echo bang-ok\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 127,
+    "stdout": "",
+    "stderr": "nshell: !: command not found\n"
+   }
+  },
+  {
+   "id": "not-bare",
+   "src": "not false; and echo not-and\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "not-and\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "pipestatus",
+   "src": "false | true\necho $status $pipestatus\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "0 1 0\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "export",
+   "src": "(set -x NSHX val)\n(^sh -c \"echo $NSHX\")\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "val\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "export-env",
+   "src": "set -x NSHY val2\nsh -c 'echo $NSHY'\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "val2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "script-args",
+   "src": "(echo $argv)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "define-shell-fn",
+   "src": "(define-shell-function sf (a) (echo sf=$a))\n(sf word)\nsf w2\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "sf=word\nsf=w2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "time-head",
+   "src": "(time (+ 1 2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The value\n                                              #<FUNCTION SB-IMPL::PRINT-TIME>\n                                            is not of type\n                                              (OR STRING CHARACTER NUMBER\n                                                  (AND SYMBOL (NOT (EQL NIL))))\nsource: $WORK/case.nsh: The value\n                                              #<FUNCTION SB-IMPL::PRINT-TIME>\n                                            is not of type\n                                              (OR STRING CHARACTER NUMBER\n                                                  (AND SYMBOL (NOT (EQL NIL))))\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "join-head",
+   "src": "(join a b)\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "/usr/bin/join: a: No such file or directory\n"
+   }
+  },
+  {
+   "id": "question",
+   "src": "(echo ?)\n(echo a?)\n",
+   "files": {
+    "ab": ""
+   },
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "?\nab\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "dollar-paren-sexp-word",
+   "src": "(echo x$(echo y))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\nsource: $WORK/case.nsh: The function NSHELL.USER::|echo| is\n                                            undefined.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "cl-sort",
+   "src": "(echo ,(cl:sort (list 3 1 2) #'<))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "sharp-eq",
+   "src": "(echo ,(position 2 (list 1 2) :test #'=))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Unknown &KEY argument: :|test|\nsource: $WORK/case.nsh: Unknown &KEY argument: :|test|\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "last-top",
+   "src": "(last (list 1 2))\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 1,
+    "stdout": "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\nsource: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "glob-nomatch",
+   "src": "(echo *.nomatch)\necho *.nomatch2\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "*.nomatch\n*.nomatch2\n",
+    "stderr": ""
+   }
+  },
+  {
+   "id": "mid-dollar",
+   "src": "(set x v)\n(echo pre$x ${x}post)\necho pre$x\n",
+   "files": {},
+   "observed_v0_7_0": {
+    "exit": 0,
+    "stdout": "prev \nprev\n",
+    "stderr": ""
+   }
+  }
+ ]
+}

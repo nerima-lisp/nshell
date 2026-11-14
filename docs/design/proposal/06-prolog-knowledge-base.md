@@ -1,0 +1,192 @@
+# cl-prolog-kit をもっと活かす
+
+## いまの使い方
+
+補完の知識ベースだけで使っており、規則は 3 本 (登録コマンド・サブコマンド・フラグから completes を導く)。実質は表引きです。一方 cl-prolog-kit 自体は、cut・否定・findall / setof・assert・tabling・CLP(FD)・DCG・foreign predicate・.pl ファイルの読み込みまで備えています。
+
+表引きだけなら Prolog は要りません。使い方を変えれば、nshell の中核になれます。
+
+## 考え方: 1 つの「シェル知識ベース」を全機能で共有する
+
+シェルが知っている事実をすべて 1 つの rulebase に集め、補完・危険度判定・エラー診断・型検査が同じ規則に問い合わせます。規則はデータなので、人も AI も読めて、書き足せて、テストできます。
+
+事実の供給元
+
+- builtin の spec
+- コマンドカタログと --help の解析結果
+- 履歴 (cwd・status・所要時間)
+- ジョブ・環境変数・abbr
+- git の状態 (必要なときだけ)
+- ファイルの種類・場所 (必要なときだけ)
+
+›
+
+シェル知識ベース
+
+- 事実: command / flag / effect / produces …
+- 規則: classify / diagnose / next_stage …
+- ユーザー規則: ~/.config/nshell/rules.pl
+- 外部状態は foreign predicate で遅延取得
+
+›
+
+問い合わせる側
+
+- 補完とハイライト
+- explain と危険度 (safe / confirm / block)
+- ai why の一次診断
+- 値パイプラインの型検査
+- S式の (?- …) と MCP の query
+- nshell doctor
+
+### A. 安全ポリシーを規則で書く
+
+追加
+
+いまの静的解析 (safety.lisp 約500行) を規則に置き換える。証明に使った規則がそのまま「理由」になり、explain・--json・MCP の承認画面に出せる。利用者は rules.pl で自分の規則を足せる。
+
+```
+classify(C, block, 'ルートの再帰削除') :-
+    command(C, rm), flag(C, recursive),
+    operand(C, P), root_path(P), !.
+classify(C, confirm, '強制 push') :-
+    command(C, git), subcommand(C, push),
+    flag(C, force), !.
+classify(C, confirm, 'プロジェクト外への書き込み') :-
+    effect(C, writes(P)), \+ inside_project(P), !.
+classify(_, safe, '該当する規則なし').
+```
+
+使うエンジン機能: cut・否定・foreign predicate
+
+### B. コマンドの効果モデル
+
+追加
+
+各コマンドが「読む・書く・消す・ネットワーク・権限昇格」のどれをするかを事実で持ち、パイプラインやリダイレクトを通して合成する。A の判定と、実行前の要約 (src/ を削除・ネットワーク接続あり) に使う。
+
+```
+effect(C, deletes(P)) :- command(C, rm), operand(C, P).
+effect(C, writes(P))  :- redirect(C, '>', P).
+effect(C, network)    :- command(C, N), network_command(N).
+network_command(curl).  network_command(ssh).
+
+pipeline_effects(Pl, Es) :-
+    setof(E, S^(stage(Pl, S), effect(S, E)), Es).
+```
+
+使うエンジン機能: setof・事実の合成
+
+### C. ai why の一次診断をオフラインで
+
+追加
+
+失敗したコマンドの status・stderr・文脈から、規則で原因と修正案を出す。決定的で速く、理由も示せる。規則に当たらないときだけ LLM に渡す。AI に規則とテストを書かせやすい。
+
+```
+diagnose(R, fix(New), 'コマンド名の打ち間違い') :-
+    status(R, 127), command_name(R, Bad),
+    known_command(Good), edit_distance(Bad, Good, D),
+    D =< 2, retype(R, Good, New).
+diagnose(R, fix('git pull --rebase'), 'リモートが先行') :-
+    command(R, git), subcommand(R, push),
+    stderr_has(R, 'non-fast-forward').
+```
+
+使うエンジン機能: foreign predicate (編集距離・stderr 検索)
+
+### D. 値パイプラインの型検査
+
+追加
+
+ビルトインが返すレコードの型と、変換が受け取る型を事実で持つ。-> の連鎖を実行前に検査し、型に合う次の段だけを補完する。to-json の差し込みなど修正案も出せる。
+
+```
+produces(jobs,    list(record(job))).
+produces(history, list(record(history))).
+transforms(where,   list(T), list(T)).
+transforms(select,  list(record(_)), list(record(partial))).
+transforms(to_json, _, text).
+
+next_stage(In, F) :- transforms(F, In, _).
+```
+
+使うエンジン機能: 単一化による型の照合
+
+### E. 文法としての補完 (DCG)
+
+簡素化
+
+コマンドの引数の並びを DCG で書く。入力途中の行を解析すれば「次に来られるもの」が分かり、補完・誤ったフラグのハイライト・排他オプションの検査が 1 つの定義から出る。--help の解析結果もこの形に変換する。
+
+```
+git     --> [git], git_sub.
+git_sub --> [checkout], branch.
+git_sub --> [commit], commit_opts.
+commit_opts --> [].
+commit_opts --> ['-m'], message, commit_opts.
+commit_opts --> ['--amend'], commit_opts.
+branch  --> [B], { git_branch(B) }.
+```
+
+使うエンジン機能: DCG・foreign predicate (git ブランチ)
+
+### F. 論理クエリをシェル言語に入れる
+
+追加
+
+S式に (?- …) を足し、履歴・ジョブ・ファイルなどの事実へ問い合わせて結果をレコードで返す。-> にそのまま流せる。--serve と MCP にも query として出し、AI が推測せずに事実を引けるようにする。
+
+```
+(?- (history ?cmd :cwd ?dir :status ?s)
+    (/= ?s 0)
+    (prefix ?cmd "make"))
+
+(-> (?- (has-flag tar ?f) (describes tar ?f ?d))
+    (select :f :d)
+    (to-json))
+```
+
+使うエンジン機能: findall・tabling (再帰的な問い合わせ)
+
+### G. nshell doctor と次のコマンドの提案
+
+追加
+
+設定の矛盾 (コマンドを隠す abbr、キー割り当ての衝突、ループする alias) を規則で検出する。直前の結果と状態から次の一手を提案する (commit 後で先行していれば push)。
+
+```
+problem(abbr_shadows(A)) :-
+    abbr(A, _), command_on_path(A).
+problem(key_conflict(K)) :-
+    binding(K, A1), binding(K, A2), A1 \== A2.
+
+suggest('git push') :-
+    last(C, 0), command(C, git), subcommand(C, commit),
+    branch_ahead.
+```
+
+使うエンジン機能: 否定・findall
+
+## AI フレンドリーになる理由
+
+- 判定の理由が証明として残るので、--json と MCP に「なぜ confirm なのか」を構造化して返せる。
+- 規則は小さく独立しているので、AI に「この失敗の診断規則を書いて、テストも足して」と頼みやすい。
+- AI はコマンドの使い方を推測せず、query で知識ベースに聞ける。
+- ポリシーを MCP のリソースとして公開すれば、エージェントが実行前に自分で検査できる。
+
+## 性能と安全の注意
+
+- キー入力ごとの問い合わせは、起動時に規則を読み込み済みにし、結果を入力単位でキャッシュする。
+- git やファイルなど外部の状態は foreign predicate で必要なときだけ取り、タイムアウトをかける。
+- call_with_depth_limit と既存の資源上限で暴走を止める。
+- ユーザー規則で安全判定を緩められないよう、block は組み込み規則だけが出せるようにする。
+
+## 導入順
+
+- 1. A と B (P1 の explain と同時に): 危険度判定を規則に移す。効果が最も大きい。
+- 2. C (P4 の ai why と同時に)。
+- 3. D と E (P3 の補完の作り直しで)。
+- 4. F と G: 言語と MCP への公開、doctor。
+
+cl-prolog-kit は残す依存として扱い、補完の Prolog 部分は「作り直し」と判定しています (01・I6)。

@@ -16,6 +16,10 @@ S式のリスト (HEAD …) は Lisp 形式かコマンド形式のどちらか�
 | 8 | CL の関数とマクロ | Lisp | (format t "~a" x) |
 | 9 | それ以外 | コマンド。実行時に PATH を探し、なければ 127 | (git status) |
 
+同じ名前を defun と、defcmd または alias の両方で定義したときは、後の定義を採って警告する。
+
+abbr はスクリプトでは展開しない。
+
 ## 2.2 4 番の形式 (いつでも Lisp)
 
 ```
@@ -27,16 +31,27 @@ defun defmacro defcmd define-shell-function defvar defparameter
 capture capture-lines capture-json status run with-env glob files out str view clip ?-
 ```
 
-これらの名前で defcmd・alias・abbr を定義しようとしたら E_PARSE で拒否する。
+これらの名前は、defun を含むどの書き方でも再定義できない。新しく入る defcmd は v0.8 から、既存の書き方は v0.9.0 から E_PARSE で拒否する。
+
+| 書き方 | v0.8 | v0.9.0 |
+|---|---|---|
+| defcmd | E_PARSE | E_PARSE |
+| defun・define-shell-function・alias・abbr | 警告し、nshell migrate でも知らせる | E_PARSE |
+
+out・view・clip・?- は、実装されるまで E_NOT_IMPLEMENTED を返す。
 
 ## 2.3 衝突表
 
-CL にもあり、シェルでもよく使う 6 つはコマンドとして扱います。Lisp の方は cl: をつけて呼びます。
+CL にもあり、シェルでもよく使う 5 つはコマンドとして扱います。Lisp の方は cl: をつけて呼びます。
 
 | 名前 | 既定 | もう一方を使うには |
 |---|---|---|
-| sort find join split sleep time | コマンド | (cl:sort xs #'<) など |
-| last write expand truncate print ほか | Lisp (CL) | (^last) など |
+| sort find sleep time open | コマンド | (cl:sort xs #'<) など |
+| last write truncate print ほか | Lisp (CL) | (^last) など |
+
+join と split は CL にない名前なので表に入れない。
+
+衝突表のコマンドを値の位置に書くと E_VALUE_POSITION になる。,(find …) は v0.8 では今までどおり CL の find として評価して警告し、v0.9.0 で切り替える (L7)。
 
 表は nshell の版ごとに固定し、変えるときは破壊的変更として扱う。
 

@@ -11,8 +11,8 @@ and-or    = pipeline { ( "&&" | "||" ) pipeline }
 pipeline  = command { ( "|" | "|&" ) command }
 command   = { assign } word { word | redirect }
 assign    = NAME "=" word
-redirect  = [ FD ] ( ">" | ">>" | "<" | "&>" | "&>>" | "<<<" ) word
-          | [ FD ] ">&" FD
+redirect  = [ FD ] ( ">" | ">>" | ">|" | "<" | "&>" | "&>>" | "<<<" ) word
+          | [ FD ] ( ">&" | "<&" ) FD
 word      = part { part }
 part      = BARE | SQUOTE | DQUOTE | VAR | "$(" line ")"
           | "(" sexp ")" | "<(" line ")" | ">(" line ")"
@@ -27,6 +27,8 @@ $( … ) は中身を bare-line として実行する。"…" の中でも展開
 
 ( … ) は "…" の中では展開しない (文字そのもの)。
 
+bare-line の ,expr は 5.1 の文法にない。v0.8 では今までどおり扱って警告し、v0.9.0 で削る。
+
 ## 5.3 使えない構文と書き換え
 
 次の構文は、実行する前に入力全体を E_UNSUPPORTED_SYNTAX で拒否し、同じ意味の S式を示します。現在は if や end が「コマンドが見つからない」になったうえで、本体だけが実行されてしまいます。
@@ -39,8 +41,10 @@ $( … ) は中身を bare-line として実行する。"…" の中でも展開
 | switch $x; case a; …; end | (case … ) または (cond …) |
 | function f; …; end | (defcmd f () …) |
 | begin; …; end | (progn …) |
-| cat <<EOF … EOF | (cat <<< "…複数行の文字列…") |
+| cat <<EOF … EOF、cat <<-EOF … EOF | (cat <<< "…複数行の文字列…") |
 | ! cmd | (not (cmd)) |
 | not cmd; and cmd2 | (and (not (cmd)) (cmd2)) |
 
-v0.8 では警告つきで動かし、次の版で拒否に切り替える (決定事項どおり)。警告の段階でも、if の本体だけが走ることはない。
+builtin の and・or・not・break・continue・function も同じく拒否する。
+
+この拒否は v0.8 から行う。警告つきで動かす段階は設けない。

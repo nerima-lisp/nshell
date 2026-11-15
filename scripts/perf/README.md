@@ -32,6 +32,7 @@ Without `--noise`, `compare.sh` uses the thresholds in the table under "Statisti
 
 To include B3, pass both source trees: `--base-src DIR --cand-src DIR`.
 `compare.sh` then runs `b3-measure.sh` in ABBA order (`--b3-blocks N` repeats the A, B, B, A runs; default 1) with the caller's environment, which must provide what `b3-measure.sh` requires (`B3_SBCL`, `CL_SOURCE_REGISTRY`).
+When the two arms pin different dependencies, pass each arm's registry with `--base-registry REG --cand-registry REG`; `compare.sh` sets `CL_SOURCE_REGISTRY` to that value for the arm's `b3-measure.sh` and `legacy-bench.sh` runs and records both in `conditions.txt`.
 Without the source trees, the table reports B3 as not measured.
 `noise.sh --src DIR` adds B3 to the noise file the same way.
 

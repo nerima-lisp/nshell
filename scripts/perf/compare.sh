@@ -10,6 +10,10 @@
 #   --out DIR             Result directory (default: a new temporary directory).
 #   --base-src DIR        Baseline source tree, for B3 (with --cand-src).
 #   --cand-src DIR        Candidate source tree, for B3.
+#   --base-registry REG   CL_SOURCE_REGISTRY for the baseline's B3 and legacy
+#                         runs (with --cand-registry), when the two arms pin
+#                         different dependencies. Default: the caller's.
+#   --cand-registry REG   CL_SOURCE_REGISTRY for the candidate's runs.
 #   --b3-blocks N         ABBA blocks of b3-measure.sh runs (default 1; 0 skips
 #                         B3, e.g. when the source trees are only for --legacy).
 #   --legacy              Also run the bench/ benchmarks of this checkout
@@ -30,7 +34,7 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 python=${PYTHON:-python3}
 
 usage() {
-  sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
@@ -38,6 +42,8 @@ noise_file=
 out_dir=
 base_src=
 cand_src=
+base_registry=
+cand_registry=
 b3_blocks=1
 legacy=0
 harness_args=()
@@ -50,6 +56,8 @@ while [[ $# -gt 0 ]]; do
     --out) out_dir=${2:?--out needs a directory}; shift 2 ;;
     --base-src) base_src=${2:?--base-src needs a directory}; shift 2 ;;
     --cand-src) cand_src=${2:?--cand-src needs a directory}; shift 2 ;;
+    --base-registry) base_registry=${2:?--base-registry needs a value}; shift 2 ;;
+    --cand-registry) cand_registry=${2:?--cand-registry needs a value}; shift 2 ;;
     --b3-blocks) b3_blocks=${2:?--b3-blocks needs a number}; shift 2 ;;
     --legacy) legacy=1; shift ;;
     --quick)
@@ -78,6 +86,14 @@ for binary in "$baseline" "$candidate"; do
 done
 if [[ -n $base_src || -n $cand_src ]] && [[ -z $base_src || -z $cand_src ]]; then
   printf 'compare.sh: --base-src and --cand-src go together\n' >&2
+  exit 2
+fi
+if [[ -n $base_registry || -n $cand_registry ]] && [[ -z $base_registry || -z $cand_registry ]]; then
+  printf 'compare.sh: --base-registry and --cand-registry go together\n' >&2
+  exit 2
+fi
+if [[ -n $base_registry && -z $base_src ]]; then
+  printf 'compare.sh: --base-registry needs --base-src and --cand-src\n' >&2
   exit 2
 fi
 if [[ ! $b3_blocks =~ ^[0-9]+$ ]]; then
@@ -110,6 +126,8 @@ uptime >"$out_dir/uptime-before.txt"
   printf 'candidate=%s\n' "$candidate"
   printf 'noise_file=%s\n' "${noise_file:-none}"
   printf 'base_src=%s\ncand_src=%s\n' "${base_src:-none}" "${cand_src:-none}"
+  printf 'base_registry=%s\ncand_registry=%s\n' \
+    "${base_registry:-${CL_SOURCE_REGISTRY:-unset}}" "${cand_registry:-${CL_SOURCE_REGISTRY:-unset}}"
   printf 'host=%s %s\n' "$(uname -s)" "$(uname -m)"
   printf 'python=%s\n' "$("$python" --version 2>&1)"
 } >"$out_dir/conditions.txt"
@@ -123,6 +141,19 @@ if [[ $harness_status -ne 0 || ! -s $out_dir/raw.json ]]; then
   printf 'compare.sh: harness exited %s without results; outcome inconclusive\n' "$harness_status" >&2
   exit 3
 fi
+
+# Run "$@" with the dependency registry of arm $1.
+with_arm_registry() {
+  local arm=$1
+  shift
+  if [[ -z $base_registry ]]; then
+    "$@"
+  elif [[ $arm == A ]]; then
+    CL_SOURCE_REGISTRY=$base_registry "$@"
+  else
+    CL_SOURCE_REGISTRY=$cand_registry "$@"
+  fi
+}
 
 # B3: in-process per-key consing and I/O counts from each source tree.
 b3_args=()
@@ -143,7 +174,7 @@ if [[ -n $base_src ]]; then
         [[ $arm == B ]] && src=$cand_src
         out=$out_dir/b3-$block-$position-$arm.json
         printf 'compare.sh: B3 block %s run %s (arm %s)\n' "$block" "$position" "$arm" >&2
-        if "$b3_script" "$src" "$out" 2>"$out_dir/b3-$block-$position-$arm.log"; then
+        if with_arm_registry "$arm" "$b3_script" "$src" "$out" 2>"$out_dir/b3-$block-$position-$arm.log"; then
           b3_args+=(--b3 "$arm:$block:$out")
         else
           b3_failures+=("arm $arm block $block run $position (see ${out%.json}.log)")
@@ -164,7 +195,7 @@ if [[ $legacy -eq 1 ]]; then
       src=$cand_src
       binary=$candidate
     fi
-    "$script_dir/legacy-bench.sh" "$src" "$out_dir/legacy-$arm.jsonl" "$binary" \
+    with_arm_registry "$arm" "$script_dir/legacy-bench.sh" "$src" "$out_dir/legacy-$arm.jsonl" "$binary" \
       >"$out_dir/legacy-$arm.log" 2>&1 ||
       printf 'compare.sh: legacy benchmark for arm %s failed (informational, see %s)\n' \
         "$arm" "$out_dir/legacy-$arm.log" >&2

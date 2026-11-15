@@ -52,6 +52,7 @@
         "key_echo",
         "command_output",
         "(not gating)",
+        "marker_logged=yes",
         "L02 slow_git sessions=5 passed=5",
         "L02 result=PASS"
       ]

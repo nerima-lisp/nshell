@@ -2182,10 +2182,25 @@ def _slow_git_log_lines(log: Path) -> list[str]:
         return []
 
 
+def _slow_git_order_failure(lines: list[str], marker: str) -> str | None:
+    """Judge the log order: the command's marker must follow a status start and precede every
+    status end. A status call started by a later prompt may follow the marker."""
+    if marker not in lines:
+        return f"the command did not append {marker!r} to the Git log"
+    marker_index = lines.index(marker)
+    before = lines[:marker_index]
+    if "status-start" not in before:
+        return "the command ran before any git status call started"
+    if "status-end" in before:
+        return "a git status call ended before the command ran"
+    return None
+
+
 def _run_slow_git_session(scenario: dict[str, Any], binary: Path, cwd: Path,
                           env: dict[str, str], slow_git_directory: Path, session: int,
                           scenario_deadline: float) -> tuple[dict[str, Any], list[str]]:
-    """Run one fresh nshell whose `git status` sleeps, and check it never waits for Git."""
+    """Run one fresh nshell whose `git status` sleeps, and check that neither the prompt nor a
+    typed command waits for Git."""
     benchmark = scenario["benchmark"]
     timeout = benchmark["interaction_timeout_seconds"]
     prompt_max_ms = benchmark["prompt_max_ms"]
@@ -2228,7 +2243,7 @@ def _run_slow_git_session(scenario: dict[str, Any], binary: Path, cwd: Path,
                 f"above {prompt_max_ms} ms while git status was sleeping"
             )
 
-        # Without an observed status call, the input check below proves nothing.
+        # Typing before a status call starts would let the order check pass vacuously.
         status_deadline = min(scenario_deadline, time.monotonic() + prompt_max_ms / 1000)
         while "status-start" not in _slow_git_log_lines(log):
             remaining = status_deadline - time.monotonic()
@@ -2244,31 +2259,33 @@ def _run_slow_git_session(scenario: dict[str, Any], binary: Path, cwd: Path,
             )
         record["status_start_after_prompt_ms"] = (status_seen_ns - startup_ns) / 1_000_000
 
-        ready = benchmark["ready_marker"].encode("utf-8")
-        command_start = len(stream)
-        key_start_ns = time.monotonic_ns()
-        _write_pty(fd, ("echo " + benchmark["ready_marker"]).encode("utf-8"), scenario["id"])
-        command_echo_end, key_echo_ns = _wait_pty_text(
-            scenario["id"], fd, stream, command_start, ready,
-            timeout, scenario_deadline, query_responses,
-        )
-        record["key_echo_ms"] = (key_echo_ns - key_start_ns) / 1_000_000
-        command_start_ns = time.monotonic_ns()
-        _write_pty(fd, b"\n", scenario["id"])
-        _, ready_ns = _wait_pty_text(
-            scenario["id"], fd, stream, command_echo_end, ready,
-            timeout, scenario_deadline, query_responses,
-        )
-        # The log is read after the output arrived, so a status-end seen here may only be late,
-        # never early. A later prompt may start another status call; no call may have ended yet.
+        # The typed command appends the marker to the log the fake Git writes, so one file's
+        # append order shows whether the command ran while `git status` was still sleeping.
+        # PTY output is not used: nshell sets a window title holding the typed line before
+        # it runs the command.
+        # The path is typed relative to cwd: autosuggestion rescans each directory named in the
+        # line on every key, and an absolute path under a large TMPDIR (such as /tmp) can delay
+        # the Enter by seconds on a loaded host, unrelated to Git.
+        marker = benchmark["ready_marker"]
+        typed_log = os.path.relpath(log, cwd)
+        _require(re.fullmatch(r"[A-Za-z0-9_./-]+", typed_log) is not None,
+                 f"{scenario['id']}: Git log path needs quoting on the nshell command line: "
+                 f"{typed_log}")
+        command_ns = time.monotonic_ns()
+        _write_pty(fd, f"echo {marker} >> {typed_log}\n".encode("utf-8"), scenario["id"])
+        marker_deadline = min(scenario_deadline, time.monotonic() + timeout)
+        while marker not in _slow_git_log_lines(log):
+            remaining = marker_deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            _read_pty_available(scenario["id"], fd, stream, min(remaining, 0.02), query_responses)
         lines = _slow_git_log_lines(log)
-        record["command_output_ms"] = (ready_ns - command_start_ns) / 1_000_000
-        record["status_ended_before_output"] = "status-end" in lines
-        if record["status_ended_before_output"]:
-            failures.append(
-                f"session {session}: git status finished before the command output was seen; "
-                f"git log: {lines!r}"
-            )
+        record["marker_logged"] = marker in lines
+        record["marker_ms"] = (time.monotonic_ns() - command_ns) / 1_000_000
+        order_failure = _slow_git_order_failure(lines, marker)
+        record["order_ok"] = order_failure is None
+        if order_failure is not None:
+            failures.append(f"session {session}: {order_failure}; git log: {lines!r}")
 
         exit_start_ns = time.monotonic_ns()
         # nshell joins running Git workers before it exits, so allow the sleeping status call.
@@ -2383,10 +2400,9 @@ def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, in
                 f"L02 slow_git session={session} prompt_ms={record['prompt_ms']:.3f} "
                 f"status_started={'yes' if record['status_started'] else 'no'} "
                 f"status_start_after_prompt_ms={record['status_start_after_prompt_ms']:.3f} "
-                f"key_echo_ms={record['key_echo_ms']:.3f} "
-                f"command_output_ms={record['command_output_ms']:.3f} "
-                f"status_ended_before_output="
-                f"{'yes' if record['status_ended_before_output'] else 'no'} "
+                f"marker_logged={'yes' if record['marker_logged'] else 'no'} "
+                f"marker_ms={record['marker_ms']:.3f} "
+                f"order={'ok' if record['order_ok'] else 'wrong'} "
                 f"exit={'clean' if record['clean_exit'] else 'forced'} "
                 f"exit_ms={record['exit_ms']:.3f}"
             )

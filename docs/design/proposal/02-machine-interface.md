@@ -127,6 +127,23 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 
 警告には W_ で始まるコードを付ける。v0.7 の AI の承認ゲートは 126 で終了するが、P1 で E_NEEDS_APPROVAL の 3 と E_BLOCKED_BY_POLICY の 4 に変え、リリースノートに書く。
 
+v0.8 の警告コードは次の 12 個。
+
+| コード | 当たる規則 |
+|---|---|
+| W_RESOLUTION_ORDER | L7.2「名前解決の順序 (PATH より CL)」 |
+| W_VALUE_POSITION | L7.2「,(find …) (find は衝突表でコマンド)」 |
+| W_KEYWORD_ARGUMENT | L7.2「:kw を引数にしたとき」 |
+| W_MID_WORD_SPECIAL | L7.2「語の途中の , と \|」 |
+| W_BRACE_EXPANSION | L7.2「(echo {a,b}c) の brace 展開」 |
+| W_LIST_SPLICE | L7.2「$xs が要素ごとの引数になる」 |
+| W_STATUS_AS_VALUE | L7.2「(= (cmd) 0) で終了コード」 |
+| W_DEFUN_WORD_ARGS | L7.2「S式から defun の関数に語を渡す」 |
+| W_NO_MATCH | L7.2「一致しない glob」 |
+| W_REDEFINITION | L7.2「L2.2 の名前の再定義」 (defun・define-shell-function・alias・abbr のとき) |
+| W_BARE_LINE_UNQUOTE | L7.2「bare-line の ,expr」 |
+| W_NAME_CONFLICT | L2.1「同じ名前を defun と、defcmd または alias の両方で定義したとき」 |
+
 追加
 
 ## 非対話時は決定的に

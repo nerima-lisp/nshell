@@ -162,7 +162,7 @@ deps_dir="$test_root/deps"
 jq -r '.nodes as $nodes | .nodes.root.inputs | to_entries[] | select(.key | startswith("cl-")) | .key as $name | .value as $node | [$name, ("https://github.com/\($nodes[$node].locked.owner)/\($nodes[$node].locked.repo).git"), $nodes[$node].original.ref, $nodes[$node].locked.rev] | @tsv' flake.lock |
 while IFS="$(printf '\t')" read -r name url ref locked_rev; do
   case "$name" in
-    cl-prolog-kit|cl-parser-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|cl-process-kit|cl-regex-kit|cl-vcs-kit|cl-tui-kit|cl-history-kit|cl-host-kit|cl-codec-kit|cl-concurrent-kit|cl-date-kit|cl-json-kit|cl-log-kit|cl-weave)
+    cl-prolog-kit|cl-parser-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|cl-process-kit|cl-regex-kit|cl-history-kit|cl-host-kit|cl-codec-kit|cl-concurrent-kit|cl-date-kit|cl-json-kit|cl-log-kit|cl-weave)
       git clone --depth 1 --branch "$ref" "$url" "$deps_dir/$name" || exit 1
       git -C "$deps_dir/$name" checkout --detach "$locked_rev" || exit 1
       ;;

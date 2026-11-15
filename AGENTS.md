@@ -47,53 +47,47 @@ check takes the layer from the path.
 
 ## Build and test
 
-With Nix (CI, preferred):
-
 ```sh
-nix develop                     # dev shell with SBCL and all toolkits
+nix develop                     # interactive shell with SBCL and pinned toolkits
 nix build                       # ./result/bin/nshell
-perl -e 'alarm 300; exec @ARGV' nix build .#checks.$(nix eval --raw --impure --expr 'builtins.currentSystem').default --no-link
 nix fmt
+nix flake check --print-build-logs # full suite and configured checks
 ```
 
-Agents run the suites through `nix develop -c`, from the repository root:
+CI runs the full suite through the flake check shown above.
+
+Run long commands in the background, wait for the process to finish, and keep
+its output. Do not stop a build with a timer.
+
+Run Lisp test scripts from the repository root through `nix develop -c`:
 
 ```sh
 nix develop -c sbcl --script run-tests.lisp        # full suite (nshell/test)
 nix develop -c sbcl --script scripts/test-fast.lisp # unit, main and static checks (nshell/test-unit)
 nix develop -c sbcl --script scripts/weave.lisp    # completion knowledge-base suite (nshell/weave)
-nix develop -c sbcl --script scripts/coverage.lisp # suite with coverage; set NSHELL_COVERAGE_DIR to choose the output directory
+NSHELL_COVERAGE_DIR="$XDG_CACHE_HOME/nshell/coverage" \
+  nix develop -c sbcl --script scripts/coverage.lisp
 ```
 
-The `test`, `test-fast`, `weave` and `cov` aliases in `nix develop` are for humans:
-they are defined in the shell hook and exist only in an interactive shell.
+The `test`, `test-fast`, `weave` and `cov` aliases exist in the interactive
+shell hook. Automation uses the explicit `nix develop -c sbcl --script …`
+commands above.
 
-test-fast excludes tests tagged `:slow`; the full suite keeps them.
-The cached target for test-fast is 30 seconds. After isolating state as below, run
-`NSHELL_ASDF_OUTPUT_DIR="$XDG_CACHE_HOME/nshell/asdf" nix develop -c sbcl --script scripts/test-fast.lisp`
-twice, starting with a new cache directory. Record cold and cached elapsed times
-separately; the runner reports SBCL elapsed time, excluding Nix startup.
-
-Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
+`test-fast` excludes tests tagged `:slow`; the full suite keeps them. Its cached
+target is 30 seconds. To measure it, set
+`NSHELL_ASDF_OUTPUT_DIR="$XDG_CACHE_HOME/nshell/asdf"` to a new cache directory
+and run the following command twice. Record the cold and cached elapsed times
+separately. The runner reports SBCL elapsed time and excludes Nix startup.
 
 ```sh
-# 1. SBCL >= 2.6.0 and < 2.6.10 (2.6.10 removed sb-unix:unix-ioctl, which cl-tty-kit uses).
-#    Build 2.6.9 from source with any older SBCL as host:
-git clone --depth 1 --branch sbcl-2.6.9 https://github.com/sbcl/sbcl && cd sbcl \
-  && echo '"2.6.9"' > version.lisp-expr && sh make.sh --prefix=$HOME/sbcl && sh install.sh
-# 2. Clone the nerima-lisp toolkits at the tags pinned in flake.nix into one directory, e.g. ../deps/
-# 3. Run the suite
-export SBCL_HOME=$HOME/sbcl/lib/sbcl PATH=$HOME/sbcl/bin:$PATH
-export CL_SOURCE_REGISTRY="$PWD/../deps//:$PWD/"
-sbcl --script run-tests.lisp
+NSHELL_ASDF_OUTPUT_DIR="$XDG_CACHE_HOME/nshell/asdf" nix develop -c sbcl --script scripts/test-fast.lisp
 ```
 
-Known environment-only failures when running as root inside a container
-(not bugs in nshell): `complete-path-like-command-arguments-from-filesystem`,
-`regular-file-preview-reader-rejects-permission-denied-files`, and two
-`process-tests` that check descendant reaping (no init process to reap zombies).
+The Nix-free bootstrap script is planned at
+`scripts/bootstrap-without-nix.sh`; it is not present in this worktree yet.
 
-To run a built binary on a script: `nshell FILE.nsh` or `nshell --command '(…)'`.
+After `nix build`, run a script with `./result/bin/nshell FILE.nsh` or a command
+with `./result/bin/nshell --command '(…)'`.
 
 Always isolate state when testing, so you never touch the real history, config
 or AI provider:

@@ -25,27 +25,9 @@
   (let ((passed-p
           (handler-case
               (progn
-                (asdf:load-asd (merge-pathnames #P"nshell.asd" root))
                 (asdf:load-system "nshell/test-unit")
-                (let ((selected-count
-                        (length
-                         (uiop:symbol-call :cl-weave '#:list-tests
-                                           :reporter :sexp
-                                           :stream (make-string-output-stream)
-                                           :exclude-tags '(:slow)))))
-                  (unless (plusp selected-count)
-                    (error "nshell unit test discovery selected no tests"))
-                  (let* ((events
-                           (uiop:symbol-call :cl-weave '#:run
-                                             (uiop:symbol-call :cl-weave '#:root-suite)
-                                             :reporter :spec
-                                             :exclude-tags '(:slow)
-                                             :max-workers 1
-                                             :timeout-ms 120000))
-                         (result (uiop:symbol-call :cl-weave '#:results-status events)))
-                    (format t "~&NSHELL_TESTS selected=~D passed=~A~%"
-                            selected-count result)
-                    result)))
+                (uiop:symbol-call :nshell/test '#:run-tests
+                                  :exclude-tags '(:slow)))
             (error (condition)
               (format *error-output* "~&nshell/test-unit failed: ~A~%" condition)
               nil))))

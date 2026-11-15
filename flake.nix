@@ -973,6 +973,7 @@
                 echo ""
                 echo "nshell development environment"
                 echo "  test  - Run the full nshell suite (cl-weave, nshell/test)"
+                echo "  test-fast - Run unit, main and static checks, excluding slow tests"
                 echo "  weave - Run the focused completion suite (nshell/weave)"
                 echo "  cov     - Run the test suite and write HTML coverage to coverage/"
                 echo "  sbcl  - Interactive Common Lisp (with cl-weave)"

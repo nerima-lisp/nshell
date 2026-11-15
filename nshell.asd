@@ -418,7 +418,7 @@
   ;; being named a second time, so the two cannot drift apart; this is the
   ;; same idiom cl-nix-forge's own Darwin delivery path uses. UIOP and
   ;; ASDF/SYSTEM are safe to name at read time for the reason spelled out at
-  ;; the nshell/test :perform below: ASDF ships both, so they are in the image
+  ;; the nshell/test-unit :perform below: ASDF ships both, so they are in the image
   ;; before this file is read. `#'nshell:main` would NOT be -- it is a
   ;; read-time error, which is why the entry point is a string.
   :perform (asdf:program-op (o c)
@@ -677,7 +677,7 @@ primary suite in nshell/test."
    (:file "weave/completion-properties")
    (:file "weave/logic-crosscheck")
    (:file "weave/entry"))
-  ;; See the "nshell/test" :perform above for why this is FIND-SYMBOL rather
+  ;; See the "nshell/test-unit" :perform above for why this is FIND-SYMBOL rather
   ;; than any PKG:SYMBOL-CALL form.
   :perform (asdf:test-op (o s)
              (declare (ignore o s))

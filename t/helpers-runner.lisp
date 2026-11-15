@@ -1,9 +1,8 @@
 ;;; Test-harness helpers: environment probes, skip macros, and the entry point.
 ;;;
 ;;; This file holds no tests.  It is loaded before every suite so the skip
-;;; macros below are available while the suites are being read, which is why it
-;;; sits third in the nshell/test :components list, right after the package and
-;;; the shared assertions.  Tests for src/main.lisp live in t/main-test.lisp.
+;;; macros below are available while the suites are being read.
+;;; Tests for src/main.lisp live in t/main-test.lisp.
 
 (in-package #:nshell/test)
 
@@ -79,8 +78,8 @@ facility, but the non-sandboxed CI job is required to exercise it."
      (t
       (progn ,@body))))
 
-(defun run-tests ()
-  "Run all nshell tests through cl-weave.
+(defun run-tests (&key exclude-tags)
+  "Run selected nshell tests through cl-weave.
 
 Runs single-threaded: many suites share process-global state (mock command
 tables, abbreviation/alias/history registries, shared mutable registries), so
@@ -89,12 +88,14 @@ Each test has a bounded execution time so a hung subprocess is reported as a
 test failure instead of blocking the entire verification indefinitely."
   (let ((discovery-stream (make-string-output-stream)))
     (let* ((plan (cl-weave:list-tests :reporter :sexp
-                                      :stream discovery-stream))
+                                      :stream discovery-stream
+                                      :exclude-tags exclude-tags))
            (selected-count (length plan)))
       (unless (plusp selected-count)
         (error "nshell test discovery selected no tests"))
       (let* ((events (cl-weave:run (cl-weave:root-suite)
                                    :reporter :spec
+                                   :exclude-tags exclude-tags
                                    :max-workers 1
                                    :timeout-ms 120000))
              (passed-p (cl-weave:results-status events)))

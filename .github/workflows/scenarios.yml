@@ -34,6 +34,8 @@ jobs:
           persist-credentials: false
 
       - name: Checkout previous supported release (P12)
+        # Public API comparison is OS-independent; v0.6.5 has no Darwin flake outputs.
+        if: ${{ matrix.system == 'x86_64-linux' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: 35473e96831aed44654e3523f8e965a9a395ed86
@@ -52,6 +54,7 @@ jobs:
           --out-link "$RUNNER_TEMP/nshell-scenario-binary"
 
       - name: Build previous release dependency registry (P12)
+        if: ${{ matrix.system == 'x86_64-linux' }}
         run: |
           nix build --impure --print-build-logs \
             --out-link "$RUNNER_TEMP/nshell-p12-previous-registry" \
@@ -68,6 +71,7 @@ jobs:
             '
 
       - name: Compare public API against previous release (P12)
+        if: ${{ matrix.system == 'x86_64-linux' }}
         run: >-
           nix develop .#default -c bash -c
           "python3 -B scripts/run-scenarios.py --scenario-dir t/scenarios/P12

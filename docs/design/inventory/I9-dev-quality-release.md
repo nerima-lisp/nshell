@@ -47,7 +47,7 @@
 | 機能 — 現状 | 判定 | 方針 |
 |---|---|---|
 | contracts 層 — L02–L08、C06、E04–E06、WP | [削除候補] | 通常の unit テストへ吸収。 |
-| NFR 計測 — measure-nfr-*.py、profile-nfr06、Q05 の VM 試行 | [削除候補] | P0 で作る性能の計測 (08 の 6 項目) に置き換え、置き換えた旧スクリプトだけを消す。fuzz の入力は P5 のために残す。 |
+| NFR 計測 — measure-nfr-*.py、profile-nfr06 | [削除候補] | P0 で作る性能の計測 (08 の 6 項目) に置き換え、置き換えた旧スクリプトだけを消す。fuzz の入力は P5 のために残す。 |
 | 競合ベンチ — benchmark-competitors.pl | [削除候補] | P0 で作る性能の計測に統合。 |
 | 依存の登録と検査スクリプト — dependency registry / assertions | [簡素化] | flake.lock と静的チェックに寄せる。 |
 | AGENTS.md — なし | [追加] | 03 を参照。 |

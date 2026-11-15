@@ -233,16 +233,15 @@ against the corresponding scenario's `uc` array, without regard to array order.
 Repeat `--exclude-scenario-id ID` to omit selected cases from a larger run; each
 excluded ID must exist in the selected scenario directory, and exclusions
 cannot overlap explicit `--scenario-id` selections. Use this only when another
-workflow job supplies the scenario's required external fixture. The Scenario
-corpus workflow excludes Q05's three NFS cases from its ordinary PTY matrix and
-runs them in a dedicated Linux client-VM job.
+workflow job supplies the scenario's required external fixture.
+
 Use `--scenario-binary ID=PATH` to run a selected scenario with a dedicated
 executable while the remaining scenarios use `--binary`. The override must name
 an ID in the current selection and point to a non-empty executable file.
 Use `--scenario-cwd ID=PATH` to start one selected PTY case in an existing
 absolute directory, including one outside the runner's temporary root. This
 does not change the scenario JSON's `environment.cwd`, fixture root, or home
-directory; it is intended for external filesystems such as Q05's NFS mount.
+directory; it is intended for external filesystems.
 Use `--scenario-temp-dir ID=PATH` to place one selected PTY scenario's isolated
 root on a bounded filesystem. The path must be an absolute, writable,
 non-symlink directory on a filesystem with total capacity at most 128 MiB. It
@@ -357,9 +356,4 @@ nix develop .#scenarios -c python3 scripts/test-run-scenarios.py
 ```
 
 The workflow runs ordinary PTY scenarios with `--mode pty --repeat 3` on both
-Linux and Apple Silicon macOS. Q05 runs separately on an Ubuntu runner that
-exports NFS over a test-only TAP interface to an Ubuntu QEMU client with a
-separate management interface. The client builds the candidate binary locally
-and records three baseline trials plus ten 500 ms delayed trials for each of
-the prompt, filesystem-completion, and glob cases. The job uploads its trial
-records and logs as an artifact.
+Linux and Apple Silicon macOS.

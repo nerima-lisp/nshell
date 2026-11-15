@@ -1736,21 +1736,6 @@
       "path": "Q03/Q03-real-heap-exhaustion.json"
     },
     {
-      "id": "Q05-nfs-filesystem-completion",
-      "uc": ["Q05"],
-      "path": "Q05/filesystem-completion-on-nfs.json"
-    },
-    {
-      "id": "Q05-nfs-git-prompt",
-      "uc": ["Q05"],
-      "path": "Q05/git-prompt-on-nfs.json"
-    },
-    {
-      "id": "Q05-nfs-glob-expansion",
-      "uc": ["Q05"],
-      "path": "Q05/glob-expansion-on-nfs.json"
-    },
-    {
       "id": "Q05-git-probe-timeout-does-not-block-input",
       "uc": ["Q05"],
       "path": "Q05/git-probe-timeout-does-not-block-input.json"

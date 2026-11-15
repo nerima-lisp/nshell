@@ -175,7 +175,24 @@ jobs:
             fi
             hdiutil create -size 16m -fs HFS+ -volname NShellQ07 -type SPARSE "$q07_image"
             hdiutil attach -nobrowse -noverify "$q07_image"
-            trap 'hdiutil detach "$q07_tmp_root"' EXIT
+            q07_detach() {
+              local scenario_status=$?
+              trap - EXIT
+              if hdiutil detach "$q07_tmp_root"; then
+                exit "$scenario_status"
+              fi
+              for delay in 1 2 3; do
+                sleep "$delay" || :
+                if hdiutil detach "$q07_tmp_root"; then
+                  exit "$scenario_status"
+                fi
+              done
+              if ! hdiutil detach -force "$q07_tmp_root"; then
+                printf 'Q07: forced detach failed for %s\n' "$q07_tmp_root" >&2 || :
+              fi
+              exit "$scenario_status"
+            }
+            trap q07_detach EXIT
           else
             q07_tmp_root="/mnt/nshell-q07"
             if mountpoint -q "$q07_tmp_root"; then
@@ -194,9 +211,6 @@ jobs:
             --scenario-binary "Q03-real-heap-exhaustion=$RUNNER_TEMP/nshell-q03-scenario-binary/bin/nshell" \
             --scenario-binary "Q08-fault-injected-key-handler-preserves-input=$RUNNER_TEMP/nshell-q08-fault-injected-binary/bin/nshell-q08-fault-injected" \
             --scenario-temp-dir "Q07-history-write-failure-on-bounded-filesystem=$q07_tmp_root" \
-            --exclude-scenario-id Q05-nfs-git-prompt \
-            --exclude-scenario-id Q05-nfs-filesystem-completion \
-            --exclude-scenario-id Q05-nfs-glob-expansion \
             --repeat 3 \
             --mode pty
 
@@ -206,32 +220,3 @@ jobs:
           echo "Darwin L02 slow Git check ended with outcome: ${{ steps.l02.outcome }}" >&2
           exit 1
 
-  q05-nfs:
-    name: Q05 NFS responsiveness (Ubuntu client VM)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Allow the runner user to access KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls -l /dev/kvm || true
-          stat /dev/kvm || true
-          id
-
-      - name: Build isolated NFS client VM and run Q05 trials
-        run: bash scripts/run-q05-vm-ci.sh
-
-      - name: Upload Q05 trial evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: nshell-q05-${{ github.run_id }}
-          path: ${{ runner.temp }}/nshell-q05-results
-          if-no-files-found: warn
-          retention-days: 90

@@ -59,7 +59,7 @@ CI uses `nix flake check --print-build-logs` as its full gate; its generated `ch
 
 Run long commands in the background, keep their output, and wait for them to finish.
 Do not stop a build after a fixed time limit.
-If its log has not grown for several minutes, check whether the process is still active before deciding it is stuck.
+If its log has not grown for 30 minutes, check whether the process is still active before deciding it is stuck.
 If it is stuck, signal only the PID you started, for example `kill -TERM "$pid"`.
 
 Create a temporary state directory before testing:
@@ -120,6 +120,8 @@ nix develop -c env HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/config" \
 
 Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
 
+The no-Nix procedure requires `jq`, `git`, and `cc` (a C compiler).
+
 ```sh
 # Start from the repository root. SBCL must be >= 2.6.0 and < 2.6.10 because
 # 2.6.10 removed sb-unix:unix-ioctl, which cl-tty-kit uses.
@@ -165,7 +167,7 @@ while IFS="$(printf '\t')" read -r name url ref locked_rev; do
       git -C "$deps_dir/$name" checkout --detach "$locked_rev" || exit 1
       ;;
   esac
-done
+done || exit 1
 
 # Build the cl-process-kit helpers used by the tests. Keep generated helpers in
 # the temporary root.
@@ -205,7 +207,7 @@ export NSHELL_TEST_PTY=1 CI=1
 sbcl --script run-tests.lisp
 ```
 
-On macOS and Linux, an unprivileged-user run is expected to finish with `failures 0`.
+On macOS and Linux, an unprivileged-user run is expected to finish with `0 failed` and `0 errored`, followed by the final `NSHELL_TESTS ... passed=T` marker.
 When running as root inside a container, these environment-only tests may fail:
 `complete-path-like-command-arguments-from-filesystem`,
 `regular-file-preview-reader-rejects-permission-denied-files`,

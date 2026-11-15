@@ -245,16 +245,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1794753487,
-        "narHash": "sha256-VvcHSNQzpyImIS+yS49qq2UzvTJSABHSfSbjVKdPVPs=",
+        "lastModified": 1794776812,
+        "narHash": "sha256-AIvoPXVSSLEELk3fatbfTV3wGC5Y+19iwqhC7QDUfGU=",
         "owner": "nerima-lisp",
         "repo": "cl-prolog-kit",
-        "rev": "2521cfcddade817a63c5e5f1abd7ec59e9fbb58c",
+        "rev": "051a3f1772466a3eeee99357a5f9e2f3c7d1f8b0",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v1.6.0",
+        "ref": "v1.7.0",
         "repo": "cl-prolog-kit",
         "type": "github"
       }

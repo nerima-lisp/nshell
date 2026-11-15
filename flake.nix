@@ -29,7 +29,7 @@
     # each would drag in its own nixpkgs, inflating flake.lock and rebuilding
     # the same derivations.
     cl-prolog-kit = {
-      url = "github:nerima-lisp/cl-prolog-kit/v1.6.0";
+      url = "github:nerima-lisp/cl-prolog-kit/v1.7.0";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.cl-nix-forge.follows = "cl-nix-forge";
       inputs.cl-weave.follows = "cl-weave";

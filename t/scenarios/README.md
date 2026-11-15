@@ -55,14 +55,27 @@ root. Fixture paths cannot be duplicated or make one fixture path the parent
 directory of another.
 
 The `benchmark` mode is reserved for L02. It creates a disposable Git repository
-with 20,000 tracked files, checks startup and empty-Enter latency through a PTY,
-and records five warmups plus 30 samples in each of two runs. Each run reports
-the median and full sample range for startup, empty Enter, key echo, command
-output, and the next prompt. Startup and Enter pass only when every sample range
-stays at or below the manual thresholds in both runs; a range that crosses a
-threshold or disagreeing runs is inconclusive. A separate L02 PTY scenario uses
-a fake Git status command that sleeps beyond the application's probe timeout and
-checks that input and command output remain responsive.
+with 20,000 tracked files and runs nshell through a PTY. The result depends on
+five fresh sessions that put a fake `git` from `slow_git_directory` first on
+`PATH`. Its `status` command logs a start line, sleeps 3 seconds, and logs an
+end line. Each session passes when the prompt appears within `prompt_max_ms`
+(2,000 ms), the log shows a `status` call starting, the output of
+`echo <ready_marker>` arrives before any `status` call ends, and nshell exits
+cleanly after `exit`. A shell that waited for Git would need at least 3,000 ms
+for the prompt however loaded the host is, while a shell that does not wait only
+starts later under load. The bound stays 1,000 ms below that floor and well above
+the largest startup seen on shared macOS CI runners (327 ms).
+
+With the real `git`, the mode then records five warmups plus 30 samples in each
+of two runs. Each run reports the median and full sample range for startup,
+empty Enter, key echo, command output, and the next prompt, and the output
+compares startup and empty Enter with the manual 150 ms and 60 ms targets on a
+line marked `(not gating)`. These numbers do not decide the result; performance
+is guarded by later relative checks on a local machine
+(task P0-7 in `docs/design/tasks/P0-foundation.md`). A separate
+L02 PTY scenario uses a fake Git status command that sleeps 2 seconds, below the
+application's 5-second probe timeout, and checks that input and command output
+remain responsive.
 
 The `source` mode reads files under the repository root and checks their text.
 Each `source_checks` entry has a repository-relative `path` and at least one of

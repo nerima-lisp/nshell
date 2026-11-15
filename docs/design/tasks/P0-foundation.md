@@ -52,10 +52,10 @@
 
 ## P0-4 想定外のエラーからの復帰とクラッシュログ
 
-- [ ] REPL の 1 周を `handler-bind` で囲み、捕まえたエラーのバックトレースを `$XDG_STATE_HOME/nshell/crash/<時刻>.log` に書いてプロンプトへ戻る。XDG_STATE_HOME が未設定なら `~/.local/state/nshell/crash/`
-- [ ] クラッシュログのディレクトリは 0700、ファイルは 0600。秘匿化を通し、HOME を `~` に置き換える。バッチでも書く
-- [ ] 「同じ場所」は condition の型と最も内側の nshell のフレームで判定する。同じ場所で 3 回続いたら、実行中のジョブを一覧表示してから `--safe` で re-exec するか尋ねる
-- [ ] storage-condition とスタック溢れも同じ経路で処理する
+- [x] REPL の 1 周を `handler-bind` で囲み、捕まえたエラーのバックトレースを `$XDG_STATE_HOME/nshell/crash/<時刻>.log` に書いてプロンプトへ戻る。XDG_STATE_HOME が未設定なら `~/.local/state/nshell/crash/`
+- [x] クラッシュログのディレクトリは 0700、ファイルは 0600。秘匿化を通し、HOME を `~` に置き換える。バッチでも書く
+- [x] 「同じ場所」は condition の型と最も内側の nshell のフレームで判定する。同じ場所で 3 回続いたら、実行中のジョブを一覧表示してから `--safe` で re-exec するか尋ねる
+- [x] storage-condition とスタック溢れも同じ経路で処理する
 
 受け入れ条件: テスト用の builtin でわざとエラーを起こしても端末が raw mode のまま残らず、履歴が失われない (PTY テスト)。
 

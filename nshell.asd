@@ -200,6 +200,7 @@
    (:file "domain/history/last-argument")
    (:file "domain/history/expansion")
    (:file "domain/job-control/monitor")
+   (:file "domain/crash/crash-report")
    (:file "domain/configuration/theme-data"
           :pathname "../data/domain/configuration/theme-data")
    (:file "domain/configuration/theme")
@@ -305,9 +306,11 @@
    (:file "infrastructure/acl/pty")
    (:file "infrastructure/acl/pty-spawn-child")
    (:file "infrastructure/acl/pty-spawn")
+   (:file "infrastructure/acl/process-reexec")
    (:file "infrastructure/acl/signal-acl")
    (:file "infrastructure/persistence/file-history")
    (:file "infrastructure/persistence/file-config")
+   (:file "infrastructure/persistence/crash-log")
    (:file "infrastructure/terminal/detection")
    #+linux
    (:module "infrastructure/terminal/linux-abi"
@@ -379,6 +382,7 @@
    (:file "presentation/repl-output-completion")
    (:file "presentation/editor")
    (:file "presentation/repl-history-last-argument")
+   (:file "presentation/repl-crash")
    (:file "presentation/repl-output-handlers")
    (:file "presentation/repl-agent")
    (:file "presentation/repl-ai")
@@ -594,6 +598,7 @@
    (:file "unit/test-error-codes")
    (:file "main-test")
    (:file "unit/test-safe-mode")
+   (:file "unit/test-crash-recovery")
    (:file "unit/static-check-allowlist")
    (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is
@@ -650,6 +655,7 @@
    (:file "e2e/test-package-route")
    (:file "e2e/test-assistant-mcp")
    (:file "e2e/test-safe-mode")
+   (:file "e2e/test-crash-recovery")
    (:file "perf/test-startup")
    (:file "perf/key-cost")
    (:file "perf/test-key-cost"))

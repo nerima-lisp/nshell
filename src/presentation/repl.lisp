@@ -117,8 +117,8 @@
 
 (defun %process-input-event (event)
   (let ((input-state-before *input-state*))
-    (handler-case
-        (progn
+    (call-with-crash-capture
+     (lambda ()
           (when (and *rerun-confirmation-pending-p*
                      (nshell.infrastructure.acl:consume-terminal-resize-p))
             (return-from %process-input-event
@@ -142,14 +142,19 @@
               (setf *assistant-last-cancel-at* nil
                     *input-state* new-state))
             (process-output-event output-event)))
-      (storage-condition ()
-        (setf *input-state* input-state-before)
-        (with-cleared-rendered-completions-and-reset-prompt-cont
-          (format t "~%nshell: storage exhausted; input was preserved~%")))
-      (error ()
-        (setf *input-state* input-state-before)
-        (with-cleared-rendered-completions-and-reset-prompt-cont
-          (format t "~%nshell: input processing failed; input was preserved~%"))))))
+     (lambda (crash)
+       (setf *input-state* input-state-before)
+       (let* ((end-session-p nil)
+              (continuation
+                (with-cleared-rendered-completions-and-reset-prompt-cont
+                  (if (%crash-storage-p crash)
+                      (format t "~%nshell: storage exhausted; input was preserved~%")
+                      (format t "~%nshell: input processing failed; input was preserved~%"))
+                  (%record-crash-log crash *standard-output*)
+                  (setf end-session-p (%note-interactive-crash crash)))))
+         (if end-session-p
+             (%end-session-after-crash)
+             continuation))))))
 
 (defun %handle-pending-shell-termination ()
   (let ((status (nshell.infrastructure.acl:consume-shell-termination-status)))
@@ -272,12 +277,18 @@ remains available in private mode.
 INSTALL-INTERACTIVE-TERMINAL runs inside the UNWIND-PROTECT because it changes
 the process group, signal handlers, terminal mode, and ANSI modes. If setup
 fails part-way through, the cleanup must still restore that state; otherwise
-the next shell could start with SGR mouse reporting still on."
+the next shell could start with SGR mouse reporting still on.
+
+Setup is not guarded by crash recovery: a failure there ends the session as
+before. Every later trampoline step is. A --safe restart the user accepted after
+repeated crashes happens only after the cleanup has restored the terminal."
   (let ((*history-loading-enabled-p* history-p)
         (*history-persistence-enabled-p* (and history-p (not private-p)))
         (nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
          (and history-p (not private-p)))
-        (*history-seen-command-texts* (make-hash-table :test #'equal)))
+        (*history-seen-command-texts* (make-hash-table :test #'equal))
+        (*crash-streak* nil)
+        (*safe-reexec-requested-p* nil))
     (initialize-repl-state
      :load-config-p load-config-p
      :config-path config-path
@@ -285,27 +296,32 @@ the next shell could start with SGR mouse reporting still on."
      :private-p private-p)
     (when greeting-p
       (print-session-greeting))
-    (unwind-protect
-        (progn
-          (with-cps-trampoline
-           (if (setf *interactive-terminal-installed-p*
-                     (install-interactive-terminal))
-               (progn
-                  (%apply-east-asian-ambiguous-width)
-                  (render-prompt-cont))
-             ;; Raw mode is a precondition for the line editor and could not be
-             ;; entered; INSTALL-INTERACTIVE-TERMINAL has already said so on
-             ;; stderr. Running the editor against a cooked terminal anyway is the
-             ;; one outcome worth avoiding, so end the session instead.
-             (progn
-               (setf *last-exit-code* 1)
-               +repl-exit+)))
-          *last-exit-code*)
-
-      (setf *interactive-terminal-installed-p* nil)
-      (unwind-protect
-          (unwind-protect
-              (ignore-errors (nshell.feature.assistant:assistant-model-stop))
-            (restore-interactive-terminal))
-        (%completion-help-drain-workers))
-      (format t "Goodbye!~%"))))
+    (let ((exit-code
+            (unwind-protect
+                 (progn
+                   (with-cps-trampoline
+                     (if (setf *interactive-terminal-installed-p*
+                               (install-interactive-terminal))
+                         (progn
+                           (%apply-east-asian-ambiguous-width)
+                           (funcall (%guard-repl-continuation
+                                     (lambda () (render-prompt-cont)))))
+                         ;; Raw mode is a precondition for the line editor and
+                         ;; could not be entered; INSTALL-INTERACTIVE-TERMINAL
+                         ;; has already said so on stderr. Running the editor
+                         ;; against a cooked terminal anyway is the one outcome
+                         ;; worth avoiding, so end the session instead.
+                         (progn
+                           (setf *last-exit-code* 1)
+                           +repl-exit+)))
+                   *last-exit-code*)
+              (setf *interactive-terminal-installed-p* nil)
+              (unwind-protect
+                   (unwind-protect
+                        (ignore-errors (nshell.feature.assistant:assistant-model-stop))
+                     (restore-interactive-terminal))
+                (%completion-help-drain-workers))
+              (format t "Goodbye!~%"))))
+      (if *safe-reexec-requested-p*
+          (%reexec-with-safe-mode)
+          exit-code))))

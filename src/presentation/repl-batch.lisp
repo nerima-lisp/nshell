@@ -52,7 +52,8 @@
 
 (defun %run-batch-source-lines (lines)
   (let ((command-not-found-command nil))
-    (handler-case
+    (call-with-crash-capture
+     (lambda ()
         (multiple-value-bind (output code)
             (let ((nshell.infrastructure.acl:*command-not-found-hook*
                     (lambda (command)
@@ -76,10 +77,12 @@
                     (%repl-command-corrections command-not-found-command)))
               (when corrections
                 (format *error-output* "nshell: did you mean: ~{~a~^, ~}?~%" corrections))))
-          *last-exit-code*)
-      (error (condition)
-        (format *error-output* "nshell error: ~a~%" condition)
-        (setf *last-exit-code* 1)))))
+          *last-exit-code*))
+     (lambda (crash)
+       (format *error-output* "nshell error: ~a~%"
+               (if (%crash-storage-p crash) "storage exhausted" (%crash-message crash)))
+       (%record-crash-log crash *error-output*)
+       (setf *last-exit-code* 1)))))
 
 (defun run-repl-batch (&key line script-args (errexit-p nil))
   "Batch mode for stdin or the nshell-specific --command option.
@@ -126,38 +129,47 @@ SCRIPT-ARGS are exposed as $argv for --command."
               2
               1))))
 
+(deftype repl-script-diagnostic-condition ()
+  "Source errors that RUN-REPL-SCRIPT reports with their location. They are
+diagnostics of the script, not crashes, so no crash log is written for them."
+  '(or nshell.domain.parsing:sexp-reader-error
+       nshell.application:sexp-evaluation-syntax-error
+       nshell.application:command-macro-syntax-error))
+
 (defun run-repl-script (path &optional script-args)
   "Execute the script file at PATH (multiline blocks supported, via the same
 block-aware reader as the source builtin). SCRIPT-ARGS are exposed to the
 script as $argv. Returns the exit status of the last command."
   (%initialize-batch-state)
   (handler-case
-      (let ((nshell.domain.expansion:*positional-args* script-args))
-        (multiple-value-bind (output code)
-            (%with-repl-shell-context (context)
-              (handler-case
-                  (with-open-file (stream path :direction :input)
-                    (nshell.application:source-lines-to-stream
-                     context
-                     (nshell.application:collect-source-lines stream)
-                     path))
-                (nshell.domain.parsing:sexp-reader-error (condition)
-                  (error condition))
-                (nshell.application:sexp-evaluation-syntax-error (condition)
-                  (error condition))
-                (nshell.application:command-macro-syntax-error (condition)
-                  (error condition))
-                (error (condition)
-                  (values (format nil "source: ~a: ~a~%" path condition) 1))))
-          (when output (write-string output *standard-output*))
-          (setf *last-exit-code* (or code 0))))
+      (call-with-crash-capture
+       (lambda ()
+         (let ((nshell.domain.expansion:*positional-args* script-args))
+           (multiple-value-bind (output code)
+               (%with-repl-shell-context (context)
+                 (call-with-crash-capture
+                  (lambda ()
+                    (with-open-file (stream path :direction :input)
+                      (nshell.application:source-lines-to-stream
+                       context
+                       (nshell.application:collect-source-lines stream)
+                       path)))
+                  (lambda (crash)
+                    (%record-crash-log crash *error-output*)
+                    (values (format nil "source: ~a: ~a~%" path (%crash-message crash))
+                            1))
+                  :pass-through 'repl-script-diagnostic-condition))
+             (when output (write-string output *standard-output*))
+             (setf *last-exit-code* (or code 0)))))
+       (lambda (crash)
+         (format *error-output* "nshell: ~a~%" (%crash-message crash))
+         (%record-crash-log crash *error-output*)
+         (setf *last-exit-code* 1))
+       :pass-through 'repl-script-diagnostic-condition)
     (nshell.domain.parsing:sexp-reader-error (condition)
       (%report-repl-script-source-diagnostic condition path))
     (nshell.application:sexp-evaluation-syntax-error (condition)
       (%report-repl-script-source-diagnostic condition path))
     (nshell.application:command-macro-syntax-error (condition)
-      (%report-repl-script-source-diagnostic condition path))
-    (error (condition)
-      (format *error-output* "nshell: ~a~%" condition)
-      (setf *last-exit-code* 1)))
+      (%report-repl-script-source-diagnostic condition path)))
   *last-exit-code*)

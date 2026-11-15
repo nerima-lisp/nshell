@@ -66,6 +66,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:terminal-size-unavailable #:terminal-size-unavailable-fd
             #:*external-command-timeout* #:*command-not-found-hook*
             #:run-shell-command
+            #:current-executable-path #:current-process-arguments #:exec-program
             #:run-external #:run-external-capture #:run-external-exec
             #:process-exit-status-code
             #:sidecar-handle #:sidecar-handle-p #:sidecar-handle-process
@@ -147,5 +148,9 @@ history records and loads and saves configuration values.")
            #:history-record-matches-p #:history-record-filter-token
            #:*history-record-to-append*
            #:load-config-sources
-           #:load-config #:save-config #:config-file-path #:history-record-add-batch))
+           #:load-config #:save-config #:config-file-path #:history-record-add-batch
+           ;; Crash logs (P0-4)
+           #:crash-record #:crash-record-p #:crash-record-condition
+           #:crash-record-frame-names #:crash-record-frame-arguments
+           #:capture-crash #:crash-log-directory-path #:write-crash-report))
 )

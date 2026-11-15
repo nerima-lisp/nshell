@@ -1171,22 +1171,28 @@ wrapped line's other rows on screen as stale duplicates."
   (defun %execute-command-line (text)
     (if (%assistant-proposal-confirmation-required-p)
         (%confirm-assistant-proposal)
-        (handler-case
-            (%execute-new-reader-command-line text)
-          (nshell.infrastructure.terminal:terminal-mode-operation-failed
-              (condition)
-            (format *error-output* "~%nshell: ~a~%" condition)
-            (%set-command-failure-state 1)
-            (setf *running* nil)
-            +repl-exit+)
-          (storage-condition ()
-            (with-reset-rendered-prompt-state-and-prompt-cont
-              (format t "~%nshell: storage exhausted~%")
-              (%set-command-failure-state 1)))
-          (error (condition)
-            (with-reset-rendered-prompt-state-and-prompt-cont
-              (format t "~%nshell error: ~a~%" condition)
-              (%set-command-failure-state 1))))))
+        (call-with-crash-capture
+         (lambda ()
+           (handler-case
+               (multiple-value-prog1 (%execute-new-reader-command-line text)
+                 (setf *crash-streak* nil))
+             ;; Raw mode could not be restored: end the session rather than
+             ;; run the line editor on a cooked terminal. Not a crash.
+             (nshell.infrastructure.terminal:terminal-mode-operation-failed
+                 (condition)
+               (format *error-output* "~%nshell: ~a~%" condition)
+               (%set-command-failure-state 1)
+               (setf *running* nil)
+               +repl-exit+)))
+         (lambda (crash)
+           (if (%crash-storage-p crash)
+               (format t "~%nshell: storage exhausted~%")
+               (format t "~%nshell error: ~a~%" (%crash-message crash)))
+           (%record-crash-log crash *standard-output*)
+           (%set-command-failure-state 1)
+           (if (%note-interactive-crash crash)
+               (%end-session-after-crash)
+               (with-reset-rendered-prompt-state-and-prompt-cont))))))
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)

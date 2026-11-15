@@ -11,6 +11,9 @@ from pathlib import Path
 
 FUNCTION = "(defun %process-input-event (event)"
 TARGET = "          (multiple-value-bind (new-state output-event)\n              (reduce-input-state *input-state* event)"
+# The guarded body of %process-input-event: the fault must be raised inside it,
+# so crash recovery handles it like any other key-handler failure.
+GUARDED_BODY = "(call-with-crash-capture\n     (lambda ()"
 FAULT_QUERY = (
     '(when (eq :ctrl-f (nshell.domain.input:key-event-type event)) '
     '(error "Q08_TEST_CONDITION"))'
@@ -161,8 +164,8 @@ def prepare_source(source_root: Path, destination: Path) -> None:
     patched_function = patched[patched_function_start:patched_function_end]
     condition_index = patched_function.find("Q08_TEST_CONDITION")
     reducer_index = patched_function.find(TARGET)
-    progn_index = patched_function.find("(progn")
-    if progn_index < 0 or not progn_index < condition_index < reducer_index:
+    body_index = patched_function.find(GUARDED_BODY)
+    if body_index < 0 or not body_index < condition_index < reducer_index:
         raise ValueError("fault injection must immediately precede the reducer")
     resolution = json.loads(
         run_paredit(

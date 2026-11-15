@@ -246,4 +246,21 @@ generated reference page. Loaded before any condition that mixes it in.")
            #:error-code-name #:error-code-kind #:error-code-exit-code
            #:read-error-code-table #:render-error-codes-markdown))
 
+(defpackage #:nshell.domain.crash
+  (:documentation
+   "Domain: what a crash report says. Where crash logs go, what a log file is
+called, how a log is rendered with HOME shortened to ~ and secrets redacted,
+which backtrace frame names the place of a crash, and when the same place has
+failed often enough to offer a --safe restart. Capturing the backtrace and
+writing the file happen in infrastructure.")
+  (:use #:cl)
+  (:export #:+crash-repeat-threshold+
+           #:crash-log-directory #:crash-log-file-name #:crash-time-string
+           #:replace-home-directory
+           #:nshell-frame-name-p #:innermost-nshell-frame #:crash-place
+           #:crash-streak-advance #:crash-streak-count
+           #:crash-streak-repeated-p
+           #:render-crash-log
+           #:safe-reexec-arguments))
+
 )

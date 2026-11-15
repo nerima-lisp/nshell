@@ -341,6 +341,10 @@
                 (lambda () (setf restored t)))
                ('nshell.presentation::%call-with-cooked-terminal
                 (lambda (thunk) (setf called t) (funcall thunk)))
+               ;; A failing step is recovered (P0-4); the third failure at
+               ;; the same place asks about --safe, and end of input ends it.
+               ('nshell.presentation::%read-safe-reexec-answer
+                (lambda () :eof))
                ('nshell.presentation::render-prompt-cont
                 (lambda ()
                   (nshell.presentation::%execute-with-repl-shell-context
@@ -357,9 +361,8 @@
           (expect (not (null selected)) :to-equal (not (eq scenario :install-failure)))
           (expect called :to-equal (not (eq scenario :install-failure)))
           (expect restored :to-be-truthy)
-          (expect caught :to-equal (eq scenario :execution-failure))
-          (unless caught
-            (expect code :to-equal (if (eq scenario :install-failure) 1 0)))
+          (expect caught :to-be-falsy)
+          (expect code :to-equal (if (eq scenario :success) 0 1))
           (expect nshell.presentation::*interactive-terminal-installed-p* :to-be-falsy)))))
 
   (it "repl-failure-status-is-observed-by-next-command"

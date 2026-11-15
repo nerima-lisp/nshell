@@ -7,9 +7,11 @@ Output is a human-readable table plus a machine-readable JSON verdict.
 Subcommands:
   judge RAW [--noise NOISE] [--b3 ARM:BLOCK:PATH ...] [--b3-status TEXT]
         [--note TEXT ...] --json OUT --table OUT
-  noise RAW [--b3 ...] --out NOISE
+  noise RAW [--b3 ...] [--b3-status TEXT] --out NOISE
 
 Exit codes of `judge`: 0 pass, 1 fail, 3 inconclusive, 2 usage or input error.
+Exit codes of `noise`: 0 every gated metric has an entry, 3 the noise file was
+written without some of them, 2 usage or input error.
 """
 
 from __future__ import annotations
@@ -136,12 +138,41 @@ def valid_blocks(metric: dict[str, Any]) -> list[dict[str, list[list[float]]]]:
     return [block for block in metric.get("blocks", []) if block.get("A") and block.get("B")]
 
 
+def unjudgeable(metric: dict[str, Any]) -> tuple[str, str] | None:
+    """("n/a" or "inconclusive", reason) when the metric's samples cannot be judged.
+
+    n/a needs a recorded reason per unsupported arm, which the harness writes
+    only when a binary rejects the feature; every measurement failure leaves
+    the metric short of samples and therefore inconclusive.
+    """
+    support = metric.get("support", {"A": True, "B": True})
+    missing = [arm for arm in ("A", "B") if not support.get(arm, True)]
+    if missing:
+        reasons = metric.get("unsupported", {})
+        if all(reasons.get(arm) for arm in missing):
+            return "n/a", "unsupported by " + "; ".join(f"arm {arm}: {reasons[arm]}" for arm in missing)
+        return "inconclusive", f"arm {'+'.join(missing)} marked unsupported without a recorded reason"
+    if metric.get("guard_failures"):
+        return "inconclusive", "correctness guard failed: " + "; ".join(metric["guard_failures"][:3])
+    planned = metric.get("planned_groups_per_arm", 0)
+    blocks = valid_blocks(metric)
+    counts = {arm: sum(len(block[arm]) for block in blocks) for arm in ("A", "B")}
+    needed = math.ceil(planned * MIN_VALID_FRACTION) if planned else 1
+    if not blocks or min(counts.values()) < needed:
+        reason = f"valid groups A={counts['A']} B={counts['B']}, need >= {needed} of {planned} per arm"
+        if metric.get("errors"):
+            reason += "; errors: " + "; ".join(str(e) for e in metric["errors"][:3])
+        return "inconclusive", reason
+    return None
+
+
 def judge_count_metric(metric: dict[str, Any]) -> dict[str, Any]:
     blocks = valid_blocks(metric)
     gated = metric.get("io_gate", True)
     row: dict[str, Any] = {"metric": metric["name"], "stat": "per_key", "kind": "count", "gated": gated}
-    if not blocks:
-        row.update(verdict="inconclusive" if gated else "info", reason="no valid B3 runs")
+    problem = unjudgeable(metric)
+    if problem is not None:
+        row.update(verdict="inconclusive" if gated else "info", reason=problem[1])
         return row
     base_values = pooled(blocks, "A")
     cand_values = pooled(blocks, "B")
@@ -167,10 +198,10 @@ def judge_metric(metric: dict[str, Any], noise: dict[str, Any] | None) -> list[d
     gated = GATED_RULES.get(kind, [])
     stats: list[tuple[str, float | None, float | None]] = list(gated)
     stats += [(name, None, None) for name in INFO_STATS.get(kind, [])]
-    support = metric.get("support", {"A": True, "B": True})
     planned = metric.get("planned_groups_per_arm", 0)
     blocks = valid_blocks(metric)
     counts = {arm: sum(len(block[arm]) for block in blocks) for arm in ("A", "B")}
+    problem = unjudgeable(metric)
     for stat, relative, absolute in stats:
         row: dict[str, Any] = {
             "metric": metric["name"],
@@ -183,19 +214,8 @@ def judge_metric(metric: dict[str, Any], noise: dict[str, Any] | None) -> list[d
             "blocks": len(blocks),
         }
         rows.append(row)
-        if not support.get("A", True) or not support.get("B", True):
-            missing = [arm for arm in ("A", "B") if not support.get(arm, True)]
-            row.update(verdict="n/a", reason=f"unsupported by arm {'+'.join(missing)}")
-            continue
-        if metric.get("guard_failures"):
-            row.update(verdict="inconclusive", reason="correctness guard failed: " + "; ".join(metric["guard_failures"][:3]))
-            continue
-        needed = math.ceil(planned * MIN_VALID_FRACTION) if planned else 1
-        if not blocks or min(counts.values()) < needed:
-            reason = f"valid groups A={counts['A']} B={counts['B']}, need >= {needed} of {planned} per arm"
-            if metric.get("errors"):
-                reason += "; errors: " + "; ".join(str(e) for e in metric["errors"][:3])
-            row.update(verdict="inconclusive", reason=reason)
+        if problem is not None:
+            row.update(verdict=problem[0], reason=problem[1])
             continue
         result = bootstrap_difference(blocks, stat)
         row.update(result)
@@ -206,7 +226,15 @@ def judge_metric(metric: dict[str, Any], noise: dict[str, Any] | None) -> list[d
         table_threshold = max(relative * result["base"], absolute)
         threshold = table_threshold
         source = "table"
-        entry = (noise or {}).get("metrics", {}).get(noise_key(metric["name"], stat))
+        key = noise_key(metric["name"], stat)
+        entry = (noise or {}).get("metrics", {}).get(key)
+        if noise is not None and entry is None:
+            # The noise floor can only raise the threshold, so without it a
+            # table-threshold fail or pass is not established.
+            why = noise.get("missing", {}).get(key) or noise.get("unsupported", {}).get(key)
+            reason = f"noise file has no entry for {key}" + (f" (noise run: {why})" if why else "")
+            row.update(verdict="inconclusive", reason=reason + "; rerun noise.sh")
+            continue
         if entry is not None:
             floor = 2 * entry["noise_rel"] * result["base"]
             if floor > threshold:
@@ -272,6 +300,29 @@ def parse_b3_args(values: list[str]) -> list[tuple[str, int, Path]]:
             raise ValueError(f"--b3 arm must be A or B: {value}")
         runs.append((arm, int(block), Path(path)))
     return runs
+
+
+def run_problems(raw: dict[str, Any], b3_runs: list[tuple[str, int, Path]],
+                 b3_status: str | None) -> tuple[list[dict[str, Any]], list[str], list[str], list[str]]:
+    """All metrics plus the run-level reasons that rule out a pass, B3 notes and uptimes."""
+    metrics = list(raw.get("metrics", []))
+    problems: list[str] = []
+    notes: list[str] = []
+    uptimes: list[str] = []
+    if b3_runs:
+        b3, errors, uptimes = b3_metrics(b3_runs)
+        metrics += b3
+        if errors:
+            problems.append("B3 errors: " + "; ".join(errors))
+            notes.extend(errors)
+        if not b3:
+            problems.append("B3 produced no scenarios")
+    if raw.get("fatal_error"):
+        problems.append("harness error: " + raw["fatal_error"])
+        notes.append("harness error: " + raw["fatal_error"])
+    if b3_status and b3_status.startswith("error"):
+        problems.append(b3_status)
+    return metrics, problems, notes, uptimes
 
 
 def overall_verdict(rows: list[dict[str, Any]], extra_inconclusive: list[str]) -> tuple[str, int]:
@@ -350,28 +401,15 @@ def render_table(report: dict[str, Any]) -> str:
 
 def build_report(raw: dict[str, Any], noise: dict[str, Any] | None, noise_path: str | None,
                  b3_runs: list[tuple[str, int, Path]], b3_status: str | None) -> dict[str, Any]:
-    metrics = list(raw.get("metrics", []))
-    extra_inconclusive: list[str] = []
-    notes: list[str] = list(raw.get("notes", []))
+    metrics, extra_inconclusive, b3_notes, uptimes = run_problems(raw, b3_runs, b3_status)
+    notes: list[str] = list(raw.get("notes", [])) + b3_notes
     uptime = dict(raw.get("uptime", {}))
+    for index, value in enumerate(uptimes):
+        uptime[f"b3 {index}"] = value
     if b3_runs:
-        b3, errors, uptimes = b3_metrics(b3_runs)
-        metrics += b3
-        if errors:
-            extra_inconclusive.append("B3 errors: " + "; ".join(errors))
-            notes.extend(errors)
-        if not b3:
-            extra_inconclusive.append("B3 produced no scenarios")
-        for index, value in enumerate(uptimes):
-            uptime[f"b3 {index}"] = value
         status = b3_status or f"measured ({len(b3_runs)} runs)"
     else:
         status = b3_status or "not measured"
-    if raw.get("fatal_error"):
-        extra_inconclusive.append("harness error: " + raw["fatal_error"])
-        notes.append("harness error: " + raw["fatal_error"])
-    if b3_status and b3_status.startswith("error"):
-        extra_inconclusive.append(b3_status)
     rows: list[dict[str, Any]] = []
     for metric in metrics:
         rows.extend(judge_metric(metric, noise))
@@ -391,23 +429,31 @@ def build_report(raw: dict[str, Any], noise: dict[str, Any] | None, noise_path: 
     }
 
 
-def build_noise(raw: dict[str, Any], b3_runs: list[tuple[str, int, Path]]) -> dict[str, Any]:
-    metrics = list(raw.get("metrics", []))
-    if b3_runs:
-        metrics += b3_metrics(b3_runs)[0]
+def build_noise(raw: dict[str, Any], b3_runs: list[tuple[str, int, Path]],
+                b3_status: str | None = None) -> dict[str, Any]:
+    metrics, problems, _, _ = run_problems(raw, b3_runs, b3_status)
     entries: dict[str, Any] = {}
+    missing: dict[str, str] = {}
+    unsupported: dict[str, str] = {}
     for metric in metrics:
         stats = [rule[0] for rule in GATED_RULES.get(metric["kind"], [])]
-        blocks = valid_blocks(metric)
-        if not blocks or metric.get("guard_failures"):
-            continue
+        problem = unjudgeable(metric)
         for stat in stats:
-            result = bootstrap_difference(blocks, stat)
-            if not result["base"]:
+            key = noise_key(metric["name"], stat)
+            if problem is not None:
+                (unsupported if problem[0] == "n/a" else missing)[key] = problem[1]
                 continue
+            result = bootstrap_difference(valid_blocks(metric), stat)
             magnitude = max(abs(result["ci_low"]), abs(result["ci_high"]))
-            entries[noise_key(metric["name"], stat)] = {
-                "noise_rel": magnitude / result["base"],
+            if result["base"]:
+                noise_rel = magnitude / result["base"]
+            elif magnitude == 0:
+                noise_rel = 0.0
+            else:
+                missing[key] = f"A statistic is 0 but the A-vs-A CI is [{result['ci_low']}, {result['ci_high']}]"
+                continue
+            entries[key] = {
+                "noise_rel": noise_rel,
                 "base": result["base"],
                 "diff": result["diff"],
                 "ci_low": result["ci_low"],
@@ -419,7 +465,11 @@ def build_noise(raw: dict[str, Any], b3_runs: list[tuple[str, int, Path]]) -> di
         "arms": raw.get("arms", {}),
         "uptime": raw.get("uptime", {}),
         "config": raw.get("config", {}),
+        "complete": not (missing or problems or not entries),
+        "incomplete_reasons": problems + ([] if entries else ["no gated metric was measured"]),
         "metrics": entries,
+        "missing": missing,
+        "unsupported": unsupported,
     }
 
 
@@ -441,6 +491,7 @@ def main(argv: list[str]) -> int:
     noise = sub.add_parser("noise")
     noise.add_argument("raw")
     noise.add_argument("--b3", action="append", default=[])
+    noise.add_argument("--b3-status")
     noise.add_argument("--out", required=True)
     try:
         args = parser.parse_args(argv)
@@ -450,8 +501,15 @@ def main(argv: list[str]) -> int:
         raw = load_json(args.raw)
         b3_runs = parse_b3_args(args.b3)
         if args.command == "noise":
-            Path(args.out).write_text(json.dumps(build_noise(raw, b3_runs), indent=2) + "\n", encoding="utf-8")
-            return EXIT_PASS
+            noise_report = build_noise(raw, b3_runs, args.b3_status)
+            Path(args.out).write_text(json.dumps(noise_report, indent=2) + "\n", encoding="utf-8")
+            if noise_report["complete"]:
+                return EXIT_PASS
+            for reason in noise_report["incomplete_reasons"]:
+                print(f"perfstats: noise run incomplete: {reason}", file=sys.stderr)
+            for key, reason in noise_report["missing"].items():
+                print(f"perfstats: noise run has no entry for {key}: {reason}", file=sys.stderr)
+            return EXIT_INCONCLUSIVE
         noise_data = load_json(args.noise) if args.noise else None
     except (OSError, ValueError) as error:
         print(f"perfstats: {error}", file=sys.stderr)

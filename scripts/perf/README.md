@@ -11,11 +11,12 @@ Absolute times on a shared, loaded machine move by a factor of two or more betwe
 | `perfstats.py` | Bootstrap confidence intervals, thresholds, verdict, table and JSON |
 | `legacy-bench.sh`, `legacy-bench.lisp` | Run the `bench/` benchmarks of this checkout against the nshell system of one source tree (informational) |
 | `b3-*` | B3 per-key consing and I/O counts, measured in-process |
+| `test_*.py` | Unit tests of the scripts; no nshell build needed: `python3 -B -m unittest discover -s scripts/perf -p 'test_*.py'` |
 
 ## Running
 
 A `BINARY` is the `bin/nshell` wrapper of an nshell package build (for example `result/bin/nshell` after `nix build`).
-The cold-startup metric follows its two wrapper scripts to `nshell.core`, so a binary without that layout makes the run inconclusive.
+The cold-startup metric follows its two wrapper scripts to `nshell.core`, so a binary without that layout makes the run inconclusive; the reason is in `verdict.txt` and `verdict.json`.
 
 Run the scripts under a lock file shared with builds and other benchmarks so they do not overlap:
 
@@ -27,6 +28,7 @@ lockf LOCKFILE scripts/perf/compare.sh \
 
 `noise.sh` runs the full `compare.sh` protocol with the same binary as both arms.
 Rerun it when the machine or the harness changes, and pass `noise.sh` the same `--harness-arg` sample-count options that `compare.sh` will use.
+`noise.sh` exits 3 when it could not measure a gated metric; the noise file then lists it under `missing` with the reason.
 Without `--noise`, `compare.sh` uses the thresholds in the table under "Statistics and thresholds" alone and prints a warning.
 `--note TEXT` records what differs between the two binaries (for example the build path) in the table and the JSON.
 
@@ -35,6 +37,7 @@ To include B3, pass both source trees: `--base-src DIR --cand-src DIR`.
 When the two arms pin different dependencies, pass each arm's registry with `--base-registry REG --cand-registry REG`; `compare.sh` sets `CL_SOURCE_REGISTRY` to that value for the arm's `b3-measure.sh` and `legacy-bench.sh` runs and records both in `conditions.txt`.
 Without the source trees, the table reports B3 as not measured.
 `noise.sh --src DIR` adds B3 to the noise file the same way.
+A noise file taken without `--src` has no B3 consing entries, so B3 consing is inconclusive in a comparison that uses it (see "Statistics and thresholds").
 
 `--quick` uses tiny sample counts; use it only to check that the harness works.
 Its verdicts mean nothing.
@@ -68,6 +71,9 @@ A redraw counts as finished when the line editor writes its closing cursor-shape
 | `startup.c_true` | `nshell -c true` until exit (`-c` is delegated to `/bin/sh` by the wrapper) |
 | `startup.command_true` | `nshell --command true` until exit |
 | `startup.json_command_true` | `nshell --json --command true` until exit; `n/a` while a binary does not support `--json` |
+
+`n/a` requires that the binary rejects `--json` as a usage error: exit 1 with the usage text on stderr.
+Any other probe outcome (a timeout, another exit status, output that is not JSON) leaves the metric unmeasured, which makes it inconclusive.
 
 A cold start needs an empty page cache, and `purge` needs root.
 For each cold sample the harness instead writes a fresh copy of the binary's `nshell.core` with `F_NOCACHE`, checks with `mincore` that under 1% of its pages are resident, and starts nshell through a copy of the wrapper scripts that points at the copy.
@@ -128,6 +134,8 @@ For each metric the gate computes the difference B − A of a statistic (median,
 
 With a noise file, each threshold is raised to twice the same-binary variation when that is larger.
 The variation of a metric is `max(|CI low|, |CI high|)` of its A-vs-A difference, stored relative to the noise run's statistic and scaled to arm A of the current compare run.
+When a noise file is given but has no entry for a startup, key or B3 consing metric, that metric is inconclusive: its floor is unknown, and the table threshold alone could fail a difference the noise floor would allow.
+The B3 `stat`, file I/O and spawn counts have no noise floor, so they are judged by their rule with or without a noise file.
 Tab, prompt, RSS and key medians are reported with intervals but are not gated.
 
 ## Outcomes and exit codes
@@ -136,12 +144,13 @@ Tab, prompt, RSS and key medians are reported with intervals but are not gated.
 |---|---|---|
 | 0 | pass | No gated metric's CI lower bound exceeds its threshold |
 | 1 | fail | At least one gated metric's CI lower bound exceeds its threshold |
-| 3 | inconclusive | No fail, but the run cannot support a pass: a gated metric has fewer than 75% of its planned processes valid, a correctness check failed (missing history suggestion, warm core, frame without the typed character), the harness stopped early, or a requested B3 run failed |
+| 3 | inconclusive | No fail, but the run cannot support a pass: a gated metric has fewer than 75% of its planned processes valid or could not be measured at all (for example the cold-startup launcher could not be built), a correctness check failed (missing history suggestion, warm core, frame without the typed character), the noise file has no entry for a gated metric, the harness stopped early, or a requested B3 run failed |
 | 2 | usage error | Bad arguments or unreadable input |
 
 A fail outranks inconclusive.
 A row marked `pass*` passed the rule, but its CI upper bound exceeds the threshold, so a regression of that size is not excluded at this sample count.
-`noise.sh` exits 0 whenever it wrote the noise file and warns if the binary failed against itself.
+A gated metric marked `n/a` is left out of the verdict; the table and `verdict.json` give the reason.
+`noise.sh` exits 0 when the noise file has an entry for every gated metric, 3 when it lacks one, and warns if the binary failed against itself.
 
 ## Relation to bench/ and older scripts
 

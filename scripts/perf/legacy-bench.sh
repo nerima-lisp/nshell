@@ -18,8 +18,14 @@ if [[ $# -lt 2 || $# -gt 3 ]]; then
   printf 'usage: %s SOURCE_TREE OUT.jsonl [NSHELL_BINARY]\n' "$0" >&2
   exit 2
 fi
-tree=$(cd -- "$1" && pwd -P)
-out_dir=$(cd -- "$(dirname -- "$2")" && pwd -P)
+if ! tree=$(cd -- "$1" 2>/dev/null && pwd -P); then
+  printf 'legacy-bench: source tree not found: %s\n' "$1" >&2
+  exit 2
+fi
+if ! out_dir=$(cd -- "$(dirname -- "$2")" 2>/dev/null && pwd -P); then
+  printf 'legacy-bench: output directory not found: %s\n' "$(dirname -- "$2")" >&2
+  exit 2
+fi
 output=$out_dir/$(basename -- "$2")
 binary=${3:-}
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)

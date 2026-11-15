@@ -38,6 +38,14 @@ usage() {
   exit 2
 }
 
+# need_value OPTION "$@": exit 2 unless OPTION is followed by a nonempty value.
+need_value() {
+  if [[ $# -lt 3 || -z $3 ]]; then
+    printf 'compare.sh: %s needs a value\n' "$1" >&2
+    exit 2
+  fi
+}
+
 noise_file=
 out_dir=
 base_src=
@@ -52,20 +60,20 @@ mode=compare
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --noise) noise_file=${2:?--noise needs a file}; shift 2 ;;
-    --out) out_dir=${2:?--out needs a directory}; shift 2 ;;
-    --base-src) base_src=${2:?--base-src needs a directory}; shift 2 ;;
-    --cand-src) cand_src=${2:?--cand-src needs a directory}; shift 2 ;;
-    --base-registry) base_registry=${2:?--base-registry needs a value}; shift 2 ;;
-    --cand-registry) cand_registry=${2:?--cand-registry needs a value}; shift 2 ;;
-    --b3-blocks) b3_blocks=${2:?--b3-blocks needs a number}; shift 2 ;;
+    --noise) need_value "$1" "$@"; noise_file=$2; shift 2 ;;
+    --out) need_value "$1" "$@"; out_dir=$2; shift 2 ;;
+    --base-src) need_value "$1" "$@"; base_src=$2; shift 2 ;;
+    --cand-src) need_value "$1" "$@"; cand_src=$2; shift 2 ;;
+    --base-registry) need_value "$1" "$@"; base_registry=$2; shift 2 ;;
+    --cand-registry) need_value "$1" "$@"; cand_registry=$2; shift 2 ;;
+    --b3-blocks) need_value "$1" "$@"; b3_blocks=$2; shift 2 ;;
     --legacy) legacy=1; shift ;;
     --quick)
       harness_args+=(--startup-blocks 1 --key-blocks 1 --path-key-blocks 1 --keys 20 --warmup-keys 2
         --tab-blocks 1 --tab-samples 2 --prompt-blocks 1 --prompt-samples 3)
       shift ;;
-    --harness-arg) harness_args+=("${2:?--harness-arg needs a value}"); shift 2 ;;
-    --note) notes+=(--note "${2:?--note needs text}"); shift 2 ;;
+    --harness-arg) need_value "$1" "$@"; harness_args+=("$2"); shift 2 ;;
+    --note) need_value "$1" "$@"; notes+=(--note "$2"); shift 2 ;;
     --noise-mode) mode=noise; shift ;;  # used by noise.sh
     -h|--help) usage ;;
     --) shift; break ;;
@@ -163,7 +171,7 @@ if [[ -n $base_src ]]; then
   if [[ $b3_blocks -eq 0 ]]; then
     b3_status="not measured: --b3-blocks 0"
   elif [[ ! -x $b3_script ]]; then
-    b3_status="not measured: $b3_script is absent"
+    b3_status="error: B3 requested but $b3_script is not executable"
   else
     b3_failures=()
     for ((block = 1; block <= b3_blocks; block++)); do
@@ -204,9 +212,14 @@ fi
 
 uptime >"$out_dir/uptime-after.txt"
 
+noise_status=0
 if [[ $mode == noise ]]; then
-  "$python" -B "$script_dir/perfstats.py" noise "$out_dir/raw.json" \
-    ${b3_args[@]+"${b3_args[@]}"} --out "$out_dir/noise.json"
+  noise_args=(noise "$out_dir/raw.json" --out "$out_dir/noise.json")
+  [[ -n $b3_status ]] && noise_args+=(--b3-status "$b3_status")
+  "$python" -B "$script_dir/perfstats.py" "${noise_args[@]}" ${b3_args[@]+"${b3_args[@]}"} || noise_status=$?
+  if [[ $noise_status -ne 0 && $noise_status -ne 3 ]]; then
+    exit "$noise_status"
+  fi
   printf 'compare.sh: noise file %s\n' "$out_dir/noise.json" >&2
 fi
 
@@ -225,6 +238,12 @@ if [[ $mode == noise ]]; then
   # harness or the machine introduced a bias between the two arms.
   if [[ $status -eq 1 ]]; then
     printf 'noise.sh: WARNING: the same binary failed against itself; treat this noise file with suspicion\n' >&2
+  fi
+  if [[ $noise_status -eq 3 ]]; then
+    # compare.sh judges every gated metric missing from this file inconclusive.
+    printf 'noise.sh: the noise file lacks gated metrics (see %s); outcome inconclusive\n' \
+      "$out_dir/noise.json" >&2
+    exit 3
   fi
   exit 0
 fi

@@ -441,20 +441,34 @@ def measure_command(argv: list[str], fixtures: dict[str, Path], root: Path) -> d
         isolation.remove()
 
 
-def json_supported(binary: Path, fixtures: dict[str, Path], root: Path) -> bool:
+def json_support(binary: Path, fixtures: dict[str, Path], root: Path,
+                 timeout: float = COMMAND_TIMEOUT) -> str | None:
+    """None when `--json --command true` prints JSON; the reason when the binary rejects `--json`.
+
+    Only nshell's usage-error path (exit 1 with the usage text on stderr)
+    counts as "not supported". Any other outcome raises HarnessError, so a
+    broken or slow binary is reported as unmeasured instead of excluded.
+    """
     isolation = Isolation(root)
     try:
         completed = subprocess.run([str(binary), "--json", "--command", "true"], cwd=fixtures["work"],
                                    env=isolation.env(), stdin=subprocess.DEVNULL, capture_output=True,
-                                   timeout=COMMAND_TIMEOUT)
-        if completed.returncode != 0:
-            return False
-        json.loads(completed.stdout.decode("utf-8", "replace").strip().splitlines()[-1])
-        return True
-    except (ValueError, IndexError, subprocess.TimeoutExpired):
-        return False
+                                   timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        raise HarnessError(f"--json probe: no exit within {timeout}s") from error
     finally:
         isolation.remove()
+    stderr = completed.stderr.decode("utf-8", "replace")
+    if completed.returncode == 1 and "Usage: nshell" in stderr:
+        return "--json rejected as a usage error (exit 1 with usage text)"
+    if completed.returncode != 0:
+        raise HarnessError(f"--json probe exited {completed.returncode}: {stderr[-200:]!r}")
+    lines = completed.stdout.decode("utf-8", "replace").strip().splitlines()
+    try:
+        json.loads(lines[-1])
+    except (ValueError, IndexError) as error:
+        raise HarnessError(f"--json probe printed no JSON on its last line: {lines[-1:]!r}") from error
+    return None
 
 
 def run_key_session(binary: Path, fixtures: dict[str, Path], root: Path, prefill: str, char: str,
@@ -560,6 +574,9 @@ class Metric:
             "blocks": [], "errors": [], "guard_failures": [], "support": {"A": True, "B": True},
             "extra": [],
         }
+        # Set when the metric cannot be measured at all; its samples stay
+        # empty, so perfstats judges it inconclusive from the recorded errors.
+        self.skip = False
 
     def new_block(self) -> None:
         self.data["blocks"].append({"A": [], "B": []})
@@ -608,11 +625,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             try:
                 cold[arm] = ColdLauncher(path, root)
             except (HarnessError, OSError) as error:
-                cold_metric.data["support"][arm] = False
+                cold_metric.skip = True
                 cold_metric.data["errors"].append(f"{arm}: {error}")
         json_metric = Metric("startup.json_command_true", "startup", "ms", 2 * args.startup_blocks)
         for arm, path in binaries.items():
-            json_metric.data["support"][arm] = json_supported(path, fixtures, root)
+            try:
+                rejected = json_support(path, fixtures, root)
+            except (HarnessError, OSError) as error:
+                json_metric.skip = True
+                json_metric.data["errors"].append(f"{arm}: {error}")
+                continue
+            if rejected is not None:
+                json_metric.data["support"][arm] = False
+                json_metric.data.setdefault("unsupported", {})[arm] = rejected
 
         startup: list[tuple[Metric, Callable[[str, bool], dict[str, Any]]]] = [
             (Metric("startup.interactive_warm", "startup", "ms", 2 * args.startup_blocks),
@@ -632,7 +657,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             warm = block == 0
             log(f"startup block {block}{' (warm-up, discarded)' if warm else ''}")
             for metric, action in startup:
-                if not all(metric.data["support"].values()):
+                if metric.skip or not all(metric.data["support"].values()):
                     continue
                 if not warm:
                     metric.new_block()

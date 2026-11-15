@@ -26,29 +26,29 @@ my ($flag, $object) = @ARGV;
 open my $trace, '>>', $ENV{GATE_TRACE} or die $!;
 print {$trace} "$flag $object\n";
 close $trace;
-my $helper = $object =~ m{/libexec/cl-process-kit-spawn$};
-exit 2 if $helper && $ENV{GATE_CASE} eq 'readelf-failure';
+my $executable = $object =~ m{/libexec/nshell$};
+exit 2 if $executable && $ENV{GATE_CASE} eq 'readelf-failure';
 if ($flag eq '-d') {
     print " (NEEDED) Shared library: [libmissing.so.1]\n"
-        if $helper && $ENV{GATE_CASE} eq 'dependency';
+        if $executable && $ENV{GATE_CASE} eq 'dependency';
 } elsif ($flag eq '-l') {
-    my $interpreter = $helper && $ENV{GATE_CASE} eq 'interpreter'
+    my $interpreter = $executable && $ENV{GATE_CASE} eq 'interpreter'
         ? '/lib64/ld-linux-x86-64.so.2.extra' : '/lib64/ld-linux-x86-64.so.2';
     print " [Requesting program interpreter: $interpreter]\n";
 } else { die "unexpected readelf flag $flag" }
 STUB
-my @licenses = qw(SBCL-COPYING ZSTD-LICENSE CL-PROLOG-KIT-LICENSE CL-PARSER-KIT-LICENSE CL-DATAFLOW-KIT-LICENSE CL-HOST-KIT-LICENSE CL-BOUNDARY-KIT-LICENSE CL-CLI-LICENSE CL-TTY-KIT-LICENSE CL-LOG-KIT-LICENSE CL-PROCESS-KIT-LICENSE CL-HISTORY-KIT-LICENSE CL-CODEC-KIT-LICENSE CL-DATE-KIT-LICENSE CL-CONCURRENT-KIT-LICENSE CL-JSON-KIT-LICENSE CL-REGEX-KIT-LICENSE CL-VCS-KIT-LICENSE CL-TUI-KIT-LICENSE GLIBC-COPYING.LIB);
+my @licenses = qw(SBCL-COPYING ZSTD-LICENSE CL-PROLOG-KIT-LICENSE CL-PARSER-KIT-LICENSE CL-DATAFLOW-KIT-LICENSE CL-HOST-KIT-LICENSE CL-BOUNDARY-KIT-LICENSE CL-CLI-LICENSE CL-TTY-KIT-LICENSE CL-HISTORY-KIT-LICENSE CL-CODEC-KIT-LICENSE CL-DATE-KIT-LICENSE CL-CONCURRENT-KIT-LICENSE CL-JSON-KIT-LICENSE CL-REGEX-KIT-LICENSE GLIBC-COPYING.LIB);
 my @cases = (
     ['control', undef, undef],
-    ['missing-launcher', 'bin/cl-process-kit-spawn', qr/missing Linux release file: bin\/cl-process-kit-spawn/],
-    ['missing-helper', 'libexec/cl-process-kit-spawn', qr/missing Linux release file: libexec\/cl-process-kit-spawn/],
-    ['nonexec-launcher', 'bin/cl-process-kit-spawn', qr/bin\/cl-process-kit-spawn is not executable/],
-    ['nonexec-helper', 'libexec/cl-process-kit-spawn', qr/libexec\/cl-process-kit-spawn is not executable/],
+    ['missing-launcher', 'bin/nshell', qr/missing release file: bin\/nshell/],
+    ['missing-image', 'libexec/nshell', qr/missing Linux release file: libexec\/nshell/],
+    ['nonexec-launcher', 'bin/nshell', qr/bin\/nshell is not executable/],
+    ['nonexec-image', 'libexec/nshell', qr/libexec\/nshell is not executable/],
     ['dependency', undef, qr/ELF dependency would fall back to the host.*libmissing.so.1/],
     ['interpreter', undef, qr/unexpected ELF interpreter/],
     ['readelf-failure', undef, qr/readelf -d failed/],
 );
-for my $package (qw(JSON REGEX VCS TUI)) {
+for my $package (qw(JSON REGEX)) {
     my $relative = "LICENSES/CL-$package-KIT-LICENSE";
     push @cases,
         ["missing-license-$package", $relative, qr/missing release file: \Q$relative\E/],
@@ -62,7 +62,7 @@ for my $case (@cases) {
         next if $name =~ /^missing-/ && $relative eq $target;
         write_file("$bundle/$relative", $name =~ /^empty-/ && $relative eq $target ? '' : "fixture\n", 0644);
     }
-    for my $relative (qw(bin/nshell bin/cl-process-kit-spawn libexec/nshell libexec/cl-process-kit-spawn lib/ld-linux-x86-64.so.2)) {
+    for my $relative (qw(bin/nshell libexec/nshell lib/ld-linux-x86-64.so.2)) {
         next if $name =~ /^missing-/ && $relative eq $target;
         write_file("$bundle/$relative", "fixture\n", $name =~ /^nonexec-/ && $relative eq $target ? 0644 : 0755);
     }
@@ -87,8 +87,8 @@ for my $case (@cases) {
         is($status, 0, 'known-good synthetic control accepted');
         open my $trace, '<', "$root/$name.trace" or die $!;
         my $calls = do { local $/; <$trace> };
-        like($calls, qr/-d .*libexec\/cl-process-kit-spawn/, 'helper dynamic dependencies inspected');
-        like($calls, qr/-l .*libexec\/cl-process-kit-spawn/, 'helper interpreter inspected');
+        like($calls, qr/-d .*libexec\/nshell/, 'shell dynamic dependencies inspected');
+        like($calls, qr/-l .*libexec\/nshell/, 'shell interpreter inspected');
     }
 }
-done_testing(33);
+done_testing(25);

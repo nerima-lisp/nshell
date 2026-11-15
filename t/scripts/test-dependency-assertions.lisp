@@ -60,7 +60,7 @@
 (multiple-value-bind (root tests) (fixture (lambda () nil))
   (declare (ignore tests))
   (check (= 3 (length (dependency-call-with-history-assertions
-                      "cl-process-kit/test" root (lambda () (run-fixture root)))))
+                      "cl-json-kit/test" root (lambda () (run-fixture root)))))
          "other systems remain outside the limited gate")
   (check (rejects (lambda ()
                     (dependency-call-with-history-assertions

@@ -29,14 +29,21 @@
     # each would drag in its own nixpkgs, inflating flake.lock and rebuilding
     # the same derivations.
     cl-prolog-kit = {
-      url = "github:nerima-lisp/cl-prolog-kit/v1.5.0";
+      url = "github:nerima-lisp/cl-prolog-kit/v1.6.0";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.cl-nix-forge.follows = "cl-nix-forge";
+      inputs.cl-weave.follows = "cl-weave";
+      inputs.paredit-cli.follows = "paredit-cli";
+      inputs.treefmt-nix.follows = "treefmt-nix";
     };
 
     # cl-weave is the testing framework behind both suites.
     cl-weave = {
       url = "github:nerima-lisp/cl-weave/v1.3.0";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.cl-nix-forge.follows = "cl-nix-forge";
+      inputs.paredit-cli.follows = "paredit-cli";
+      inputs.treefmt-nix.follows = "treefmt-nix";
     };
 
     # paredit-cli is a development-only structure editor. Keeping it outside
@@ -75,26 +82,8 @@
       url = "github:nerima-lisp/cl-tty-kit/v1.8.0";
       flake = false;
     };
-    # cl-process-kit consolidates timeout-guarded process launch; it sits on
-    # cl-boundary-kit (clock/sleeper) and cl-log-kit (structured logging).
-    cl-log-kit = {
-      url = "github:nerima-lisp/cl-log-kit/v2.2.0";
-      flake = false;
-    };
-    cl-process-kit = {
-      url = "github:nerima-lisp/cl-process-kit/v3.4.4";
-      flake = false;
-    };
     cl-regex-kit = {
       url = "github:nerima-lisp/cl-regex-kit/v2.2.0";
-      flake = false;
-    };
-    cl-vcs-kit = {
-      url = "github:nerima-lisp/cl-vcs-kit/v0.2.0";
-      flake = false;
-    };
-    cl-tui-kit = {
-      url = "github:nerima-lisp/cl-tui-kit/v1.0.0";
       flake = false;
     };
     # cl-history-kit backs the command-history store, search, and recall
@@ -118,11 +107,11 @@
       flake = false;
     };
     cl-concurrent-kit = {
-      url = "github:nerima-lisp/cl-concurrent-kit/v0.6.1";
+      url = "github:nerima-lisp/cl-concurrent-kit/v0.8.0";
       flake = false;
     };
     cl-json-kit = {
-      url = "github:nerima-lisp/cl-json-kit/v1.2.0";
+      url = "github:nerima-lisp/cl-json-kit/v1.3.0";
       flake = false;
     };
     cl-date-kit = {
@@ -150,11 +139,7 @@
       cl-boundary-kit,
       cl-cli,
       cl-tty-kit,
-      cl-log-kit,
-      cl-process-kit,
       cl-regex-kit,
-      cl-vcs-kit,
-      cl-tui-kit,
       cl-history-kit,
       cl-codec-kit,
       cl-concurrent-kit,
@@ -293,14 +278,6 @@
       # spans systems and hands each callback the system it is building for.
       # Called from three arguments below; identical arguments produce an
       # identical derivation, so the sibling is built once.
-      processKitSourceFor =
-        ctx:
-        ctx.pkgs.applyPatches {
-          name = "cl-process-kit-sigpipe-default";
-          src = cl-process-kit;
-          patches = [ ./nix/patches/cl-process-kit-sigpipe-default.patch ];
-        };
-
       siblingsFor =
         ctx:
         let
@@ -314,10 +291,8 @@
             ctx.cl.lispDerivation {
               pname = name;
               # Read out of the sibling's own .asd, never written here. The
-              # previously hand-written version strings had silently drifted
-              # (cl-log-kit's real 1.0.0 was labelled "1.6.0",
-              # cl-process-kit's 1.0.0 was "0.2.0"), and a number nobody
-              # updates is worse than no number.
+              # previously hand-written version strings had silently drifted,
+              # and a number nobody updates is worse than no number.
               version = ctx.cl.fromAsdSystem "${source}/${name}.asd";
               src = source;
               lispSystem = name;
@@ -369,24 +344,11 @@
           clConcurrentKit = sibling {
             name = "cl-concurrent-kit";
             source = cl-concurrent-kit;
-            patches = [ ./nix/patches/cl-concurrent-kit-cancelled-barrier.patch ];
-            dependencies = [
-              clBoundaryKit
-              clDateKit
-            ];
+            dependencies = [ clDateKit ];
           };
           clJsonKit = sibling {
             name = "cl-json-kit";
             source = cl-json-kit;
-          };
-          clLogKit = sibling {
-            name = "cl-log-kit";
-            source = cl-log-kit;
-            dependencies = [
-              clConcurrentKit
-              clDateKit
-              clHostKit
-            ];
           };
           clCli = sibling {
             name = "cl-cli";
@@ -401,22 +363,6 @@
               clConcurrentKit
             ];
           };
-          clProcessKit = sibling {
-            name = "cl-process-kit";
-            source = processKitSourceFor ctx;
-            dependencies = [
-              clBoundaryKit
-              clLogKit
-              clCodecKit
-            ];
-            # Share process reaping with the cancellation watcher and execute
-            # the complete dependency suite on Linux as well as Darwin.
-            patches = [
-              ./nix/patches/cl-process-kit-poll-interval.patch
-              ./nix/patches/cl-process-kit-enable-linux-tests.patch
-              ./nix/patches/cl-process-kit-wait-for-timeout-group.patch
-            ];
-          };
           clRegexKit = sibling {
             name = "cl-regex-kit";
             source = cl-regex-kit;
@@ -425,61 +371,10 @@
               clParserKit
             ];
           };
-          clVcsKit = sibling {
-            name = "cl-vcs-kit";
-            source = cl-vcs-kit;
-            dependencies = [
-              clProcessKit
-              clHostKit
-              clLogKit
-            ];
-          };
-          clTuiKit = sibling {
-            name = "cl-tui-kit";
-            source = cl-tui-kit;
-          };
           clHistoryKit = sibling {
             name = "cl-history-kit";
             source = cl-history-kit;
           };
-        };
-
-      spawnHelperFor =
-        ctx:
-        ctx.pkgs.stdenv.mkDerivation {
-          pname = "cl-process-kit-spawn";
-          version = ctx.cl.fromAsdSystem "${cl-process-kit}/cl-process-kit.asd";
-          dontUnpack = true;
-          buildPhase = ''
-            runHook preBuild
-            $CC -std=c11 -O2 -Wall -Wextra -Werror ${processKitSourceFor ctx}/native/spawn.c -o cl-process-kit-spawn
-            runHook postBuild
-          '';
-          installPhase = ''
-            runHook preInstall
-            install -Dm755 cl-process-kit-spawn "$out/bin/cl-process-kit-spawn"
-            runHook postInstall
-          '';
-        };
-
-      ptyHelperFor =
-        ctx:
-        ctx.pkgs.stdenv.mkDerivation {
-          pname = "cl-process-kit-pty";
-          version = ctx.cl.fromAsdSystem "${cl-process-kit}/cl-process-kit.asd";
-          dontUnpack = true;
-          buildPhase = ''
-            runHook preBuild
-            $CC -O2 -fPIC -shared ${cl-process-kit}/native/pty.c \
-              -o libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} \
-              ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.hostPlatform.isLinux "-lutil"}
-            runHook postBuild
-          '';
-          installPhase = ''
-            runHook preInstall
-            install -Dm755 libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary} "$out/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}"
-            runHook postInstall
-          '';
         };
 
       ptyBootstrapFor =
@@ -527,8 +422,7 @@
           buildCommand = previous.buildCommand + ''
             wrapProgram "$out/bin/nshell" --inherit-argv0 \
               --run ${deliveryRun} \
-              ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.hostPlatform.isDarwin "--set NSHELL_PTY_BOOTSTRAP ${ptyBootstrapPathFor ctx}"} \
-              --prefix PATH : ${ctx.pkgs.lib.makeBinPath [ (spawnHelperFor ctx) ]}
+              ${ctx.pkgs.lib.optionalString ctx.pkgs.stdenv.hostPlatform.isDarwin "--set NSHELL_PTY_BOOTSTRAP ${ptyBootstrapPathFor ctx}"}
             mkdir -p "$out/share/man/man1" "$out/LICENSES"
             cp ${./README.md} "$out/README.md"
             cp ${./LICENSE} "$out/LICENSE"
@@ -541,16 +435,12 @@
             cp ${cl-boundary-kit}/LICENSE "$out/LICENSES/CL-BOUNDARY-KIT-LICENSE"
             cp ${cl-cli}/LICENSE "$out/LICENSES/CL-CLI-LICENSE"
             cp ${cl-tty-kit}/LICENSE "$out/LICENSES/CL-TTY-KIT-LICENSE"
-            cp ${cl-log-kit}/LICENSE "$out/LICENSES/CL-LOG-KIT-LICENSE"
-            cp ${cl-process-kit}/LICENSE "$out/LICENSES/CL-PROCESS-KIT-LICENSE"
             cp ${cl-history-kit}/LICENSE "$out/LICENSES/CL-HISTORY-KIT-LICENSE"
             cp ${cl-codec-kit}/LICENSE "$out/LICENSES/CL-CODEC-KIT-LICENSE"
             cp ${cl-date-kit}/LICENSE "$out/LICENSES/CL-DATE-KIT-LICENSE"
             cp ${cl-concurrent-kit}/LICENSE "$out/LICENSES/CL-CONCURRENT-KIT-LICENSE"
             cp ${cl-json-kit}/LICENSE "$out/LICENSES/CL-JSON-KIT-LICENSE"
             cp ${cl-regex-kit}/LICENSE "$out/LICENSES/CL-REGEX-KIT-LICENSE"
-            cp ${cl-vcs-kit}/LICENSE "$out/LICENSES/CL-VCS-KIT-LICENSE"
-            cp ${cl-tui-kit}/LICENSE "$out/LICENSES/CL-TUI-KIT-LICENSE"
             cp ${./man/nshell.1} "$out/share/man/man1/nshell.1"
           '';
         });
@@ -621,8 +511,7 @@
               cp -R ${delivery}/README.md ${delivery}/LICENSE ${delivery}/LICENSES ${delivery}/share $out/
               chmod -R u+w $out
               cp ${builtImage} $out/libexec/nshell
-              cp ${spawnHelperFor ctx}/bin/cl-process-kit-spawn $out/libexec/cl-process-kit-spawn
-              chmod u+w $out/libexec/nshell $out/libexec/cl-process-kit-spawn
+              chmod u+w $out/libexec/nshell
               # patchelf rewrites the ELF layout and discards SBCL's appended
               # core. Patch only PT_INTERP through a temporary patchelf copy,
               # preserving the delivered image byte-for-byte otherwise.
@@ -651,10 +540,8 @@
                 bs=1 skip="$source_offset" seek="$target_offset" \
                 count="$target_size" conv=notrunc status=none
               rm $out/libexec/nshell-interp
-              patchelf --set-interpreter "$interpreter" \
-                --set-rpath '$ORIGIN/../lib' $out/libexec/cl-process-kit-spawn
               cp -L ${pkgs.stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $out/lib/
-              printf '%s\n' $out/libexec/nshell $out/libexec/cl-process-kit-spawn > $out/.elf-queue
+              printf '%s\n' $out/libexec/nshell > $out/.elf-queue
               while IFS= read -r object; do
                 for needed in $(patchelf --print-needed "$object"); do
                   if [ -e "$out/lib/$needed" ]; then
@@ -700,59 +587,52 @@
                 esac
               done
               root="$(CDPATH= cd -- "''${self%/*}/.." && pwd)"
-              case "''${self##*/}" in
-                cl-process-kit-spawn) program=cl-process-kit-spawn ;;
-                *) program=nshell ;;
-              esac
               export PATH="$root/bin:$PATH"
               ${loginEnvironment}
-              if [ "$program" = nshell ]; then
-                if [ -z "''${BASH_VERSION-}" ] \
-                  && [ -z "''${ZSH_VERSION-}" ] \
-                  && [ -z "''${KSH_VERSION-}" ]; then
-                  shlvl="''${SHLVL-0}"
-                  case "$shlvl" in
-                    *[!0-9]*) shlvl=0 ;;
-                  esac
-                  while [ "$shlvl" != "''${shlvl#0}" ]; do
-                    shlvl="''${shlvl#0}"
-                  done
-                  [ -n "$shlvl" ] || shlvl=0
-                  SHLVL=$((shlvl + 1))
-                  export SHLVL
-                fi
-                case "''${1-}" in
-                  -c)
-                    exec /bin/sh "$@"
-                    ;;
-                  -lc)
-                    nshell_login_environment
-                    shift
-                    set -- -c "$@"
-                    exec /bin/sh "$@"
-                    ;;
-                  -ilc)
-                    nshell_login_environment
-                    ;;
-                  -l|--login)
-                    nshell_login_environment
-                    if [ "''${2-}" = -c ]; then
-                      shift
-                      exec /bin/sh "$@"
-                    fi
-                    ;;
-                  -i)
-                    case "''${2-}" in
-                      -l|--login) nshell_login_environment ;;
-                    esac
-                    ;;
+              if [ -z "''${BASH_VERSION-}" ] \
+                && [ -z "''${ZSH_VERSION-}" ] \
+                && [ -z "''${KSH_VERSION-}" ]; then
+                shlvl="''${SHLVL-0}"
+                case "$shlvl" in
+                  *[!0-9]*) shlvl=0 ;;
                 esac
+                while [ "$shlvl" != "''${shlvl#0}" ]; do
+                  shlvl="''${shlvl#0}"
+                done
+                [ -n "$shlvl" ] || shlvl=0
+                SHLVL=$((shlvl + 1))
+                export SHLVL
               fi
+              case "''${1-}" in
+                -c)
+                  exec /bin/sh "$@"
+                  ;;
+                -lc)
+                  nshell_login_environment
+                  shift
+                  set -- -c "$@"
+                  exec /bin/sh "$@"
+                  ;;
+                -ilc)
+                  nshell_login_environment
+                  ;;
+                -l|--login)
+                  nshell_login_environment
+                  if [ "''${2-}" = -c ]; then
+                    shift
+                    exec /bin/sh "$@"
+                  fi
+                  ;;
+                -i)
+                  case "''${2-}" in
+                    -l|--login) nshell_login_environment ;;
+                  esac
+                  ;;
+              esac
               exec "$root/lib/ld-linux-x86-64.so.2" \
-                --library-path "$root/lib" --argv0 "$root/libexec/$program" \
-                "$root/libexec/$program" "$@"
+                --library-path "$root/lib" --argv0 "$root/libexec/nshell" \
+                "$root/libexec/nshell" "$@"
               EOF
-              cp $out/bin/nshell $out/bin/cl-process-kit-spawn
 
               # SBCL records source locations in its appended core. Dynamic
               # dependencies have already been made relative above, so only
@@ -760,8 +640,8 @@
               # length unchanged to preserve binary offsets and layouts.
               find $out -type f -exec \
                 perl -0777 -pi -e 's{/nix/store/}{/non/store/}g' {} +
-              chmod +x $out/bin/nshell $out/bin/cl-process-kit-spawn \
-                $out/libexec/nshell $out/libexec/cl-process-kit-spawn $out/lib/ld-linux-x86-64.so.2
+              chmod +x $out/bin/nshell \
+                $out/libexec/nshell $out/lib/ld-linux-x86-64.so.2
               perl ${./scripts/verify-release-bundle.pl} $out --no-smoke
             '';
     in
@@ -797,10 +677,7 @@
           clBoundaryKit
           clCli
           clTtyKit
-          clProcessKit
           clRegexKit
-          clVcsKit
-          clTuiKit
           clHistoryKit
           clHostKit
           clCodecKit
@@ -820,7 +697,6 @@
         ctx:
         {
           nativeBuildInputs = [
-            (spawnHelperFor ctx)
             ctx.pkgs.coreutils
           ]
           ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
@@ -890,7 +766,6 @@
       devShellPackages =
         ctx:
         [
-          (spawnHelperFor ctx)
           cl-weave.packages.${ctx.system}.default
           paredit-cli.packages.${ctx.system}.default
         ]
@@ -916,10 +791,7 @@
           app = ctx.cl.mkApp { drv = delivery; };
           testApp = ctx.pkgs.writeShellApplication {
             name = "nshell-test";
-            runtimeInputs = [
-              (spawnHelperFor ctx)
-            ]
-            ++ ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
+            runtimeInputs = ctx.pkgs.lib.optionals ctx.pkgs.stdenv.hostPlatform.isDarwin [
               (ptyBootstrapFor ctx)
             ];
             text = ''
@@ -957,8 +829,6 @@
             previous:
             {
               TZDIR = "${ctx.pkgs.tzdata}/share/zoneinfo";
-              CL_PROCESS_KIT_SPAWN = "${spawnHelperFor ctx}/bin/cl-process-kit-spawn";
-              CL_PROCESS_KIT_PTY_LIBRARY = "${ptyHelperFor ctx}/lib/libcl_process_kit_pty${ctx.pkgs.stdenv.hostPlatform.extensions.sharedLibrary}";
               shellHook = previous.shellHook + ''
                 export NSHELL_ROOT=$PWD
                 alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'

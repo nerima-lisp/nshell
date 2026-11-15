@@ -22,7 +22,7 @@
     "A cold SBCL process can load the nshell system within an interactive budget."
     ;; Reuses t/e2e/test-smoke.lisp's %asdf-bootstrap-forms so this
     ;; subprocess's central-registry carries the same dependency roots
-    ;; (including transitive ones like cl-log-kit) as the e2e bootstrap,
+    ;; (including transitive ones like cl-date-kit) as the e2e bootstrap,
     ;; rather than a second, easily-stale hand-rolled list.
     (let* ((root (asdf:system-source-directory :nshell))
            (sbcl (current-sbcl-executable))

@@ -2,8 +2,8 @@
 
 (defparameter +nshell-runtime-dependencies+
   '(:cl-prolog-kit :cl-parser-kit :cl-dataflow-kit :cl-boundary-kit :cl-cli
-    :cl-tty-kit :cl-process-kit
-    :cl-history-kit :cl-host-kit :cl-log-kit
+    :cl-tty-kit
+    :cl-history-kit :cl-host-kit
     :cl-concurrent-kit :cl-codec-kit :cl-date-kit :cl-json-kit :cl-regex-kit)
   "ASDF systems whose source directories a fresh nshell subprocess needs.
 The list is the transitive runtime closure of nshell, expressed explicitly

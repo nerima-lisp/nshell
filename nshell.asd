@@ -31,7 +31,6 @@
                "cl-boundary-kit"
                "cl-cli"
                "cl-tty-kit"
-               "cl-process-kit"
                "cl-history-kit"
                "cl-concurrent-kit"
                "cl-json-kit"

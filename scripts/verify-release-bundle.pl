@@ -23,16 +23,12 @@ for my $relative (qw(
     LICENSES/CL-BOUNDARY-KIT-LICENSE
     LICENSES/CL-CLI-LICENSE
     LICENSES/CL-TTY-KIT-LICENSE
-    LICENSES/CL-LOG-KIT-LICENSE
-    LICENSES/CL-PROCESS-KIT-LICENSE
     LICENSES/CL-HISTORY-KIT-LICENSE
     LICENSES/CL-CODEC-KIT-LICENSE
     LICENSES/CL-DATE-KIT-LICENSE
     LICENSES/CL-CONCURRENT-KIT-LICENSE
     LICENSES/CL-JSON-KIT-LICENSE
     LICENSES/CL-REGEX-KIT-LICENSE
-    LICENSES/CL-VCS-KIT-LICENSE
-    LICENSES/CL-TUI-KIT-LICENSE
     share/man/man1/nshell.1
     bin/nshell
 )) {
@@ -99,11 +95,11 @@ if ($^O eq 'darwin') {
         }
     }
 } elsif ($^O eq 'linux') {
-    my @executables = qw(libexec/nshell libexec/cl-process-kit-spawn);
-    for my $relative (@executables, qw(bin/cl-process-kit-spawn lib/ld-linux-x86-64.so.2 LICENSES/GLIBC-COPYING.LIB)) {
+    my @executables = qw(libexec/nshell);
+    for my $relative (@executables, qw(lib/ld-linux-x86-64.so.2 LICENSES/GLIBC-COPYING.LIB)) {
         die "missing Linux release file: $relative\n" unless -f "$bundle/$relative";
     }
-    for my $relative (@executables, qw(bin/cl-process-kit-spawn lib/ld-linux-x86-64.so.2)) {
+    for my $relative (@executables, qw(lib/ld-linux-x86-64.so.2)) {
         die "$relative is not executable\n" unless -x "$bundle/$relative";
     }
 

@@ -913,7 +913,6 @@ def _tmux_key_echo_sources(key: str) -> list[str]:
 
 def _environment(
     scenario: dict[str, Any], root: Path, scenario_binary: Path | None = None,
-    cwd_override: Path | None = None,
 ) -> tuple[dict[str, str], Path, Path]:
     settings = scenario.get("environment", {})
     home = _relative_path(root, settings.get("home", "home"), f"{scenario['id']}: home")
@@ -929,10 +928,6 @@ def _environment(
         home / ".local" / "state",
     ):
         directory.mkdir(parents=True, exist_ok=True)
-    if cwd_override is not None:
-        _require(cwd_override.is_absolute() and cwd_override.is_dir(),
-                 f"{scenario['id']}: scenario cwd override must be an existing absolute directory")
-        cwd = cwd_override.resolve()
     env = {
         "HOME": str(home),
         "PATH": "/usr/bin:/bin",
@@ -1393,12 +1388,11 @@ class TmuxSession:
 
 def _run_pty(
     scenario: dict[str, Any], binary: Path, temporary_root: Path | None = None,
-    cwd_override: Path | None = None,
 ) -> tuple[str, str, int, list[str]]:
     _require(shutil.which("tmux") is not None, f"{scenario['id']}: tmux is required for PTY scenarios")
     with tempfile.TemporaryDirectory(prefix="nshell-scenario-", dir=temporary_root) as temporary:
         root = Path(temporary)
-        env, home, cwd = _environment(scenario, root, binary, cwd_override)
+        env, home, cwd = _environment(scenario, root, binary)
         _write_preconditions(scenario, root)
         with _read_only_directory_modes(scenario, root):
             sessions: list[tuple[TmuxSession, dict[str, Any]]] = []
@@ -2426,7 +2420,6 @@ def _run_once(
     consumer_fixture: Path | None = None,
     sbcl: Path | None = None,
     temporary_root: Path | None = None,
-    cwd_override: Path | None = None,
 ) -> tuple[str, str]:
     expected_failure = scenario.get("expected_failure")
     if expected_failure is not None and expected_failure.get("platform", sys.platform) != sys.platform:
@@ -2436,24 +2429,14 @@ def _run_once(
             _require(temporary_root is not None,
                      f"{scenario['id']}: pass --scenario-temp-dir ID=PATH for its bounded filesystem")
         if scenario["mode"] == "batch":
-            _require(cwd_override is None,
-                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
             first, second, _, failures = _run_batch(scenario, binary)
         elif scenario["mode"] == "pty":
-            first, second, _, failures = _run_pty(
-                scenario, binary, temporary_root, cwd_override
-            )
+            first, second, _, failures = _run_pty(scenario, binary, temporary_root)
         elif scenario["mode"] == "benchmark":
-            _require(cwd_override is None,
-                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
             first, second, _, failures = _run_benchmark(scenario, binary)
         elif scenario["mode"] == "source":
-            _require(cwd_override is None,
-                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
             first, second, _, failures = _run_source(scenario)
         else:
-            _require(cwd_override is None,
-                     f"{scenario['id']}: --scenario-cwd only supports PTY scenarios")
             _require(previous_source_root is not None, "P12 previous source root is required")
             _require(consumer_fixture is not None, "P12 consumer fixture is required")
             _require(sbcl is not None, "P12 SBCL executable is required")
@@ -2541,33 +2524,6 @@ def _parse_scenario_temp_dir_overrides(
     return overrides
 
 
-def _parse_scenario_cwd_overrides(
-    specifications: list[str], scenarios: list[dict[str, Any]],
-) -> dict[str, Path]:
-    scenarios_by_id = {scenario["id"]: scenario for scenario in scenarios}
-    overrides: dict[str, Path] = {}
-    for specification in specifications:
-        _require("=" in specification, "--scenario-cwd must use ID=PATH")
-        scenario_id, raw_path = specification.split("=", 1)
-        _require(bool(scenario_id) and bool(raw_path), "--scenario-cwd must use ID=PATH")
-        scenario = scenarios_by_id.get(scenario_id)
-        _require(scenario is not None,
-                 f"--scenario-cwd ID is not selected: {scenario_id}")
-        _require(scenario["mode"] == "pty",
-                 f"--scenario-cwd only supports PTY scenarios: {scenario_id}")
-        _require(scenario_id not in overrides,
-                 f"duplicate --scenario-cwd for {scenario_id}")
-        path = Path(raw_path)
-        _require(path.is_absolute(), f"--scenario-cwd path must be absolute: {raw_path!r}")
-        try:
-            resolved = path.resolve(strict=True)
-        except (OSError, RuntimeError) as error:
-            raise ScenarioError(f"--scenario-cwd path is unavailable: {raw_path!r}") from error
-        _require(resolved.is_dir(), f"--scenario-cwd path must be a directory: {raw_path!r}")
-        overrides[scenario_id] = resolved
-    return overrides
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, help="path to the nshell executable")
@@ -2583,8 +2539,6 @@ def main() -> int:
                         help="use an alternate nshell executable for one selected scenario")
     parser.add_argument("--scenario-temp-dir", action="append", default=[], metavar="ID=PATH",
                         help="use an empty bounded filesystem directory for one PTY scenario")
-    parser.add_argument("--scenario-cwd", action="append", default=[], metavar="ID=PATH",
-                        help="run one PTY scenario from an existing absolute directory")
     parser.add_argument("--p12-previous-root", type=Path,
                         help="source root of the immediately preceding supported release")
     parser.add_argument("--p12-consumer-fixture", type=Path,
@@ -2644,7 +2598,6 @@ def main() -> int:
         scenario_temp_dirs = _parse_scenario_temp_dir_overrides(
             arguments.scenario_temp_dir, scenarios
         )
-        scenario_cwds = _parse_scenario_cwd_overrides(arguments.scenario_cwd, scenarios)
         _require(
             not scenario_binaries or binary is not None,
             "--scenario-binary requires --binary",
@@ -2660,7 +2613,6 @@ def main() -> int:
                         consumer_fixture=consumer_fixture,
                         sbcl=sbcl,
                         temporary_root=scenario_temp_dirs.get(scenario["id"]),
-                        cwd_override=scenario_cwds.get(scenario["id"]),
                     )
                 except ScenarioError as error:
                     status, detail = "FAIL", str(error)

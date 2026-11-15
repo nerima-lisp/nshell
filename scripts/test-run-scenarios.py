@@ -1803,27 +1803,6 @@ class ScenarioRunnerTests(unittest.TestCase):
 
         self.assertEqual([scenario["id"] for scenario in selected], ["second"])
 
-    def test_scenario_cwd_override_requires_a_selected_pty_and_existing_absolute_directory(self) -> None:
-        scenario = _pty_scenario("external-cwd", [{"type": "wait_exit"}], {"exit_code": 0})
-        batch = _batch_scenario("batch-cwd")
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            working = root / "external"
-            working.mkdir()
-            overrides = runner._parse_scenario_cwd_overrides(
-                [f"external-cwd={working}"], [scenario]
-            )
-
-            self.assertEqual(overrides, {"external-cwd": working.resolve()})
-            for specification, candidates, message in (
-                ("external-cwd=relative", [scenario], "must be absolute"),
-                (f"external-cwd={root / 'missing'}", [scenario], "unavailable"),
-                (f"batch-cwd={working}", [batch], "only supports PTY"),
-            ):
-                with self.subTest(specification=specification):
-                    with self.assertRaisesRegex(runner.ScenarioError, message):
-                        runner._parse_scenario_cwd_overrides([specification], candidates)
-
     def test_file_set_fixture_validation_rejects_unsafe_or_unbounded_values(self) -> None:
         valid = _batch_scenario("file-set-valid")
         valid["preconditions"]["file_sets"] = [

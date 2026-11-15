@@ -238,10 +238,6 @@ workflow job supplies the scenario's required external fixture.
 Use `--scenario-binary ID=PATH` to run a selected scenario with a dedicated
 executable while the remaining scenarios use `--binary`. The override must name
 an ID in the current selection and point to a non-empty executable file.
-Use `--scenario-cwd ID=PATH` to start one selected PTY case in an existing
-absolute directory, including one outside the runner's temporary root. This
-does not change the scenario JSON's `environment.cwd`, fixture root, or home
-directory; it is intended for external filesystems.
 Use `--scenario-temp-dir ID=PATH` to place one selected PTY scenario's isolated
 root on a bounded filesystem. The path must be an absolute, writable,
 non-symlink directory on a filesystem with total capacity at most 128 MiB. It

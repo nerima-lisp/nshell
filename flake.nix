@@ -411,7 +411,10 @@
           clResilienceKit = sibling {
             name = "cl-resilience-kit";
             source = cl-resilience-kit;
-            dependencies = [ clConcurrentKit clDateKit ];
+            dependencies = [
+              clConcurrentKit
+              clDateKit
+            ];
           };
           clSseKit = sibling {
             name = "cl-sse-kit";

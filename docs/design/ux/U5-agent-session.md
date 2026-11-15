@@ -56,7 +56,7 @@ initialize
 > {"id":1,"method":"initialize","params":{"client":"claude-code"}}
 < {"id":1,"result":{
     "nshell_api": 1, "version": "0.8.0",
-    "methods": ["run","explain","complete","state","history",
+    "methods": ["initialize","run","explain","complete","state","history",
                 "help","query","read_output","policy"],
     "limits": {"timeout_s": 120, "max_output_bytes": 32768},
     "policy": {"block": 14, "confirm": 31, "user_rules": 2},

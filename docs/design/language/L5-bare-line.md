@@ -37,13 +37,17 @@ bare-line の ,expr は 5.1 の文法にない。v0.8 では今までどおり�
 |---|---|
 | if test -e x; echo y; end | (if (test -e x) (echo y)) |
 | for f in *.txt; echo $f; end | (dolist (f (glob "*.txt")) (echo $f)) |
-| while test -e lock; sleep 1; end | (loop while (test -e lock) do (sleep 1)) |
+| while test -e lock; sleep 1; end | (loop (unless (test -e lock) (return)) (sleep 1)) |
 | switch $x; case a; …; end | (case … ) または (cond …) |
 | function f; …; end | (defcmd f () …) |
 | begin; …; end | (progn …) |
 | cat <<EOF … EOF、cat <<-EOF … EOF | (cat <<< "…複数行の文字列…") |
 | ! cmd | (not (cmd)) |
 | not cmd; and cmd2 | (and (not (cmd)) (cmd2)) |
+| cmd1; and cmd2 | (and (cmd1) (cmd2)) |
+| cmd1; or cmd2 | (or (cmd1) (cmd2)) |
+| break | (return) |
+| continue | 直接対応する S式はない。ループの本体を (when …) か (unless …) で組み替える |
 
 builtin の and・or・not・break・continue・function も同じく拒否する。
 

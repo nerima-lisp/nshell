@@ -76,7 +76,7 @@ U1〜U4 の画面要素と、U5〜U7 の応答の型は 1 対 1 で対応しま�
 |---|---|---|
 | ✗ と 1 行の説明 | ⇄ | error.code / error.message |
 | ^^^ の位置表示 | ⇄ | error.span {line, column, end} |
-| did you mean … · Alt-Enter | ⇄ | error.fixes[] {command, why} |
+| did you mean … · Alt-Enter | ⇄ | error.fixes[] {input, why, rule} |
 | ● safe / confirm / block | ⇄ | safety.level |
 | 理由 (Tab で開く) | ⇄ | safety.reasons[] {rule, text} |
 | effects: deletes target/ | ⇄ | effects[] {kind, path, size} |

@@ -11,7 +11,13 @@
     "append_extra_path": true
   },
   "preconditions": {
-    "files": [],
+    "files": [
+      {
+        "path": "work/slow-git/git",
+        "executable": true,
+        "content": "#!/bin/sh\nlog=${NSHELL_L02_GIT_LOG:?}\nprintf 'call %s\\n' \"$*\" >> \"$log\"\n[ \"$1\" = \"-C\" ] && [ -n \"$2\" ] || exit 2\nshift 2\ncase \"$1\" in\n  symbolic-ref) printf 'nshell-l02-slow-git\\n' ;;\n  status)\n    printf 'status-start\\n' >> \"$log\"\n    /bin/sleep 3\n    printf 'status-end\\n' >> \"$log\"\n    ;;\n  *) exit 2 ;;\nesac\n"
+      }
+    ],
     "file_sets": [
       {
         "directory": "work/repository/files",
@@ -31,6 +37,9 @@
     "runs": 2,
     "startup_max_ms": 150,
     "empty_enter_max_ms": 60,
+    "slow_git_directory": "work/slow-git",
+    "slow_git_samples": 5,
+    "prompt_max_ms": 2000,
     "interaction_timeout_seconds": 10,
     "prompt_prefix": "L02_PROMPT",
     "ready_marker": "L02_READY"
@@ -40,9 +49,11 @@
     "stdout": {
       "contains": [
         "tracked_files=20000",
-        "L02 result=PASS",
         "key_echo",
-        "command_output"
+        "command_output",
+        "(not gating)",
+        "L02 slow_git sessions=5 passed=5",
+        "L02 result=PASS"
       ]
     }
   }

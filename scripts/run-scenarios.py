@@ -46,8 +46,17 @@ L02_FILE_COUNT = 20_000
 L02_WARMUPS = 5
 L02_SAMPLES = 30
 L02_RUNS = 2
+# Manual targets for startup and empty Enter. The runner reports their outcome for the record
+# only; shared CI runners are too noisy for an absolute millisecond gate (task P0-7).
 L02_STARTUP_MAX_MS = 150
 L02_EMPTY_ENTER_MAX_MS = 60
+L02_SLOW_GIT_SAMPLES = 5
+# Gating bound for startup while `git status` sleeps 3 s. A prompt that waits for Git cannot
+# appear before the 3000 ms sleep ends however loaded the host is, while a prompt that does not
+# wait only grows with load: macOS shared-runner startup reached 327 ms, and a local host at a
+# load average of about 120 on 16 cores reached 1212 ms. 2000 ms stays 1000 ms below the
+# synchronous floor.
+L02_PROMPT_MAX_MS = 2000
 ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 TMUX_KEY = re.compile(r"[A-Za-z0-9+-]+\Z")
 SHIFTED_KEY_TEXT = {
@@ -626,7 +635,8 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
             set(benchmark) == {
                 "repository", "dirty_file", "file_count", "warmups", "samples", "runs",
                 "startup_max_ms", "empty_enter_max_ms", "interaction_timeout_seconds",
-                "prompt_prefix", "ready_marker",
+                "prompt_prefix", "ready_marker", "slow_git_directory", "slow_git_samples",
+                "prompt_max_ms",
             },
             f"{scenario_id}: benchmark fields are incomplete or unsupported",
         )
@@ -654,6 +664,7 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
             ("warmups", L02_WARMUPS),
             ("samples", L02_SAMPLES),
             ("runs", L02_RUNS),
+            ("slow_git_samples", L02_SLOW_GIT_SAMPLES),
         ):
             value = benchmark[name]
             _require(isinstance(value, int) and not isinstance(value, bool) and value == required,
@@ -661,6 +672,7 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
         for name, required in (
             ("startup_max_ms", L02_STARTUP_MAX_MS),
             ("empty_enter_max_ms", L02_EMPTY_ENTER_MAX_MS),
+            ("prompt_max_ms", L02_PROMPT_MAX_MS),
         ):
             value = benchmark[name]
             _require(
@@ -678,6 +690,23 @@ def _validate_scenario(scenario: dict[str, Any], path: Path) -> None:
             value = benchmark[name]
             _require(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]+", value),
                      f"{scenario_id}: benchmark.{name} must be a plain marker")
+        slow_git_directory = _relative_path(
+            Path("/scenario"), benchmark["slow_git_directory"],
+            f"{scenario_id}: benchmark.slow_git_directory",
+        )
+        # Outside the repository, so the fixture commit does not track the fake Git.
+        _require(not slow_git_directory.is_relative_to(repository),
+                 f"{scenario_id}: benchmark.slow_git_directory must be outside the repository")
+        slow_git = slow_git_directory / "git"
+        _require(
+            any(
+                _relative_path(Path("/scenario"), fixture["path"],
+                               f"{scenario_id}: precondition file") == slow_git
+                and fixture.get("executable", False)
+                for fixture in fixtures
+            ),
+            f"{scenario_id}: benchmark.slow_git_directory must contain an executable git fixture",
+        )
 
     expected_failure = scenario.get("expected_failure")
     if expected_failure is not None:
@@ -1890,22 +1919,37 @@ def _signal_benchmark_child(pid: int, signal_number: int) -> None:
         pass
 
 
-def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
+def _drain_pty(fd: int, timeout: float) -> None:
+    # On Darwin, closing the last terminal descriptor waits for unread output, so an
+    # undrained PTY can hold nshell in exit after `exit`.
+    try:
+        readable, _, _ = select.select([fd], [], [], timeout)
+        if not readable or os.read(fd, 65536):
+            return
+    except OSError:
+        pass
+    # EOF and read errors return at once; pause so the caller's wait loop does not spin.
+    time.sleep(timeout)
+
+
+def _finish_benchmark_child(pid: int, fd: int, scenario_id: str,
+                            exit_wait_seconds: float = 1.5) -> bool:
+    """Return whether nshell exited on its own after `exit`, before any signal."""
     try:
         _write_pty(fd, b"exit\n", scenario_id)
     except ScenarioError:
         pass
-    deadline = time.monotonic() + 1.5
+    deadline = time.monotonic() + exit_wait_seconds
     while time.monotonic() < deadline:
         try:
             waited, status = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
-            return
+            return False
         if waited == pid:
             _require(os.waitstatus_to_exitcode(status) == 0,
                      f"{scenario_id}: nshell exited non-zero after the benchmark")
-            return
-        time.sleep(0.02)
+            return True
+        _drain_pty(fd, 0.02)
     try:
         _write_pty(fd, b"\x04", scenario_id)
     except ScenarioError:
@@ -1920,9 +1964,9 @@ def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
         try:
             waited, _ = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
-            return
+            return False
         if waited == pid:
-            return
+            return False
         time.sleep(0.02)
     _signal_benchmark_child(pid, signal.SIGKILL)
     deadline = time.monotonic() + 0.5
@@ -1930,9 +1974,9 @@ def _finish_benchmark_child(pid: int, fd: int, scenario_id: str) -> None:
         try:
             waited, _ = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
-            return
+            return False
         if waited == pid:
-            return
+            return False
         time.sleep(0.02)
     raise ScenarioTimeout(f"{scenario_id}: nshell could not be reaped within its benchmark cleanup budget")
 
@@ -2131,6 +2175,122 @@ def _verify_benchmark_branch(
     )
 
 
+def _slow_git_log_lines(log: Path) -> list[str]:
+    try:
+        return log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return []
+
+
+def _run_slow_git_session(scenario: dict[str, Any], binary: Path, cwd: Path,
+                          env: dict[str, str], slow_git_directory: Path, session: int,
+                          scenario_deadline: float) -> tuple[dict[str, Any], list[str]]:
+    """Run one fresh nshell whose `git status` sleeps, and check it never waits for Git."""
+    benchmark = scenario["benchmark"]
+    timeout = benchmark["interaction_timeout_seconds"]
+    prompt_max_ms = benchmark["prompt_max_ms"]
+    prompt_marker = f"{benchmark['prompt_prefix']}-slow-{session}"
+    log = slow_git_directory / f"calls-{session}.log"
+    log.unlink(missing_ok=True)
+    run_env = env.copy()
+    run_env["PATH"] = os.pathsep.join((str(slow_git_directory), env["PATH"]))
+    run_env["NSHELL_L02_GIT_LOG"] = str(log)
+    run_env["NSHELL_PROMPT"] = f"{prompt_marker} {{path}}{{git}} "
+    try:
+        pid, fd, start_ns = _fork_pty_with_size(24, 100)
+    except OSError as error:
+        raise ScenarioError(f"{scenario['id']}: could not create PTY: {error}") from error
+    if pid == 0:
+        try:
+            os.chdir(cwd)
+            os.execve(str(binary), [str(binary), "--no-config"], run_env)
+        except BaseException as error:
+            try:
+                os.write(2, f"could not exec nshell: {error}\n".encode("utf-8", errors="replace"))
+            finally:
+                os._exit(127)
+    stream = bytearray()
+    query_responses = [0]
+    failures: list[str] = []
+    record: dict[str, Any] = {}
+    finished = False
+    try:
+        # Waiting up to the interaction timeout reports the real delay of a blocking prompt;
+        # the verdict uses prompt_max_ms.
+        startup_end, startup_ns = _wait_pty_text(
+            scenario["id"], fd, stream, 0, prompt_marker.encode("utf-8"),
+            timeout, scenario_deadline, query_responses,
+        )
+        record["prompt_ms"] = (startup_ns - start_ns) / 1_000_000
+        if record["prompt_ms"] > prompt_max_ms:
+            failures.append(
+                f"session {session}: prompt took {record['prompt_ms']:.3f} ms, "
+                f"above {prompt_max_ms} ms while git status was sleeping"
+            )
+
+        # Without an observed status call, the input check below proves nothing.
+        status_deadline = min(scenario_deadline, time.monotonic() + prompt_max_ms / 1000)
+        while "status-start" not in _slow_git_log_lines(log):
+            remaining = status_deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            _read_pty_available(scenario["id"], fd, stream, min(remaining, 0.02), query_responses)
+        status_seen_ns = time.monotonic_ns()
+        record["status_started"] = "status-start" in _slow_git_log_lines(log)
+        if not record["status_started"]:
+            failures.append(
+                f"session {session}: no git status call within {prompt_max_ms} ms of the prompt; "
+                f"git log: {_slow_git_log_lines(log)!r}"
+            )
+        record["status_start_after_prompt_ms"] = (status_seen_ns - startup_ns) / 1_000_000
+
+        ready = benchmark["ready_marker"].encode("utf-8")
+        command_start = len(stream)
+        key_start_ns = time.monotonic_ns()
+        _write_pty(fd, ("echo " + benchmark["ready_marker"]).encode("utf-8"), scenario["id"])
+        command_echo_end, key_echo_ns = _wait_pty_text(
+            scenario["id"], fd, stream, command_start, ready,
+            timeout, scenario_deadline, query_responses,
+        )
+        record["key_echo_ms"] = (key_echo_ns - key_start_ns) / 1_000_000
+        command_start_ns = time.monotonic_ns()
+        _write_pty(fd, b"\n", scenario["id"])
+        _, ready_ns = _wait_pty_text(
+            scenario["id"], fd, stream, command_echo_end, ready,
+            timeout, scenario_deadline, query_responses,
+        )
+        # The log is read after the output arrived, so a status-end seen here may only be late,
+        # never early. A later prompt may start another status call; no call may have ended yet.
+        lines = _slow_git_log_lines(log)
+        record["command_output_ms"] = (ready_ns - command_start_ns) / 1_000_000
+        record["status_ended_before_output"] = "status-end" in lines
+        if record["status_ended_before_output"]:
+            failures.append(
+                f"session {session}: git status finished before the command output was seen; "
+                f"git log: {lines!r}"
+            )
+
+        exit_start_ns = time.monotonic_ns()
+        # nshell joins running Git workers before it exits, so allow the sleeping status call.
+        record["clean_exit"] = _finish_benchmark_child(
+            pid, fd, scenario["id"], exit_wait_seconds=timeout
+        )
+        finished = True
+        record["exit_ms"] = (time.monotonic_ns() - exit_start_ns) / 1_000_000
+        if not record["clean_exit"]:
+            failures.append(f"session {session}: nshell did not exit within {timeout} s of `exit`")
+        return record, failures
+    finally:
+        try:
+            if not finished:
+                _finish_benchmark_child(pid, fd, scenario["id"])
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
 def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, int, list[str]]:
     with tempfile.TemporaryDirectory(prefix="nshell-scenario-") as temporary:
         root = Path(temporary)
@@ -2146,6 +2306,17 @@ def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, in
         _run_benchmark_sample(
             scenario, binary, cwd, env, branch, 0, 0, deadline, verify_branch=True,
         )
+        # The gating phase runs before the record phase so the scenario deadline cannot cut it off.
+        slow_git_directory = _relative_path(
+            root, benchmark["slow_git_directory"], f"{scenario['id']}: slow Git directory"
+        )
+        slow_sessions = [
+            _run_slow_git_session(
+                scenario, binary, cwd, env, slow_git_directory, session, deadline
+            )
+            for session in range(1, benchmark["slow_git_samples"] + 1)
+        ]
+        # Record phase: startup and empty-Enter numbers are reported, not judged.
         groups: list[dict[str, list[float]]] = []
         for run_number in range(1, benchmark["runs"] + 1):
             for sample_number in range(1, benchmark["warmups"] + 1):
@@ -2200,16 +2371,34 @@ def _run_benchmark(scenario: dict[str, Any], binary: Path) -> tuple[str, str, in
         enter_verdict = _benchmark_verdict(
             [group["empty_enter"] for group in groups], benchmark["empty_enter_max_ms"]
         )
-        outcome = "PASS" if startup_verdict == enter_verdict == "pass" else "FAIL"
-        if startup_verdict == "inconclusive" or enter_verdict == "inconclusive":
-            outcome = "INCONCLUSIVE"
         lines.append(
-            f"L02 result={outcome} startup={startup_verdict} "
-            f"empty_enter={enter_verdict}"
+            f"L02 record startup={startup_verdict} startup_max_ms={benchmark['startup_max_ms']} "
+            f"empty_enter={enter_verdict} empty_enter_max_ms={benchmark['empty_enter_max_ms']} "
+            f"(not gating)"
         )
+        slow_failures = []
+        for session, (record, session_failures) in enumerate(slow_sessions, 1):
+            slow_failures.extend(session_failures)
+            lines.append(
+                f"L02 slow_git session={session} prompt_ms={record['prompt_ms']:.3f} "
+                f"status_started={'yes' if record['status_started'] else 'no'} "
+                f"status_start_after_prompt_ms={record['status_start_after_prompt_ms']:.3f} "
+                f"key_echo_ms={record['key_echo_ms']:.3f} "
+                f"command_output_ms={record['command_output_ms']:.3f} "
+                f"status_ended_before_output="
+                f"{'yes' if record['status_ended_before_output'] else 'no'} "
+                f"exit={'clean' if record['clean_exit'] else 'forced'} "
+                f"exit_ms={record['exit_ms']:.3f}"
+            )
+        passed = sum(1 for _, session_failures in slow_sessions if not session_failures)
+        lines.append(
+            f"L02 slow_git sessions={len(slow_sessions)} passed={passed} "
+            f"prompt_max_ms={benchmark['prompt_max_ms']}"
+        )
+        outcome = "FAIL" if slow_failures else "PASS"
+        lines.append(f"L02 result={outcome}")
         failures = _check_expected(scenario, "\n".join(lines), "", 0, home, cwd)
-        if outcome != "PASS":
-            failures.append(f"L02 benchmark verdict was {outcome}")
+        failures.extend(slow_failures)
         return "\n".join(lines) + "\n", "", 0, failures
 
 

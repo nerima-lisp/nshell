@@ -6,8 +6,5 @@
     #:kb-add-option
     #:complete
     #:candidate-text
-    #:candidate-kind
-    #:*path-command-directory-files-fn*
-    #:*path-command-executable-p-fn*
-    #:*path-command-directory-map-fn*)
+    #:candidate-kind)
   (:export #:run-completion-benchmark))

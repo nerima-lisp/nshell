@@ -35,6 +35,16 @@
         expected
         actual))))
 
+;; PATH command completion reads directories through an injected
+;; nshell.domain.filesystem value; the fixtures supply synthetic directory
+;; listings so no workload touches the real filesystem.
+(defun %make-fixture-filesystem (directory-files-fn executable-p-fn directory-map-fn)
+  (nshell.domain.filesystem:make-filesystem
+   :directory-files directory-files-fn
+   :subdirectories (constantly nil)
+   :executable-p executable-p-fn
+   :directory-map directory-map-fn))
+
 (defun %make-fixed-kb-workload ()
   (let ((kb (make-empty-knowledge-base)))
     (dotimes (index 1000)
@@ -72,13 +82,13 @@
                (declare (ignore directory))
                0)))
       (nshell.domain.completion::%invalidate-path-command-cache)
-      (values
-        (lambda ()
-          (let ((*path-command-directory-files-fn* directory-files-fn)
-                (*path-command-executable-p-fn* executable-p-fn)
-                (*path-command-directory-stamp-fn* directory-stamp-fn))
-            (complete kb "zzbench-" :path "/fixture")))
-        '(("zzbench-alpha" :command) ("zzbench-beta" :command))))))
+      (let ((filesystem (%make-fixture-filesystem directory-files-fn executable-p-fn #'mapcar)))
+        (values
+          (lambda ()
+            (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
+                    directory-stamp-fn))
+              (complete kb "zzbench-" :path "/fixture" :filesystem filesystem)))
+          '(("zzbench-alpha" :command) ("zzbench-beta" :command)))))))
 
 (defun %make-cold-path-workload (directory-map-fn)
   (let* ((kb (make-empty-knowledge-base))
@@ -102,19 +112,20 @@
           for index from 0
           do (setf (gethash directory entries-by-directory)
                    (list (pathname (format nil "~A/nshell-~D" directory index)))))
-    (values
-      (lambda ()
-        (let ((*path-command-directory-files-fn* directory-files-fn)
-              (*path-command-executable-p-fn* executable-p-fn)
-              (*path-command-directory-stamp-fn* directory-stamp-fn)
-              (*path-command-directory-map-fn* directory-map-fn))
-          (nshell.domain.completion::%invalidate-path-command-cache)
-          (complete
-            kb
-            "nshell-"
-            :path (format nil "~{~A~^:~}" directories))))
-      (loop for index below 8
-            collect (list (format nil "nshell-~D" index) :command)))))
+    (let ((filesystem
+            (%make-fixture-filesystem directory-files-fn executable-p-fn directory-map-fn)))
+      (values
+        (lambda ()
+          (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
+                  directory-stamp-fn))
+            (nshell.domain.completion::%invalidate-path-command-cache)
+            (complete
+              kb
+              "nshell-"
+              :path (format nil "~{~A~^:~}" directories)
+              :filesystem filesystem)))
+        (loop for index below 8
+              collect (list (format nil "nshell-~D" index) :command))))))
 
 (defun %warm-up (thunk warmup batch)
   (dotimes (sample warmup)
@@ -316,7 +327,8 @@
   (multiple-value-bind (sequential-thunk expected)
       (%make-cold-path-workload #'mapcar)
     (multiple-value-bind (cck-thunk cck-expected)
-        (%make-cold-path-workload *path-command-directory-map-fn*)
+        (%make-cold-path-workload
+         #'nshell.infrastructure.acl:map-path-command-directories)
       (declare (ignore cck-expected))
       (%assert-result "cold-path-sequential" sequential-thunk expected)
       (%assert-result "cold-path-cck" cck-thunk expected)

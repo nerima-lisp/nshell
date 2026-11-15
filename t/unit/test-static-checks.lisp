@@ -78,6 +78,7 @@
         (static-check-relative-path pathname root))
       (append (static-check-system-source-paths "nshell")
               (static-check-system-source-paths "nshell/test")
+              (static-check-system-source-paths "nshell/test-unit")
               (static-check-system-source-paths "nshell/weave")))
      :test
      #'string=))

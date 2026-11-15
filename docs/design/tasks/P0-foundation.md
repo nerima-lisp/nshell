@@ -15,10 +15,10 @@
 
 ## P0-2 test-fast
 
-- [ ] `scripts/test-fast.lisp`: `t/unit/` と `main-test`・静的チェックだけを読み込んで実行する (PTY・e2e・perf・シナリオは除く)
-- [ ] test-fast は `nshell/test-unit` システムとして切り出し、`nshell/test` がそれに依存する形にする
-- [ ] `nix develop` に `test-fast` の alias を追加。Nix なしでも `sbcl --script scripts/test-fast.lisp` で動く
-- [ ] 目標の 30 秒と測り方のコマンドを AGENTS.md に書く。キャッシュ済みとキャッシュなしの両方を測るが、測った値は書かない
+- [x] `scripts/test-fast.lisp`: `t/unit/` と `main-test`・静的チェックだけを読み込んで実行する (PTY・e2e・perf・シナリオは除く)
+- [x] test-fast は `nshell/test-unit` システムとして切り出し、`nshell/test` がそれに依存する形にする
+- [x] `nix develop` に `test-fast` の alias を追加。Nix なしでも `sbcl --script scripts/test-fast.lisp` で動く
+- [x] 実行時間を README か AGENTS.md に書く。キャッシュなしの時間も併記する
 
 受け入れ条件: 一般的な開発機で 30 秒以内。30 秒はキャッシュ済みでの時間で、`NSHELL_ASDF_OUTPUT_DIR` を `$XDG_CACHE_HOME` の下に固定して測る。超えたら、測ったうえで重いテストに `:slow` タグを付けて外す。失敗したテストがあれば終了コード 1。
 

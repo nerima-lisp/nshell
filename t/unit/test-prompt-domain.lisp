@@ -214,6 +214,7 @@ after a non-zero exit code; git no longer appears here."
         (nshell.infrastructure.acl:get-git-status "/cache-reset/"))
       (expect 4 :to-equal calls)))
   (it "prompt-git-status-returns-before-slow-worker-completes"
+    (:tags '(:slow))
     "The lookup returns while a fake Git worker waits behind a semaphore barrier."
     (let* ((worker-started (sb-thread:make-semaphore :count 0))
            (release-worker (sb-thread:make-semaphore :count 0))
@@ -386,6 +387,7 @@ after a non-zero exit code; git no longer appears here."
                (expect (list nil nil) :to-equal entry)))
         (nshell.infrastructure.acl:clear-git-status-cache))))
   (it "git-status-worker-drain-waits-for-worker-unwind"
+    (:tags '(:slow))
     "The drain helper joins a tracked Git worker before returning."
     (let* ((worker-started (sb-thread:make-semaphore :count 0))
            (release-worker (sb-thread:make-semaphore :count 0))

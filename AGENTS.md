@@ -60,12 +60,19 @@ Agents run the suites through `nix develop -c`, from the repository root:
 
 ```sh
 nix develop -c sbcl --script run-tests.lisp        # full suite (nshell/test)
+nix develop -c sbcl --script scripts/test-fast.lisp # unit, main and static checks (nshell/test-unit)
 nix develop -c sbcl --script scripts/weave.lisp    # completion knowledge-base suite (nshell/weave)
 nix develop -c sbcl --script scripts/coverage.lisp # suite with coverage; set NSHELL_COVERAGE_DIR to choose the output directory
 ```
 
-The `test`, `weave` and `cov` aliases that `nix develop` prints are for humans:
+The `test`, `test-fast`, `weave` and `cov` aliases in `nix develop` are for humans:
 they are defined in the shell hook and exist only in an interactive shell.
+
+test-fast excludes tests tagged `:slow`; the full suite keeps them.
+The cached target for test-fast is 30 seconds. After isolating state as below, run
+`NSHELL_ASDF_OUTPUT_DIR="$XDG_CACHE_HOME/nshell/asdf" nix develop -c sbcl --script scripts/test-fast.lisp`
+twice, starting with a new cache directory. Record cold and cached elapsed times
+separately; the runner reports SBCL elapsed time, excluding Nix startup.
 
 Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
 

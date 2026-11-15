@@ -967,6 +967,7 @@
               shellHook = previous.shellHook + ''
                 export NSHELL_ROOT=$PWD
                 alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'
+                alias test-fast='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/scripts/test-fast.lisp"'
                 alias cov='cd "$NSHELL_ROOT" && NSHELL_COVERAGE_DIR="$NSHELL_ROOT/coverage" sbcl --script "$NSHELL_ROOT/scripts/coverage.lisp"'
                 alias weave='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/scripts/weave.lisp"'
                 echo ""

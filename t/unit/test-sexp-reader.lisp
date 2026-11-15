@@ -275,6 +275,7 @@
                arguments))))
 
   (it "read-submission-fuzzes-one-hundred-thousand-fixed-seed-byte-strings"
+    (:tags '(:slow))
     (let ((state #x6d2b79f5)
           (case-count 0))
       (labels ((next-byte ()

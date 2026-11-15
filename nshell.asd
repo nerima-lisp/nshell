@@ -433,7 +433,7 @@
                          (asdf/system:component-entry-point c))))
   :in-order-to ((test-op (test-op "nshell/test"))))
 
-(asdf:defsystem "nshell/test"
+(asdf:defsystem "nshell/test-unit"
   :version "0.7.0"
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
@@ -441,7 +441,7 @@
   :homepage "https://github.com/nerima-lisp/nshell"
   :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
   :source-control (:git "https://github.com/nerima-lisp/nshell.git")
-  :description "Test system for nshell"
+  :description "Unit test system for nshell"
   :depends-on ("nshell" "cl-weave")
   :pathname "t"
   :serial t
@@ -591,7 +591,38 @@
    (:file "unit/test-prompt-truncation")
    (:file "unit/test-prompt-rendering")
    (:file "unit/test-prompt-properties")
-   (:file "integration/test-pipeline")
+   (:file "unit/test-error-codes")
+   (:file "main-test")
+   (:file "unit/static-check-allowlist")
+   (:file "unit/test-static-checks"))
+   ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is
+   ;; read by the plain CL reader before :depends-on is ever consulted, so any
+   ;; PKG:SYMBOL token here must resolve against a package already in the image.
+   ;; UIOP happens to be safe because ASDF ships it; CL-HOST-KIT is not loaded
+   ;; at read time no matter what this system depends on, so a HOST-KIT: prefix
+   ;; would be a read-time PACKAGE-DOES-NOT-EXIST error that takes the whole
+   ;; file -- including the "nshell" system above -- down with it.
+   ;; FIND-SYMBOL/FIND-PACKAGE/FUNCALL are CL, always present, and are what
+   ;; SYMBOL-CALL boils down to anyway.
+   :perform (asdf:test-op (o s)
+              (declare (ignore o s))
+              (unless (funcall (find-symbol "RUN-TESTS" (find-package "NSHELL/TEST")))
+                (error "cl-weave tests failed"))))
+
+(asdf:defsystem "nshell/test"
+  :version "0.7.0"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
+  :license "MIT"
+  :homepage "https://github.com/nerima-lisp/nshell"
+  :bug-tracker "https://github.com/nerima-lisp/nshell/issues"
+  :source-control (:git "https://github.com/nerima-lisp/nshell.git")
+  :description "Test system for nshell"
+  :depends-on ("nshell/test-unit")
+  :pathname "t"
+  :serial t
+  :components
+  ((:file "integration/test-pipeline")
    (:file "integration/test-reader-execution")
    (:file "integration/test-process")
    (:file "integration/test-pty")
@@ -617,22 +648,7 @@
    (:file "e2e/test-job-control")
    (:file "e2e/test-package-route")
    (:file "e2e/test-assistant-mcp")
-   (:file "perf/test-startup")
-   (:file "unit/test-error-codes")
-   ;; Appended rather than inserted next to helpers-runner: :serial t makes the
-   ;; order load order, and every existing entry must keep its position.
-   (:file "main-test")
-   (:file "unit/static-check-allowlist")
-   (:file "unit/test-static-checks"))
-   ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is
-   ;; read by the plain CL reader before :depends-on is ever consulted, so any
-   ;; PKG:SYMBOL token here must resolve against a package already in the image.
-   ;; UIOP happens to be safe because ASDF ships it; CL-HOST-KIT is not loaded
-   ;; at read time no matter what this system depends on, so a HOST-KIT: prefix
-   ;; would be a read-time PACKAGE-DOES-NOT-EXIST error that takes the whole
-   ;; file -- including the "nshell" system above -- down with it.
-   ;; FIND-SYMBOL/FIND-PACKAGE/FUNCALL are CL, always present, and are what
-   ;; SYMBOL-CALL boils down to anyway.
+   (:file "perf/test-startup"))
    :perform (asdf:test-op (o s)
               (declare (ignore o s))
               (unless (funcall (find-symbol "RUN-TESTS" (find-package "NSHELL/TEST")))

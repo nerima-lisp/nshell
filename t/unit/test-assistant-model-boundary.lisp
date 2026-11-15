@@ -971,6 +971,7 @@
             (sb-posix:unsetenv "NSHELL_AI_DISABLE")))))
 
   (it "times-out-a-sidecar-that-hangs-during-version-probe"
+    (:tags '(:slow))
     (let ((script (%assistant-test-hanging-version-sidecar-script))
           (context nil))
       (unwind-protect

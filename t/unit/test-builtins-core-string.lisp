@@ -471,6 +471,7 @@
       (expect "" :to-equal (slc "abcde" 10))))
 
   (it "string-wildcard-match-p-handles-star-and-question-mark"
+    (:tags '(:slow))
   "string-wildcard-match-p supports * (any sequence) and ? (single char) wildcards."
   (flet ((match (pat str &key ignore-case)
            (nshell.application::%string-wildcard-match-p pat str :ignore-case ignore-case)))

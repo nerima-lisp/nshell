@@ -284,6 +284,7 @@
       (expect "fast path" :to-equal (nshell.domain.completion:candidate-description winner))))
 
   (it "knowledge-base-argument-completion-handles-large-duplicate-flag-set"
+    (:tags '(:slow))
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
           (flags '()))
       (dotimes (i 2000)
@@ -301,6 +302,7 @@
         (expect "--unique-1999" :to-equal (car (last texts))))))
 
   (it "knowledge-base-option-value-completion-handles-large-duplicate-value-set"
+    (:tags '(:slow))
     (let ((kb (nshell.domain.completion:make-empty-knowledge-base))
           (values '()))
       (dotimes (i 2000)

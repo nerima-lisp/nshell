@@ -83,8 +83,25 @@ separately. The runner reports SBCL elapsed time and excludes Nix startup.
 NSHELL_ASDF_OUTPUT_DIR="$XDG_CACHE_HOME/nshell/asdf" nix develop -c sbcl --script scripts/test-fast.lisp
 ```
 
-The Nix-free bootstrap script is planned at
-`scripts/bootstrap-without-nix.sh`; it is not present in this worktree yet.
+Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
+
+```sh
+# 1. SBCL >= 2.6.0 and < 2.6.10 (2.6.10 removed sb-unix:unix-ioctl, which cl-tty-kit uses).
+#    Build 2.6.9 from source with any older SBCL as host:
+git clone --depth 1 --branch sbcl-2.6.9 https://github.com/sbcl/sbcl && cd sbcl \
+  && echo '"2.6.9"' > version.lisp-expr && sh make.sh --prefix=$HOME/sbcl && sh install.sh
+# 2. Clone the nerima-lisp toolkits at the tags pinned in flake.nix into one directory, e.g. ../deps/
+# 3. Run the suite
+export SBCL_HOME=$HOME/sbcl/lib/sbcl PATH=$HOME/sbcl/bin:$PATH
+export CL_SOURCE_REGISTRY="$PWD/../deps//:$PWD/"
+sbcl --script run-tests.lisp
+```
+
+Known environment-only failures when running as root inside a container
+(not bugs in nshell): `complete-path-like-command-arguments-from-filesystem`,
+`regular-file-preview-reader-rejects-permission-denied-files`,
+`spawn-pipeline-reaped-leader-still-terminates-descendants`, and
+`run-external-timeout-terminates-descendant-processes`.
 
 After `nix build`, run a script with `./result/bin/nshell FILE.nsh` or a command
 with `./result/bin/nshell --command '(…)'`.

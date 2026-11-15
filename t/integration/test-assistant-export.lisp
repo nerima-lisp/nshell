@@ -1,5 +1,34 @@
 (in-package #:nshell/test)
 
+(defun %snapshot-export-render ()
+  (with-stable-repl-prompt ()
+    (with-fixed-terminal-size (24 80)
+      (capture-standard-output
+        (nshell.presentation::render-prompt-cont)))))
+
+(defun %snapshot-export-inode (path)
+  (sb-posix:stat-ino (sb-posix:stat path)))
+
+(defun %call-with-snapshot-export-session (state-directory session-id thunk)
+  (let ((nshell.feature.assistant:*assistant-state-directory-path-override*
+          state-directory)
+        (nshell.application:*job-monitor*
+          (nshell.domain.job-control:make-job-monitor)))
+    (with-repl-test-state
+      (setf nshell.presentation::*interactive-terminal-installed-p* t
+            nshell.presentation::*assistant-session-id* session-id
+            nshell.presentation::*input-state*
+              (nshell.presentation::make-repl-input-state)
+            nshell.presentation::*last-command-text* "false"
+            nshell.presentation::*last-exit-code* 1
+            nshell.presentation::*last-command-duration-ms* 5)
+      (with-temporary-function
+          ('nshell.infrastructure.acl:get-git-status
+           (lambda (directory)
+             (declare (ignore directory))
+             (values "main" nil t)))
+        (funcall thunk)))))
+
 (describe "assistant-state-export-contracts"
   (it "writes redacted transcript and snapshot once at the prompt boundary"
     (host-kit:with-temporary-directory (directory)
@@ -152,4 +181,108 @@
           (expect nil :to-be
                   (probe-file
                    (merge-pathnames "snapshot.json" state-directory)))))))
+
+  (it "writes snapshot.json with the documented fields and one trailing newline"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((state-directory (merge-pathnames "state/" directory))
+             (snapshot-path (merge-pathnames "snapshot.json" state-directory)))
+        (%call-with-snapshot-export-session
+         state-directory "shape-session"
+         (lambda ()
+           (%snapshot-export-render)
+           (let* ((content (host-kit:read-file-string snapshot-path))
+                  (object (json-kit:parse content
+                                          :object-type :alist
+                                          :array-type :list
+                                          :false-value :false)))
+             (expect '("cwd" "git" "jobs" "last" "env-names" "session-id" "ai")
+                     :to-equal (mapcar #'car object))
+             (expect (cdr (assoc "cwd" object :test #'string=)) :to-be-truthy)
+             (expect '(("branch" . "main") ("dirty" . :false) ("ready" . t))
+                     :to-equal (cdr (assoc "git" object :test #'string=)))
+             (expect nil :to-be (cdr (assoc "jobs" object :test #'string=)))
+             (expect '(("text" . "false") ("exit" . 1) ("duration-ms" . 5))
+                     :to-equal (cdr (assoc "last" object :test #'string=)))
+             (expect "shape-session"
+                     :to-equal (cdr (assoc "session-id" object :test #'string=)))
+             (expect '("connected" "turns" "tokens")
+                     :to-equal
+                     (mapcar #'car (cdr (assoc "ai" object :test #'string=))))
+             (expect #\Newline :to-be (char content (1- (length content))))
+             (expect 1 :to-be (count #\Newline content))))))))
+
+  (it "rewrites snapshot.json only when its content changes"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((state-directory (merge-pathnames "state/" directory))
+             (snapshot-path (merge-pathnames "snapshot.json" state-directory)))
+        (%call-with-snapshot-export-session
+         state-directory "first-session"
+         (lambda ()
+           ;; Every write renames a newly created file over the path, so the
+           ;; inode at the path changes exactly when a write happened.
+           (%snapshot-export-render)
+           (let ((first-inode (%snapshot-export-inode snapshot-path)))
+             (%snapshot-export-render)
+             (%snapshot-export-render)
+             (expect first-inode :to-be (%snapshot-export-inode snapshot-path))
+             (setf nshell.presentation::*last-command-text* "true"
+                   nshell.presentation::*last-exit-code* 0)
+             (%snapshot-export-render)
+             (let ((second-inode (%snapshot-export-inode snapshot-path)))
+               (expect first-inode :not :to-be second-inode)
+               (expect (search "\"exit\":0"
+                               (host-kit:read-file-string snapshot-path))
+                       :to-be-truthy)
+               (%snapshot-export-render)
+               (expect second-inode
+                       :to-be (%snapshot-export-inode snapshot-path))
+               (setf nshell.presentation::*assistant-session-id*
+                     "second-session")
+               (%snapshot-export-render)
+               (expect second-inode
+                       :not :to-be (%snapshot-export-inode snapshot-path))
+               (expect (search "\"session-id\":\"second-session\""
+                               (host-kit:read-file-string snapshot-path))
+                       :to-be-truthy))))))))
+
+  (it "rewrites unchanged snapshot content after the file is removed or replaced"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((state-directory (merge-pathnames "state/" directory))
+             (snapshot-path (merge-pathnames "snapshot.json" state-directory))
+             (other-path (merge-pathnames "other-session.json" state-directory)))
+        (%call-with-snapshot-export-session
+         state-directory "replaced-session"
+         (lambda ()
+           (%snapshot-export-render)
+           (delete-file snapshot-path)
+           (%snapshot-export-render)
+           (expect (search "\"session-id\":\"replaced-session\""
+                           (host-kit:read-file-string snapshot-path))
+                   :to-be-truthy)
+           ;; Another nshell session publishes its own snapshot by rename.
+           (host-kit:write-file-string "{}" other-path)
+           (rename-file other-path snapshot-path)
+           (%snapshot-export-render)
+           (expect (search "\"session-id\":\"replaced-session\""
+                           (host-kit:read-file-string snapshot-path))
+                   :to-be-truthy))))))
+
+  (it "retries a snapshot write that failed even when the content is unchanged"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((state-directory (merge-pathnames "state/" directory))
+             (snapshot-path (merge-pathnames "snapshot.json" state-directory)))
+        (%call-with-snapshot-export-session
+         state-directory "failing-session"
+         (lambda ()
+           (with-temporary-function
+               ('uiop:rename-file-overwriting-target
+                (lambda (source target)
+                  (declare (ignore source target))
+                  (error "simulated rename failure")))
+             (%snapshot-export-render))
+           (expect nil :to-be (probe-file snapshot-path))
+           (%snapshot-export-render)
+           (expect (search "\"session-id\":\"failing-session\""
+                           (host-kit:read-file-string snapshot-path))
+                   :to-be-truthy))))))
 )

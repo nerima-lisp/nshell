@@ -127,7 +127,7 @@
                   (nshell.infrastructure.acl:process-status process))
           (expect (sb-ext:process-exit-code process) :to-be-null)))))
   (it "process-resume-group-refreshes-cache-after-esrch"
-    (with-stopped-resume-process (process)
+    (with-stopped-resume-process (process "kill -STOP $$; exec sleep 3600")
       (sb-thread:with-mutex (sb-impl::*active-processes-lock*)
         (setf (sb-impl::process-%exit-code process) 7))
       (let ((pgid (sb-posix:getpgid
@@ -169,7 +169,7 @@
                   (nshell.infrastructure.acl:process-status process))))))
   (it "process-resume-does-not-signal-an-unowned-stale-group"
   "A stale saved process-group ID is never signaled when no registered process belongs to it."
-  (with-stopped-resume-process (process)
+  (with-stopped-resume-process (process "kill -STOP $$; exec sleep 3600")
     (let* ((pid (nshell.infrastructure.acl:process-pid process))
            (stale-pgid (1+ (sb-posix:getpgid pid)))
            (original-process-kill (symbol-function 'sb-ext:process-kill)))

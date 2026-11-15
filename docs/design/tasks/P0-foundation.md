@@ -4,10 +4,10 @@
 
 ## P0-1 AGENTS.md / CLAUDE.md を仕上げる
 
-- [ ] ルートの `AGENTS.md` と `CLAUDE.md` (この計画と一緒に追加済み) を読み、実際のコマンドで確認して直す
-- [ ] 層の向きをコードの規則 `domain ← infrastructure ← application ← presentation` (`t/unit/test-static-checks.lisp` の層の規則) に合わせる
-- [ ] エージェントが使うコマンドは `nix develop -c sbcl --script …` と書く。`test` / `weave` / `cov` の alias は対話シェルでしか動かないので、人向けとして書く
-- [ ] テストの隔離に使う環境変数として HOME・XDG_CONFIG_HOME・XDG_DATA_HOME・XDG_STATE_HOME・XDG_CACHE_HOME の 5 つと `NSHELL_AI_COMMAND=/nonexistent` を書く。PTY テストに `NSHELL_TEST_PTY=1` が要ることも書く。件数のように時間で変わる数は書かない
+- [x] ルートの `AGENTS.md` と `CLAUDE.md` (この計画と一緒に追加済み) を読み、実際のコマンドで確認して直す
+- [x] 層の向きをコードの規則 `domain ← infrastructure ← application ← presentation` (`t/unit/test-static-checks.lisp` の層の規則) に合わせる
+- [x] エージェントが使うコマンドは `nix develop -c sbcl --script …` と書く。`test` / `weave` / `cov` の alias は対話シェルでしか動かないので、人向けとして書く
+- [x] テストの隔離に使う環境変数として HOME・XDG_CONFIG_HOME・XDG_DATA_HOME・XDG_STATE_HOME・XDG_CACHE_HOME の 5 つと `NSHELL_AI_COMMAND=/nonexistent` を書く。PTY テストに `NSHELL_TEST_PTY=1` が要ることも書く。件数のように時間で変わる数は書かない
 - [ ] Nix なしの手順を `scripts/bootstrap-without-nix.sh` にまとめる (kit の取得、`nix/patches/` のパッチの適用、`cl-process-kit-spawn` 以外の補助プログラムのビルド)。AGENTS.md はこのスクリプトを指すだけにする
 - [ ] ubuntu の CI ジョブ `no-nix` でこのスクリプトを流し、`run-tests.lisp` まで通す
 

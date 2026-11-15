@@ -51,72 +51,184 @@ check takes the layer from the path.
 nix develop                     # interactive shell with SBCL and pinned toolkits
 nix build                       # ./result/bin/nshell
 nix fmt
-nix flake check --print-build-logs # full suite and configured checks
+nix flake check --print-build-logs # CI gate: all configured flake checks
 ```
 
-CI runs the full suite through the flake check shown above.
+Run the complete test suite locally with the isolated full-suite command shown below; it runs `sbcl --script run-tests.lisp` through `nix develop -c env`.
+CI uses `nix flake check --print-build-logs` as its full gate; its generated `checks.default` includes `run-tests.lisp` and it runs the other configured flake checks.
 
-Run long commands in the background, wait for the process to finish, and keep
-its output. Do not stop a build with a timer.
+Run long commands in the background, keep their output, and wait for them to finish.
+Do not stop a build after a fixed time limit.
+If its log has not grown for several minutes, check whether the process is still active before deciding it is stuck.
+If it is stuck, signal only the PID you started, for example `kill -TERM "$pid"`.
 
-Run Lisp test scripts from the repository root through `nix develop -c`:
+Create a temporary state directory before testing:
 
 ```sh
-nix develop -c sbcl --script run-tests.lisp        # full suite (nshell/test)
-nix develop -c sbcl --script scripts/test-fast.lisp # unit, main and static checks (nshell/test-unit)
-nix develop -c sbcl --script scripts/weave.lisp    # completion knowledge-base suite (nshell/weave)
-NSHELL_COVERAGE_DIR="$XDG_CACHE_HOME/nshell/coverage" \
-  nix develop -c sbcl --script scripts/coverage.lisp
+test_root="$(mktemp -d)"
+mkdir -p "$test_root/home" "$test_root/config" "$test_root/data" \
+  "$test_root/state" "$test_root/cache"
 ```
 
-The `test`, `test-fast`, `weave` and `cov` aliases exist in the interactive
-shell hook. Automation uses the explicit `nix develop -c sbcl --script …`
-commands above.
-
-`test-fast` excludes tests tagged `:slow`; the full suite keeps them. Its cached
-target is 30 seconds. To measure it, set
-`NSHELL_ASDF_OUTPUT_DIR="$XDG_CACHE_HOME/nshell/asdf"` to a new cache directory
-and run the following command twice. Record the cold and cached elapsed times
-separately. The runner reports SBCL elapsed time and excludes Nix startup.
+Set test state inside `nix develop -c env`, as in this full-suite command:
 
 ```sh
-NSHELL_ASDF_OUTPUT_DIR="$XDG_CACHE_HOME/nshell/asdf" nix develop -c sbcl --script scripts/test-fast.lisp
+nix develop -c env \
+  HOME="$test_root/home" \
+  XDG_CONFIG_HOME="$test_root/config" \
+  XDG_DATA_HOME="$test_root/data" \
+  XDG_STATE_HOME="$test_root/state" \
+  XDG_CACHE_HOME="$test_root/cache" \
+  NSHELL_AI_COMMAND=/nonexistent \
+  sbcl --script run-tests.lisp
+```
+
+Set `HOME` inside `nix develop -c env`; setting it outside changes which Nix config and cache directories Nix uses.
+Run the other Lisp scripts from the repository root through `nix develop -c env` with the same isolated variables:
+
+```sh
+nix develop -c env HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/config" \
+  XDG_DATA_HOME="$test_root/data" XDG_STATE_HOME="$test_root/state" \
+  XDG_CACHE_HOME="$test_root/cache" NSHELL_AI_COMMAND=/nonexistent \
+  sbcl --script scripts/test-fast.lisp # unit, main and static checks (nshell/test-unit)
+nix develop -c env HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/config" \
+  XDG_DATA_HOME="$test_root/data" XDG_STATE_HOME="$test_root/state" \
+  XDG_CACHE_HOME="$test_root/cache" NSHELL_AI_COMMAND=/nonexistent \
+  sbcl --script scripts/weave.lisp # completion knowledge-base suite (nshell/weave)
+nix develop -c env HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/config" \
+  XDG_DATA_HOME="$test_root/data" XDG_STATE_HOME="$test_root/state" \
+  XDG_CACHE_HOME="$test_root/cache" NSHELL_AI_COMMAND=/nonexistent \
+  NSHELL_COVERAGE_DIR="$test_root/cache/nshell/coverage" \
+  sbcl --script scripts/coverage.lisp
+```
+
+The coverage report is written to `$test_root/cache/nshell/coverage` in this isolated setup.
+The `test`, `test-fast`, `weave` and `cov` aliases exist in the interactive shell hook; automation uses the explicit script commands above.
+
+`test-fast` excludes tests tagged `:slow`; the full suite keeps them.
+Its target is 30 seconds for cached SBCL elapsed time; the reported time excludes Nix startup.
+To measure it, set `NSHELL_ASDF_OUTPUT_DIR` to a new directory and run the command twice, recording cold and cached elapsed times separately.
+With the isolated environment above, the compilation cache is written to `$test_root/cache/nshell/asdf`.
+
+```sh
+nix develop -c env HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/config" \
+  XDG_DATA_HOME="$test_root/data" XDG_STATE_HOME="$test_root/state" \
+  XDG_CACHE_HOME="$test_root/cache" NSHELL_AI_COMMAND=/nonexistent \
+  NSHELL_ASDF_OUTPUT_DIR="$test_root/cache/nshell/asdf" \
+  sbcl --script scripts/test-fast.lisp
 ```
 
 Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
 
 ```sh
-# 1. SBCL >= 2.6.0 and < 2.6.10 (2.6.10 removed sb-unix:unix-ioctl, which cl-tty-kit uses).
-#    Build 2.6.9 from source with any older SBCL as host:
-git clone --depth 1 --branch sbcl-2.6.9 https://github.com/sbcl/sbcl && cd sbcl \
-  && echo '"2.6.9"' > version.lisp-expr && sh make.sh --prefix=$HOME/sbcl && sh install.sh
-# 2. Clone the nerima-lisp toolkits at the tags pinned in flake.nix into one directory, e.g. ../deps/
-# 3. Run the suite
-export SBCL_HOME=$HOME/sbcl/lib/sbcl PATH=$HOME/sbcl/bin:$PATH
-export CL_SOURCE_REGISTRY="$PWD/../deps//:$PWD/"
+# Start from the repository root. SBCL must be >= 2.6.0 and < 2.6.10 because
+# 2.6.10 removed sb-unix:unix-ioctl, which cl-tty-kit uses.
+repo_root="$PWD"
+test_root="$(mktemp -d)"
+mkdir -p "$test_root/home" "$test_root/config" "$test_root/data" \
+  "$test_root/state" "$test_root/cache" "$test_root/deps" "$test_root/helpers"
+export HOME="$test_root/home"
+export XDG_CONFIG_HOME="$test_root/config"
+export XDG_DATA_HOME="$test_root/data"
+export XDG_STATE_HOME="$test_root/state"
+export XDG_CACHE_HOME="$test_root/cache"
+export NSHELL_AI_COMMAND=/nonexistent
+```
+
+Check the installed compiler with `sbcl --version`.
+If it reports a version from 2.6.0 up to, but not including, 2.6.10, use that system SBCL and skip the optional source-build block below.
+Otherwise, run that block with an installed host SBCL older than 2.6.9 to build SBCL 2.6.9.
+
+```sh
+git clone --depth 1 --branch sbcl-2.6.9 https://github.com/sbcl/sbcl "$test_root/sbcl-source"
+cd "$test_root/sbcl-source"
+echo '"2.6.9"' > version.lisp-expr
+sh make.sh --prefix="$test_root/sbcl"
+sh install.sh
+cd "$repo_root" # Return to the nshell repository root.
+```
+
+Continue in the same shell session so `$repo_root`, `$test_root` and the isolated environment remain set.
+
+```sh
+# List the locked cl-* inputs, their GitHub repository, tag/ref, and commit:
+jq -r '.nodes as $nodes | .nodes.root.inputs | to_entries[] | select(.key | startswith("cl-")) | .key as $name | .value as $node | [$name, ("https://github.com/\($nodes[$node].locked.owner)/\($nodes[$node].locked.repo).git"), $nodes[$node].original.ref, $nodes[$node].locked.rev] | @tsv' flake.lock
+# Clone the ASDF runtime inputs, transitive cl-log-kit, and test-only cl-weave
+# at their listed tags under the temporary dependency directory:
+deps_dir="$test_root/deps"
+jq -r '.nodes as $nodes | .nodes.root.inputs | to_entries[] | select(.key | startswith("cl-")) | .key as $name | .value as $node | [$name, ("https://github.com/\($nodes[$node].locked.owner)/\($nodes[$node].locked.repo).git"), $nodes[$node].original.ref, $nodes[$node].locked.rev] | @tsv' flake.lock |
+while IFS="$(printf '\t')" read -r name url ref locked_rev; do
+  case "$name" in
+    cl-prolog-kit|cl-parser-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|cl-process-kit|cl-regex-kit|cl-vcs-kit|cl-tui-kit|cl-history-kit|cl-host-kit|cl-codec-kit|cl-concurrent-kit|cl-date-kit|cl-json-kit|cl-log-kit|cl-weave)
+      git clone --depth 1 --branch "$ref" "$url" "$deps_dir/$name" || exit 1
+      ;;
+  esac
+done
+
+# Build the cl-process-kit helpers used by the tests. Keep generated helpers in
+# the temporary root.
+helper_dir="$test_root/helpers"
+cc -std=c11 -O2 -Wall -Wextra -Werror \
+  "$deps_dir/cl-process-kit/native/spawn.c" \
+  -o "$helper_dir/cl-process-kit-spawn"
+export CL_PROCESS_KIT_SPAWN="$helper_dir/cl-process-kit-spawn"
+case "$(uname -s)" in
+  Darwin)
+    cc -O2 -fPIC -dynamiclib "$deps_dir/cl-process-kit/native/pty.c" \
+      -o "$helper_dir/libcl_process_kit_pty.dylib"
+    export CL_PROCESS_KIT_PTY_LIBRARY="$helper_dir/libcl_process_kit_pty.dylib"
+    cc -std=c11 -O2 -Wall -Wextra -Werror \
+      src/infrastructure/acl/pty-exec-bootstrap.c \
+      -o "$helper_dir/nshell-pty-bootstrap"
+    export NSHELL_PTY_BOOTSTRAP="$helper_dir/nshell-pty-bootstrap"
+    ;;
+  Linux)
+    cc -O2 -fPIC -shared "$deps_dir/cl-process-kit/native/pty.c" \
+      -o "$helper_dir/libcl_process_kit_pty.so" -lutil
+    export CL_PROCESS_KIT_PTY_LIBRARY="$helper_dir/libcl_process_kit_pty.so"
+    ;;
+esac
+
+# Source-installed SBCL needs these paths. Omit both exports with a system SBCL.
+if [ -x "$test_root/sbcl/bin/sbcl" ]; then
+  export PATH="$test_root/sbcl/bin:$PATH"
+  export SBCL_HOME="$test_root/sbcl/lib/sbcl"
+else
+  unset SBCL_HOME
+fi
+
+# Configure ASDF to find the repository and temporary dependency trees.
+export CL_SOURCE_REGISTRY="$deps_dir//:$PWD/"
+export NSHELL_TEST_PTY=1 CI=1
 sbcl --script run-tests.lisp
 ```
 
-Known environment-only failures when running as root inside a container
-(not bugs in nshell): `complete-path-like-command-arguments-from-filesystem`,
+On macOS and Linux, an unprivileged-user run is expected to finish with `failures 0`.
+When running as root inside a container, these environment-only tests may fail:
+`complete-path-like-command-arguments-from-filesystem`,
 `regular-file-preview-reader-rejects-permission-denied-files`,
 `spawn-pipeline-reaped-leader-still-terminates-descendants`, and
 `run-external-timeout-terminates-descendant-processes`.
 
 After `nix build`, run a script with `./result/bin/nshell FILE.nsh` or a command
-with `./result/bin/nshell --command '(…)'`.
+with `./result/bin/nshell --command '(+ 1 2)'`; the command prints `3`.
 
-Always isolate state when testing, so you never touch the real history, config
-or AI provider:
+The flake checks run in a Nix build sandbox, where PTY integration tests are skipped.
+To run them on the host, set `NSHELL_TEST_PTY=1` and `CI=1` in the `nix develop -c env` command, as in this example:
 
-- Point `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and
-  `XDG_CACHE_HOME` at a temporary directory.
-- Set `NSHELL_AI_COMMAND=/nonexistent` so no AI provider is started.
+```sh
+nix develop -c env \
+  HOME="$test_root/home" \
+  XDG_CONFIG_HOME="$test_root/config" \
+  XDG_DATA_HOME="$test_root/data" \
+  XDG_STATE_HOME="$test_root/state" \
+  XDG_CACHE_HOME="$test_root/cache" \
+  NSHELL_AI_COMMAND=/nonexistent \
+  NSHELL_TEST_PTY=1 CI=1 \
+  sbcl --script run-tests.lisp
+```
 
-Set `NSHELL_TEST_PTY=1` when the PTY integration tests must run. Without it
-they are skipped inside a Nix build sandbox and wherever a PTY cannot be
-opened; with it and `CI` set, an unavailable PTY fails the test instead of
-skipping it.
+With `CI=1`, an unavailable PTY is a test failure instead of a skip.
 
 ## Working rules
 

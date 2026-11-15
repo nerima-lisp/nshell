@@ -68,7 +68,7 @@ golden test を安全網に、言語仕様 v0.8 を実装し、二重実装と�
 - fish 形式のビルトイン 10 個・prevd / nextd・pipeline-graph (I4)
 - slurp / barf・マウス・Ctrl-X 再実行・Alt-C/L/U/T (I5)
 - シナリオ 200 件超 → 30〜40 本 (I9)
-- cl-dataflow-kit・cl-boundary-kit を外す (04)。参照されていない cl-process-kit・cl-vcs-kit・cl-tui-kit・cl-log-kit は、P2 を待たずに先に外す
+- cl-dataflow-kitとcl-boundary-kitを外す (04)。参照されていなかった4つのtoolkitはINT-1でP2より前に削除しました
 
 P3
 

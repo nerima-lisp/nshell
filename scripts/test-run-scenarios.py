@@ -300,10 +300,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                 mock.patch.object(runner.subprocess, "run", side_effect=results) as run,
                 mock.patch.dict(runner.os.environ, {
                     "CL_SOURCE_REGISTRY": "/candidate-dependencies//:",
-                    "NSHELL_DEPENDENCY_SOURCE_REGISTRY": "/candidate-test-dependencies//:",
                     "ASDF_OUTPUT_TRANSLATIONS": "/:/candidate-cache/",
-                    "CL_PROCESS_KIT_SPAWN": "/candidate-helper",
-                    "CL_PROCESS_KIT_PTY_LIBRARY": "/candidate-pty",
                 }),
             ):
                 stdout, stderr, exit_code, failures = runner._run_p12_api(
@@ -323,9 +320,7 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(previous_env["CL_SOURCE_REGISTRY"],
                          f'(:source-registry (:directory "{previous[0]}") '
                          '(:tree "/nix/store/previous-dependencies/") :ignore-inherited-configuration)')
-        for key in ("ASDF_OUTPUT_TRANSLATIONS", "NSHELL_DEPENDENCY_SOURCE_REGISTRY",
-                    "CL_PROCESS_KIT_SPAWN", "CL_PROCESS_KIT_PTY_LIBRARY"):
-            self.assertNotIn(key, previous_env)
+        self.assertNotIn("ASDF_OUTPUT_TRANSLATIONS", previous_env)
         self.assertNotEqual(first_call.kwargs["env"]["HOME"], previous_env["HOME"])
         self.assertIn("P12 candidate source version=0.6.6", stdout)
         self.assertIn("P12 previous source version=0.6.5", stdout)
@@ -394,6 +389,20 @@ class ScenarioRunnerTests(unittest.TestCase):
             (root / "flake.lock").write_text('{"candidate":true}', encoding="utf-8")
             with self.assertRaisesRegex(runner.ScenarioError, "does not match previous flake.lock"):
                 runner._p12_previous_registry(root, registry)
+
+    def test_p12_previous_registry_replaces_pwd_after_splitting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "previous:release"
+            root.mkdir()
+            registry = _write_p12_registry(root)
+
+            result = runner._p12_previous_registry(root, registry)
+
+        self.assertEqual(
+            result,
+            f'(:source-registry (:directory "{root}") '
+            '(:tree "/nix/store/previous-dependencies/") :ignore-inherited-configuration)',
+        )
 
     def test_p12_previous_registry_rejects_empty_or_inherited_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

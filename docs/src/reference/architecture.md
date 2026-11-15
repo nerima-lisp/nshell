@@ -107,10 +107,12 @@ nshell uses these `nerima-lisp` Common Lisp toolkits:
   or Darwin `termios`) to preserve speeds and control fields across raw-mode
   changes. See the commentary in
   `src/infrastructure/terminal/raw-mode.lisp`.
-- **[cl-process-kit](https://github.com/nerima-lisp/cl-process-kit)**: backs
-  timeout-guarded process launch, escalating SIGTERM to SIGKILL across a
-  child's whole process group so a timed-out command substitution leaves no
-  orphaned descendants.
+- **Process execution**: `src/infrastructure/acl/syscall-process-execution.lisp`
+  applies the foreground timeout policy.
+  `src/infrastructure/acl/syscall-process-resolution.lisp` launches child
+  processes in their own process groups, and
+  `src/infrastructure/acl/syscall-process.lisp` drains their output and sends
+  SIGTERM, escalating to SIGKILL if a process remains alive after a timeout.
 - **[cl-prolog-kit](https://github.com/nerima-lisp/cl-prolog-kit)**: the logic engine
   behind the completion knowledge base.
 

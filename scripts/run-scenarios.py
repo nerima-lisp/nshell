@@ -1718,7 +1718,8 @@ def _p12_previous_registry(root: Path, registry_file: Path) -> str:
     _require(isinstance(registry, str) and all(registry.split(":")),
              "P12 previous dependency registry must be nonempty and exclude inherited configuration")
     entries = []
-    for path in registry.replace("$PWD", str(root)).split(":"):
+    for path in registry.split(":"):
+        path = path.replace("$PWD", str(root))
         _require(path.startswith("/"), "P12 previous registry entries must be absolute paths")
         kind = "tree" if path.endswith("//") else "directory"
         pathname = path[:-1] if kind == "tree" else path
@@ -1748,9 +1749,7 @@ def _run_p12_api(
         root, version, revision = details
         with tempfile.TemporaryDirectory(prefix=f"nshell-p12-{label}-") as temporary:
             environment = os.environ.copy()
-            for key in ("ASDF_OUTPUT_TRANSLATIONS", "NSHELL_DEPENDENCY_SOURCE_REGISTRY",
-                        "CL_PROCESS_KIT_SPAWN", "CL_PROCESS_KIT_PTY_LIBRARY"):
-                environment.pop(key, None)
+            environment.pop("ASDF_OUTPUT_TRANSLATIONS", None)
             for key in ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"):
                 path = Path(temporary) / key.lower()
                 path.mkdir()

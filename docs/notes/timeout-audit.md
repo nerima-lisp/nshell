@@ -45,8 +45,9 @@ under the `--non-interactive` batch test runner is never
 ## Confirmed sound, no change needed
 
 - **`run-external-capture`** (command substitution, `$(...)`) — validates the
-  configured command-substitution timeout at the communication boundary and
-  delegates to `cl-process-kit`'s `run` with that finite value. Correctly
+  configured command-substitution timeout at the communication boundary,
+  starts the child with `%spawn-in-own-process-group`, and waits with
+  `%wait-process-with-output` using that finite value. Correctly
   unconditional — command substitution has no terminal of its own to be
   interactive with.
 - **`spawn-pipeline` / `%wait-pipeline-with-output`** — foreground OS-pipe

@@ -1,8 +1,14 @@
 # nerima-lisp package integration audit
 
-This audit covers [`nshell.asd`](../../nshell.asd), `src/`, the assistant feature
-in `packages/`, and the dependency graph in [`flake.nix`](../../flake.nix)
-for the v0.6.1 release line.
+This historical audit covers [`nshell.asd`](../../nshell.asd), `src/`, the
+assistant feature in `packages/`, and the dependency graph in
+[`flake.nix`](../../flake.nix) for the v0.6.1 release line.
+
+This audit predates INT-1, which removed `cl-process-kit`, `cl-vcs-kit`,
+`cl-tui-kit`, and `cl-log-kit` from the current dependency graph. The tables
+below preserve the v0.6.1 runtime, source-registry, and build inputs; they do
+not describe the current dependency list. Use `nshell.asd` and `flake.nix` for
+that list.
 
 ## Declared runtime dependencies with API use
 
@@ -53,7 +59,7 @@ helpers is not the same as running that library's own suite. The sibling
 derivations do not enable `doCheck`. In particular, `checks.weave` runs
 `nshell/weave`, not `cl-weave/test`.
 
-The current CI and release integration jobs additionally run
+The v0.6.1 release integration jobs additionally ran
 [`scripts/test-dependencies.sh`](../../scripts/test-dependencies.sh).
 It starts a separate Lisp image for each pinned dependency suite. Its
 [`runner`](../../scripts/test-dependencies.lisp) requires nonempty discovery,

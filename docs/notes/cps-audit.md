@@ -14,7 +14,6 @@ helps", not "everywhere".
 | `infrastructure/acl/syscall-process.lisp` `%wait-process-with-copiers` | `success-fn` / `timeout-fn` | The two terminal outcomes (exited vs. timed out) are passed in as continuations, so the wait logic never branches on "what to return" — the caller supplies both exit paths. |
 | `infrastructure/acl/syscall-pipeline.lisp` `%wait-pipeline-with-output` | `timeout-fn` | Same two-exit-path shape for a whole pipeline. |
 | `application/builtin-state-tables.lisp` | `emitter` | Table rendering emits each `(name value)` to a caller-supplied sink rather than materialising rows. |
-| `cl-process-kit` `run … :on-timeout :return` | policy continuation | The timeout *policy* is a value nshell passes to the library, not a branch nshell writes. |
 
 The common thread: a continuation is right when it separates a **traversal or a
 wait** from **what to do with each result / each exit path**. That is the

@@ -55,7 +55,6 @@ The full CI gate also runs these checks separately from `nix flake check`:
 ```sh
 nix develop -c bash scripts/test-dependencies.sh
 nix develop -c perl t/scripts/test-dependencies.pl
-nix develop -c perl t/scripts/test-native-spawn.pl
 nix develop -c sbcl --script t/scripts/test-dependency-assertions.lisp
 nix develop -c sbcl --script scripts/test-history-storage.lisp
 ```

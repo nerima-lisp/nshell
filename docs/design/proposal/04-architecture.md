@@ -102,13 +102,13 @@ AGENTS.md
 
 ## 依存 toolkit
 
-外す依存は次の 6 つです。
+削除対象だった6つのうち未参照の4つはINT-1で削除済みです。
 
-| toolkit | 外す時期と理由 |
+| toolkit | 削除時期と理由 |
 |---|---|
-| cl-process-kit・cl-vcs-kit・cl-tui-kit・cl-log-kit | nshell から参照されていないので、先に外す |
-| cl-dataflow-kit・cl-boundary-kit | コードの変更が要るので、P2 の削除 (pipeline-graph の削除と REPL 境界の簡素化) で外す |
+| cl-process-kit、cl-vcs-kit、cl-tui-kit、cl-log-kit | INT-1で削除済み。nshellから参照されていなかった |
+| cl-dataflow-kitとcl-boundary-kit | P2の削除 (pipeline-graphの削除とREPL境界の簡素化) に合わせて外す |
 
 cl-boundary-kit をイメージから消すため、cl-concurrent-kit と cl-resilience-kit からもこの依存を外します。どちらも時計の用途だけなので、cl-host-kit の時計に置き換えます。
 
-U9 の表やステータスラインは、cl-tty-kit の上に nshell で作ります。文字幅の表を 1 つに保つため、cl-tui-kit は使いません。Ollama との接続には cl-ollama-kit v3 (cl-http-kit 経由) を使い (09)、trust のハッシュには cl-crypto-kit の SHA-256 を使います (08)。cl-prolog-kit は知識ベースの中核として残します (06)。
+U9の表やステータスラインはcl-tty-kitの上にnshellで作り、文字幅の表を1つに保ちます。Ollamaとの接続にはcl-ollama-kit v3 (cl-http-kit経由)を使い (09)、trustのハッシュにはcl-crypto-kitのSHA-256を使います (08)。cl-prolog-kitは知識ベースの中核として残します (06)。

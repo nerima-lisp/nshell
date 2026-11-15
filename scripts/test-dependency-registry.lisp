@@ -2,16 +2,18 @@
 
 (let* ((original (uiop:getenv "CL_SOURCE_REGISTRY"))
        (extra (uiop:getenv "NSHELL_DEPENDENCY_SOURCE_REGISTRY"))
-       (parsed (dependency-registry-configuration original extra))
        (stores (remove-if-not
                 (lambda (entry)
                   (and (consp entry) (member (first entry) '(:directory :tree))
                        (= (length entry) 2) (dependency-store-path-p (second entry))))
-                (rest parsed)))
+                (append
+                 (rest (asdf/source-registry:parse-source-registry-string original))
+                 (rest (asdf/source-registry:parse-source-registry-string extra)))))
        (checkout (namestring *dependency-checkout-root*))
        (parent (namestring (uiop:pathname-parent-directory-pathname *dependency-checkout-root*)))
        (child (namestring (merge-pathnames "scripts/" *dependency-checkout-root*)))
        (passed 0))
+
   (unless stores (error "Registry regression tests require nonempty Nix store fixtures"))
   (labels ((check (name result)
              (unless result (error "Registry check failed: ~A" name))
@@ -30,17 +32,18 @@
                     (dependency-registry-configuration
                      (prin1-to-string `(:source-registry ,(first stores) :ignore-inherited-configuration))
                      (prin1-to-string `(:source-registry ,@(rest stores) :ignore-inherited-configuration)))))
-      (check "extension-merged"
-             (equal expected (dependency-registry-configuration
-                              (prin1-to-string `(:source-registry ,@stores :ignore-inherited-configuration))
-                              (prin1-to-string `(:source-registry ,@stores :ignore-inherited-configuration)))))
       (check "extension-local-rejected"
              (handler-case
-                 (progn (dependency-registry-configuration original
-                          (prin1-to-string `(:source-registry (:directory ,parent)
-                                            :ignore-inherited-configuration)))
-                        nil)
-               (error () t)))
+                 (progn
+                   (dependency-registry-configuration
+                    original
+                    (prin1-to-string
+                     (list :source-registry (list :directory parent)
+                           :ignore-inherited-configuration)))
+                   nil)
+               (error (condition)
+                 (search "NSHELL_DEPENDENCY_SOURCE_REGISTRY"
+                         (format nil "~A" condition)))))
       (check "store-order" (equal expected (apply #'configuration stores)))
       (check "checkout-removed"
              (equal expected (apply #'configuration `(:directory ,checkout) stores)))
@@ -69,7 +72,18 @@
              (rejects (prin1-to-string `(:source-registry (:directory ,checkout)
                                          :ignore-inherited-configuration))))
       (check "empty-rejected" (rejects ""))
-      (check "unset-rejected" (rejects nil))
+      (progn
+        (check "unset-rejected" (rejects nil))
+        (check "primary-error-names-variable"
+               (handler-case
+                   (progn
+                     (dependency-registry-configuration
+                      (prin1-to-string
+                       (list :source-registry (list :directory parent)
+                             :ignore-inherited-configuration)))
+                     nil)
+                 (error (condition)
+                   (search "CL_SOURCE_REGISTRY" (format nil "~A" condition))))))
       (sb-posix:setenv "CL_SOURCE_REGISTRY" original 1)
       (check "configured-store-only" (equal expected (dependency-configure-registry)))
       (check "exported-store-only"

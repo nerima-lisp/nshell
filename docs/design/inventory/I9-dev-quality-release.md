@@ -26,7 +26,7 @@
 | リリースバンドル — x86_64-linux、SHA-256、検証スクリプト | [残す] | そのまま。 |
 | Cachix | [残す] | そのまま。 |
 | man ページ・MkDocs | [残す] | builtin spec から生成する部分を増やす。 |
-| toolkit 依存 18 個 | [簡素化] | cl-process-kit・cl-vcs-kit・cl-tui-kit・cl-log-kit・cl-dataflow-kit・cl-boundary-kit の 6 つを外す (04)。cl-concurrent-kit と cl-resilience-kit からも cl-boundary-kit を外す。cl-prolog-kit は中核として残す。 |
+| toolkit依存（設計時点で18個） | [簡素化] | INT-1で未参照の4つを先に削除しました。cl-dataflow-kitとcl-boundary-kitをP2で外します (04)。cl-concurrent-kitとcl-resilience-kitからもcl-boundary-kitを外します。cl-prolog-kitは中核として残します。 |
 
 ### テスト
 

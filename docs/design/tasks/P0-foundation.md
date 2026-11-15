@@ -8,7 +8,7 @@
 - [x] 層の向きをコードの規則 `domain ← infrastructure ← application ← presentation` (`t/unit/test-static-checks.lisp` の層の規則) に合わせる
 - [x] エージェントが使うコマンドは `nix develop -c sbcl --script …` と書く。`test` / `weave` / `cov` の alias は対話シェルでしか動かないので、人向けとして書く
 - [x] テストの隔離に使う環境変数として HOME・XDG_CONFIG_HOME・XDG_DATA_HOME・XDG_STATE_HOME・XDG_CACHE_HOME の 5 つと `NSHELL_AI_COMMAND=/nonexistent` を書く。PTY テストに `NSHELL_TEST_PTY=1` が要ることも書く。件数のように時間で変わる数は書かない
-- [ ] Nix なしの手順を `scripts/bootstrap-without-nix.sh` にまとめる (kit の取得、`nix/patches/` のパッチの適用、`cl-process-kit-spawn` 以外の補助プログラムのビルド)。AGENTS.md はこのスクリプトを指すだけにする
+- [ ] Nix なしの手順を `scripts/bootstrap-without-nix.sh` にまとめる (kit の取得、`nix/patches/` のパッチの適用、補助プログラムのビルド)。AGENTS.md はこのスクリプトを指すだけにする
 - [ ] ubuntu の CI ジョブ `no-nix` でこのスクリプトを流し、`run-tests.lisp` まで通す
 
 受け入れ条件: 新しい Claude Code のセッションに AGENTS.md だけを渡し、ほかの文書を読まずにビルドと全テストを実行できる。

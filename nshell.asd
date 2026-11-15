@@ -34,7 +34,8 @@
                "cl-history-kit"
                "cl-concurrent-kit"
                "cl-json-kit"
-               "cl-regex-kit")
+               "cl-regex-kit"
+               "cl-ollama-kit")
   :pathname "src"
   :serial t
   :components

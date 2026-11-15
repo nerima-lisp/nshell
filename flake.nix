@@ -37,6 +37,27 @@
       inputs.treefmt-nix.follows = "treefmt-nix";
     };
 
+    cl-ollama-kit = {
+      url = "github:nerima-lisp/cl-ollama-kit/v3.0.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.cl-nix-forge.follows = "cl-nix-forge";
+      inputs.cl-weave.follows = "cl-weave";
+      inputs.paredit-cli.follows = "paredit-cli";
+      inputs.treefmt-nix.follows = "treefmt-nix";
+      inputs.cl-boundary-kit.follows = "cl-boundary-kit";
+      inputs.cl-codec-kit.follows = "cl-codec-kit";
+      inputs.cl-concurrent-kit.follows = "cl-concurrent-kit";
+      inputs.cl-date-kit.follows = "cl-date-kit";
+      inputs.cl-deflate-kit.follows = "cl-deflate-kit";
+      inputs.cl-hpack-codec-kit.follows = "cl-hpack-codec-kit";
+      inputs.cl-host-kit.follows = "cl-host-kit";
+      inputs.cl-http-kit.follows = "cl-http-kit";
+      inputs.cl-http-message-kit.follows = "cl-http-message-kit";
+      inputs.cl-json-kit.follows = "cl-json-kit";
+      inputs.cl-resilience-kit.follows = "cl-resilience-kit";
+      inputs.cl-sse-kit.follows = "cl-sse-kit";
+    };
+
     # cl-weave is the testing framework behind both suites.
     cl-weave = {
       url = "github:nerima-lisp/cl-weave/v1.3.0";
@@ -111,7 +132,31 @@
       flake = false;
     };
     cl-codec-kit = {
-      url = "github:nerima-lisp/cl-codec-kit/v0.5.0";
+      url = "github:nerima-lisp/cl-codec-kit/v0.6.0";
+      flake = false;
+    };
+    cl-deflate-kit = {
+      url = "github:nerima-lisp/cl-deflate-kit/v0.4.0";
+      flake = false;
+    };
+    cl-hpack-codec-kit = {
+      url = "github:nerima-lisp/cl-hpack-codec-kit/v1.1.2";
+      flake = false;
+    };
+    cl-http-kit = {
+      url = "github:nerima-lisp/cl-http-kit/v0.5.1";
+      flake = false;
+    };
+    cl-http-message-kit = {
+      url = "github:nerima-lisp/cl-http-message-kit/v2.0.1";
+      flake = false;
+    };
+    cl-resilience-kit = {
+      url = "github:nerima-lisp/cl-resilience-kit/v2.0.0";
+      flake = false;
+    };
+    cl-sse-kit = {
+      url = "github:nerima-lisp/cl-sse-kit/v1.2.0";
       flake = false;
     };
     cl-concurrent-kit = {
@@ -139,6 +184,7 @@
       nixpkgs,
       cl-nix-forge,
       cl-prolog-kit,
+      cl-ollama-kit,
       cl-weave,
       paredit-cli,
       cl-parser-kit,
@@ -155,6 +201,12 @@
       cl-concurrent-kit,
       cl-json-kit,
       cl-date-kit,
+      cl-deflate-kit,
+      cl-hpack-codec-kit,
+      cl-http-kit,
+      cl-http-message-kit,
+      cl-resilience-kit,
+      cl-sse-kit,
       treefmt-nix,
     }:
     let
@@ -295,6 +347,7 @@
             {
               name,
               source,
+              system ? name,
               dependencies ? [ ],
               patches ? [ ],
             }:
@@ -305,7 +358,7 @@
               # and a number nobody updates is worse than no number.
               version = ctx.cl.fromAsdSystem "${source}/${name}.asd";
               src = source;
-              lispSystem = name;
+              lispSystem = system;
               lispDependencies = dependencies;
               inherit patches;
             };
@@ -318,6 +371,56 @@
           clWeave = sibling {
             name = "cl-weave";
             source = cl-weave;
+          };
+          clOllamaKit = sibling {
+            name = "cl-ollama-kit";
+            source = cl-ollama-kit;
+            dependencies = [
+              clHttpKit
+              clHttpMessageKit
+              clSseKit
+              clCodecKit
+              clConcurrentKit
+              clJsonKit
+            ];
+          };
+          clDeflateKit = sibling {
+            name = "cl-deflate-kit";
+            source = cl-deflate-kit;
+          };
+          clHpackCodecKit = sibling {
+            name = "cl-hpack-codec-kit";
+            source = cl-hpack-codec-kit;
+          };
+          clHttpMessageKit = sibling {
+            name = "cl-http-message-kit";
+            source = cl-http-message-kit;
+            dependencies = [ clHpackCodecKit ];
+          };
+          clHttpKit = sibling {
+            name = "cl-http-kit";
+            system = "cl-http-kit/client";
+            source = cl-http-kit;
+            dependencies = [
+              clHttpMessageKit
+              clHpackCodecKit
+              clCodecKit
+              clDeflateKit
+            ];
+          };
+          clResilienceKit = sibling {
+            name = "cl-resilience-kit";
+            source = cl-resilience-kit;
+            dependencies = [ clConcurrentKit clDateKit ];
+          };
+          clSseKit = sibling {
+            name = "cl-sse-kit";
+            source = cl-sse-kit;
+            dependencies = [
+              clCodecKit
+              clHttpMessageKit
+              clResilienceKit
+            ];
           };
           clParserKit = sibling {
             name = "cl-parser-kit";
@@ -451,6 +554,13 @@
             cp ${cl-concurrent-kit}/LICENSE "$out/LICENSES/CL-CONCURRENT-KIT-LICENSE"
             cp ${cl-json-kit}/LICENSE "$out/LICENSES/CL-JSON-KIT-LICENSE"
             cp ${cl-regex-kit}/LICENSE "$out/LICENSES/CL-REGEX-KIT-LICENSE"
+            cp ${cl-ollama-kit}/LICENSE "$out/LICENSES/CL-OLLAMA-KIT-LICENSE"
+            cp ${cl-http-kit}/LICENSE "$out/LICENSES/CL-HTTP-KIT-LICENSE"
+            cp ${cl-http-message-kit}/LICENSE "$out/LICENSES/CL-HTTP-MESSAGE-KIT-LICENSE"
+            cp ${cl-sse-kit}/LICENSE "$out/LICENSES/CL-SSE-KIT-LICENSE"
+            cp ${cl-resilience-kit}/LICENSE "$out/LICENSES/CL-RESILIENCE-KIT-LICENSE"
+            cp ${cl-deflate-kit}/LICENSE "$out/LICENSES/CL-DEFLATE-KIT-LICENSE"
+            cp ${cl-hpack-codec-kit}/LICENSE "$out/LICENSES/CL-HPACK-CODEC-KIT-LICENSE"
             cp ${./man/nshell.1} "$out/share/man/man1/nshell.1"
           '';
         });
@@ -694,6 +804,7 @@
           clConcurrentKit
           clDateKit
           clJsonKit
+          clOllamaKit
         ];
 
       # cl-weave is a dependency of `nshell/test` and `nshell/weave` only (see

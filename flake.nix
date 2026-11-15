@@ -82,6 +82,14 @@
       url = "github:nerima-lisp/cl-tty-kit/v1.8.0";
       flake = false;
     };
+    cl-process-kit = {
+      url = "github:nerima-lisp/cl-process-kit/v3.4.4";
+      flake = false;
+    };
+    cl-log-kit = {
+      url = "github:nerima-lisp/cl-log-kit/v2.2.0";
+      flake = false;
+    };
     cl-regex-kit = {
       url = "github:nerima-lisp/cl-regex-kit/v2.2.0";
       flake = false;
@@ -139,6 +147,8 @@
       cl-boundary-kit,
       cl-cli,
       cl-tty-kit,
+      cl-process-kit,
+      cl-log-kit,
       cl-regex-kit,
       cl-history-kit,
       cl-codec-kit,
@@ -829,6 +839,8 @@
             previous:
             {
               TZDIR = "${ctx.pkgs.tzdata}/share/zoneinfo";
+              # cl-dataflow-kit/test and cl-cli/test/shell-verification need process-kit and its log-kit dependency.
+              NSHELL_DEPENDENCY_SOURCE_REGISTRY = "${cl-process-kit}//:${cl-log-kit}//";
               shellHook = previous.shellHook + ''
                 export NSHELL_ROOT=$PWD
                 alias test='cd "$NSHELL_ROOT" && sbcl --script "$NSHELL_ROOT/run-tests.lisp"'

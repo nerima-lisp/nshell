@@ -51,6 +51,22 @@ jobs:
           ".#packages.${{ matrix.system }}.default"
           --out-link "$RUNNER_TEMP/nshell-scenario-binary"
 
+      - name: Build previous release dependency registry (P12)
+        run: |
+          nix build --impure --print-build-logs \
+            --out-link "$RUNNER_TEMP/nshell-p12-previous-registry" \
+            --expr '
+              let
+                previous = builtins.getFlake (toString ./previous-nshell);
+                system = "${{ matrix.system }}";
+                pkgs = previous.inputs.nixpkgs.legacyPackages.${system};
+              in
+              pkgs.writeText "nshell-p12-previous-registry.json" (builtins.toJSON {
+                lockSha256 = builtins.hashFile "sha256" ./previous-nshell/flake.lock;
+                registry = previous.packages.${system}.nshell.registryPath;
+              })
+            '
+
       - name: Compare public API against previous release (P12)
         run: >-
           nix develop .#default -c bash -c
@@ -58,6 +74,7 @@ jobs:
           --mode api
           --scenario-id P12-public-api-stability
           --p12-previous-root previous-nshell
+          --p12-previous-registry \"$RUNNER_TEMP/nshell-p12-previous-registry\"
           --p12-consumer-fixture t/scenarios/P12/public-api-consumer.lisp
           --sbcl \"\$(command -v sbcl)\""
 

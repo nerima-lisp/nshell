@@ -1,7 +1,8 @@
 (load (merge-pathnames "dependency-registry.lisp" *load-truename*))
 
 (let* ((original (uiop:getenv "CL_SOURCE_REGISTRY"))
-       (parsed (asdf/source-registry:parse-source-registry-string original))
+       (extra (uiop:getenv "NSHELL_DEPENDENCY_SOURCE_REGISTRY"))
+       (parsed (dependency-registry-configuration original extra))
        (stores (remove-if-not
                 (lambda (entry)
                   (and (consp entry) (member (first entry) '(:directory :tree))
@@ -24,6 +25,22 @@
                (asdf/source-registry:invalid-source-registry () t)
                (error () t))))
     (let ((expected `(:source-registry ,@stores :ignore-inherited-configuration)))
+      (check "extension-appended"
+             (equal expected
+                    (dependency-registry-configuration
+                     (prin1-to-string `(:source-registry ,(first stores) :ignore-inherited-configuration))
+                     (prin1-to-string `(:source-registry ,@(rest stores) :ignore-inherited-configuration)))))
+      (check "extension-merged"
+             (equal expected (dependency-registry-configuration
+                              (prin1-to-string `(:source-registry ,@stores :ignore-inherited-configuration))
+                              (prin1-to-string `(:source-registry ,@stores :ignore-inherited-configuration)))))
+      (check "extension-local-rejected"
+             (handler-case
+                 (progn (dependency-registry-configuration original
+                          (prin1-to-string `(:source-registry (:directory ,parent)
+                                            :ignore-inherited-configuration)))
+                        nil)
+               (error () t)))
       (check "store-order" (equal expected (apply #'configuration stores)))
       (check "checkout-removed"
              (equal expected (apply #'configuration `(:directory ,checkout) stores)))
@@ -76,5 +93,5 @@
           (dependency-configure-registry)
           (check "central-registry-cleared" (null asdf:*central-registry*))
           (check "local-shadow-not-loaded" (null (asdf:find-system name nil))))))
-    (format t "dependency-registry-checks selected=20 pass=~D~%" passed)
-    (unless (= passed 20) (error "Incomplete registry regression selection"))))
+    (format t "dependency-registry-checks selected=23 pass=~D~%" passed)
+    (unless (= passed 23) (error "Incomplete registry regression selection"))))

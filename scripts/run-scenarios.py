@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import errno
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -1705,45 +1706,79 @@ def _p12_consumer_fixture(path: Path) -> Path:
     return fixture
 
 
+def _p12_previous_registry(root: Path, registry_file: Path) -> str:
+    try:
+        manifest = json.loads(registry_file.read_text(encoding="utf-8"))
+        lock_digest = hashlib.sha256((root / "flake.lock").read_bytes()).hexdigest()
+    except (OSError, ValueError) as error:
+        raise ScenarioError(f"P12 could not read previous dependency registry: {error}") from error
+    _require(isinstance(manifest, dict) and manifest.get("lockSha256") == lock_digest,
+             "P12 dependency registry does not match previous flake.lock")
+    registry = manifest.get("registry")
+    _require(isinstance(registry, str) and all(registry.split(":")),
+             "P12 previous dependency registry must be nonempty and exclude inherited configuration")
+    entries = []
+    for path in registry.replace("$PWD", str(root)).split(":"):
+        _require(path.startswith("/"), "P12 previous registry entries must be absolute paths")
+        kind = "tree" if path.endswith("//") else "directory"
+        pathname = path[:-1] if kind == "tree" else path
+        escaped = pathname.replace("\\", "\\\\").replace('"', '\\"')
+        entries.append(f'(:{kind} "{escaped}")')
+    return "(:source-registry " + " ".join(entries) + " :ignore-inherited-configuration)"
+
+
 def _run_p12_api(
     scenario: dict[str, Any],
     previous_root: Path,
     consumer_fixture: Path,
     sbcl: Path,
+    previous_registry_file: Path,
 ) -> tuple[str, str, int, list[str]]:
     candidate = _source_root_details(ROOT, f"{scenario['id']}: candidate")
     previous = _source_root_details(previous_root, f"{scenario['id']}: previous release")
     _require(candidate[0] != previous[0], f"{scenario['id']}: source roots must be separate directories")
     _require(candidate[2] != previous[2], f"{scenario['id']}: source revisions must be different")
     fixture = _p12_consumer_fixture(consumer_fixture)
+    previous_registry = _p12_previous_registry(previous[0], previous_registry_file)
 
     output: list[str] = []
     errors: list[str] = []
     failures: list[str] = []
     for label, details in (("candidate", candidate), ("previous", previous)):
         root, version, revision = details
-        environment = os.environ.copy()
-        environment["NSHELL_ROOT"] = str(root)
-        try:
-            result = subprocess.run(
-                [str(sbcl), "--noinform", "--disable-debugger", "--script", str(fixture)],
-                cwd=ROOT,
-                env=environment,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=scenario.get("timeout_seconds", 30),
-                check=False,
-            )
-        except subprocess.TimeoutExpired as error:
-            raise ScenarioTimeout(
-                f"{scenario['id']}: {label} SBCL consumer timed out"
-            ) from error
-        except OSError as error:
-            raise ScenarioError(f"{scenario['id']}: could not start SBCL for {label}") from error
+        with tempfile.TemporaryDirectory(prefix=f"nshell-p12-{label}-") as temporary:
+            environment = os.environ.copy()
+            for key in ("ASDF_OUTPUT_TRANSLATIONS", "NSHELL_DEPENDENCY_SOURCE_REGISTRY",
+                        "CL_PROCESS_KIT_SPAWN", "CL_PROCESS_KIT_PTY_LIBRARY"):
+                environment.pop(key, None)
+            for key in ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"):
+                path = Path(temporary) / key.lower()
+                path.mkdir()
+                environment[key] = str(path)
+            environment["NSHELL_ROOT"] = str(root)
+            environment["NSHELL_AI_COMMAND"] = "/nonexistent"
+            if label == "previous":
+                environment["CL_SOURCE_REGISTRY"] = previous_registry
+            try:
+                result = subprocess.run(
+                    [str(sbcl), "--noinform", "--disable-debugger", "--script", str(fixture)],
+                    cwd=root,
+                    env=environment,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=scenario.get("timeout_seconds", 30),
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as error:
+                raise ScenarioTimeout(
+                    f"{scenario['id']}: {label} SBCL consumer timed out"
+                ) from error
+            except OSError as error:
+                raise ScenarioError(f"{scenario['id']}: could not start SBCL for {label}") from error
 
         output.append(
             f"P12 {label} source version={version} revision={revision} exit={result.returncode}"
@@ -2417,6 +2452,7 @@ def _run_once(
     binary: Path,
     *,
     previous_source_root: Path | None = None,
+    previous_registry_file: Path | None = None,
     consumer_fixture: Path | None = None,
     sbcl: Path | None = None,
     temporary_root: Path | None = None,
@@ -2440,8 +2476,9 @@ def _run_once(
             _require(previous_source_root is not None, "P12 previous source root is required")
             _require(consumer_fixture is not None, "P12 consumer fixture is required")
             _require(sbcl is not None, "P12 SBCL executable is required")
+            _require(previous_registry_file is not None, "P12 previous dependency registry is required")
             first, second, _, failures = _run_p12_api(
-                scenario, previous_source_root, consumer_fixture, sbcl
+                scenario, previous_source_root, consumer_fixture, sbcl, previous_registry_file
             )
     except ScenarioTimeout as error:
         if expected_failure is None:
@@ -2541,6 +2578,8 @@ def main() -> int:
                         help="use an empty bounded filesystem directory for one PTY scenario")
     parser.add_argument("--p12-previous-root", type=Path,
                         help="source root of the immediately preceding supported release")
+    parser.add_argument("--p12-previous-registry", type=Path,
+                        help="dependency registry manifest built from the previous release's locked flake")
     parser.add_argument("--p12-consumer-fixture", type=Path,
                         help="repository-relative external API consumer script")
     parser.add_argument("--sbcl", type=Path, help="SBCL executable for api scenarios")
@@ -2568,6 +2607,7 @@ def main() -> int:
             "--binary is required when selecting non-api scenarios",
         )
         previous_source_root: Path | None = None
+        previous_registry_file: Path | None = None
         consumer_fixture: Path | None = None
         sbcl: Path | None = None
         if api_selected:
@@ -2575,7 +2615,10 @@ def main() -> int:
                      "--p12-previous-root is required when selecting api scenarios")
             _require(arguments.p12_consumer_fixture is not None,
                      "--p12-consumer-fixture is required when selecting api scenarios")
+            _require(arguments.p12_previous_registry is not None,
+                     "--p12-previous-registry is required when selecting api scenarios")
             previous_source_root = arguments.p12_previous_root
+            previous_registry_file = arguments.p12_previous_registry
             consumer_fixture = arguments.p12_consumer_fixture
             _p12_consumer_fixture(consumer_fixture)
             sbcl_value = str(arguments.sbcl.resolve()) if arguments.sbcl is not None else shutil.which("sbcl")
@@ -2590,6 +2633,8 @@ def main() -> int:
                      "--p12-previous-root requires an api scenario")
             _require(arguments.p12_consumer_fixture is None,
                      "--p12-consumer-fixture requires an api scenario")
+            _require(arguments.p12_previous_registry is None,
+                     "--p12-previous-registry requires an api scenario")
             _require(arguments.sbcl is None, "--sbcl requires an api scenario")
 
         scenario_binaries = _parse_scenario_binary_overrides(
@@ -2610,6 +2655,7 @@ def main() -> int:
                         scenario,
                         scenario_binaries.get(scenario["id"], binary or Path()),
                         previous_source_root=previous_source_root,
+                        previous_registry_file=previous_registry_file,
                         consumer_fixture=consumer_fixture,
                         sbcl=sbcl,
                         temporary_root=scenario_temp_dirs.get(scenario["id"]),

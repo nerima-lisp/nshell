@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -64,6 +65,15 @@ def _pty_scenario(
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
+
+
+def _write_p12_registry(root: Path) -> Path:
+    lock = b'{"nodes":{"previous":{}}}\n'
+    (root / "flake.lock").write_bytes(lock)
+    path = root / "previous-registry.json"
+    _write_json(path, {"lockSha256": hashlib.sha256(lock).hexdigest(),
+                       "registry": "$PWD:/nix/store/previous-dependencies//"})
+    return path
 
 
 def _run_main_for_pty_scenario(
@@ -278,6 +288,7 @@ class ScenarioRunnerTests(unittest.TestCase):
         fixture = Path("t/scenarios/P12/public-api-consumer.lisp")
         with tempfile.TemporaryDirectory() as temporary:
             previous_root = Path(temporary)
+            registry = _write_p12_registry(previous_root)
             candidate = (runner.ROOT.resolve(), "0.6.6", "a" * 40)
             previous = (previous_root.resolve(), "0.6.5", "b" * 40)
             results = [
@@ -287,9 +298,16 @@ class ScenarioRunnerTests(unittest.TestCase):
             with (
                 mock.patch.object(runner, "_source_root_details", side_effect=[candidate, previous]),
                 mock.patch.object(runner.subprocess, "run", side_effect=results) as run,
+                mock.patch.dict(runner.os.environ, {
+                    "CL_SOURCE_REGISTRY": "/candidate-dependencies//:",
+                    "NSHELL_DEPENDENCY_SOURCE_REGISTRY": "/candidate-test-dependencies//:",
+                    "ASDF_OUTPUT_TRANSLATIONS": "/:/candidate-cache/",
+                    "CL_PROCESS_KIT_SPAWN": "/candidate-helper",
+                    "CL_PROCESS_KIT_PTY_LIBRARY": "/candidate-pty",
+                }),
             ):
                 stdout, stderr, exit_code, failures = runner._run_p12_api(
-                    scenario, previous_root, fixture, Path("/sbcl")
+                    scenario, previous_root, fixture, Path("/sbcl"), registry
                 )
 
         self.assertEqual(exit_code, 0)
@@ -300,6 +318,15 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(first_call.args[0], second_call.args[0])
         self.assertEqual(first_call.kwargs["env"]["NSHELL_ROOT"], str(candidate[0]))
         self.assertEqual(second_call.kwargs["env"]["NSHELL_ROOT"], str(previous[0]))
+        previous_env = second_call.kwargs["env"]
+        self.assertEqual(first_call.kwargs["env"]["CL_SOURCE_REGISTRY"], "/candidate-dependencies//:")
+        self.assertEqual(previous_env["CL_SOURCE_REGISTRY"],
+                         f'(:source-registry (:directory "{previous[0]}") '
+                         '(:tree "/nix/store/previous-dependencies/") :ignore-inherited-configuration)')
+        for key in ("ASDF_OUTPUT_TRANSLATIONS", "NSHELL_DEPENDENCY_SOURCE_REGISTRY",
+                    "CL_PROCESS_KIT_SPAWN", "CL_PROCESS_KIT_PTY_LIBRARY"):
+            self.assertNotIn(key, previous_env)
+        self.assertNotEqual(first_call.kwargs["env"]["HOME"], previous_env["HOME"])
         self.assertIn("P12 candidate source version=0.6.6", stdout)
         self.assertIn("P12 previous source version=0.6.5", stdout)
         self.assertEqual(stdout.count("P12_API_OK"), 2)
@@ -325,6 +352,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                         previous_root,
                         Path("t/scenarios/P12/public-api-consumer.lisp"),
                         Path("/sbcl"),
+                        Path("/unused-registry.json"),
                     )
 
         run.assert_not_called()
@@ -334,6 +362,7 @@ class ScenarioRunnerTests(unittest.TestCase):
         scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as temporary:
             previous_root = Path(temporary)
+            registry = _write_p12_registry(previous_root)
             candidate = (runner.ROOT.resolve(), "0.6.6", "a" * 40)
             previous = (previous_root.resolve(), "0.6.5", "b" * 40)
             results = [
@@ -349,6 +378,7 @@ class ScenarioRunnerTests(unittest.TestCase):
                     previous_root,
                     Path("t/scenarios/P12/public-api-consumer.lisp"),
                     Path("/sbcl"),
+                    registry,
                 )
 
         self.assertEqual(exit_code, 1)
@@ -356,6 +386,26 @@ class ScenarioRunnerTests(unittest.TestCase):
                             for failure in failures))
         self.assertTrue(any("previous SBCL stderr: failure" in failure for failure in failures))
         self.assertTrue(any("exit code was 1, expected 0" in failure for failure in failures))
+
+    def test_p12_previous_registry_rejects_a_different_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            registry = _write_p12_registry(root)
+            (root / "flake.lock").write_text('{"candidate":true}', encoding="utf-8")
+            with self.assertRaisesRegex(runner.ScenarioError, "does not match previous flake.lock"):
+                runner._p12_previous_registry(root, registry)
+
+    def test_p12_previous_registry_rejects_empty_or_inherited_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            registry = _write_p12_registry(root)
+            manifest = json.loads(registry.read_text(encoding="utf-8"))
+            for value in ("", "$PWD:", ":$PWD", "$PWD::/nix/store/previous//"):
+                with self.subTest(registry=value):
+                    manifest["registry"] = value
+                    _write_json(registry, manifest)
+                    with self.assertRaisesRegex(runner.ScenarioError, "exclude inherited configuration"):
+                        runner._p12_previous_registry(root, registry)
 
     def test_p12_api_cli_requires_previous_root_and_consumer_fixture(self) -> None:
         scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/P12/public-api-stability.json"
@@ -387,8 +437,18 @@ class ScenarioRunnerTests(unittest.TestCase):
             ):
                 exit_code = runner.main()
 
+            argv.extend(["--p12-previous-root", str(root),
+                         "--p12-consumer-fixture", "t/scenarios/P12/public-api-consumer.lisp"])
+            with (
+                mock.patch.object(sys, "argv", argv),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(error_output),
+            ):
+                self.assertEqual(runner.main(), 2)
+
         self.assertEqual(exit_code, 2)
         self.assertIn("--p12-previous-root is required", error_output.getvalue())
+        self.assertIn("--p12-previous-registry is required", error_output.getvalue())
 
     def test_l02_benchmark_scenario_declares_the_required_fixture_and_sample_counts(self) -> None:
         scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/L02/git-prompt-responsiveness.json"

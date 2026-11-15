@@ -10,11 +10,14 @@
 (defun dependency-store-path-p (path)
   (and path (uiop:string-prefix-p "/nix/store/" (namestring (truename path)))))
 
-(defun dependency-registry-configuration (value)
+(defun dependency-registry-configuration (value &optional extra-value)
   (let* ((registry (and value (asdf/source-registry:parse-source-registry-string value)))
          (entries (and registry (rest registry))))
     (unless (and value (plusp (length value)) (eq (first registry) :source-registry))
       (error "CL_SOURCE_REGISTRY must explicitly name pinned Nix store sources"))
+    (when extra-value
+      (let ((extra (dependency-registry-configuration extra-value)))
+        (setf entries (append entries (rest extra)))))
     (setf entries
           (remove-if
            (lambda (entry)
@@ -34,10 +37,13 @@
                                (dependency-store-path-p (second entry))))
                         entries))
       (error "Only explicit Nix store :directory/:tree registry entries are allowed"))
-    `(:source-registry ,@entries :ignore-inherited-configuration)))
+    `(:source-registry ,@(remove-duplicates entries :test #'equal :from-end t)
+                       :ignore-inherited-configuration)))
 
 (defun dependency-configure-registry ()
-  (let ((configuration (dependency-registry-configuration (uiop:getenv "CL_SOURCE_REGISTRY"))))
+  (let ((configuration (dependency-registry-configuration
+                        (uiop:getenv "CL_SOURCE_REGISTRY")
+                        (uiop:getenv "NSHELL_DEPENDENCY_SOURCE_REGISTRY"))))
     (setf asdf:*central-registry* nil)
     (asdf:clear-source-registry)
     (asdf:initialize-source-registry configuration)

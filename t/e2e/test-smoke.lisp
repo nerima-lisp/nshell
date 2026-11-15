@@ -129,7 +129,9 @@ terminal without waiting out the real (30s) default."
           (sb-unix:unix-fast-select (1+ fd) (sb-alien:addr read-fds) nil nil 0 timeout-usec)
         (cond
           ((null ready)
-           (values nil :select-error errno))
+           (if (eql errno sb-unix:eintr)
+               (values nil :timeout)
+               (values nil :select-error errno)))
           ((zerop ready)
            (values nil :timeout))
           ((sb-unix:fd-isset fd (sb-alien:addr read-fds))
@@ -139,13 +141,25 @@ terminal without waiting out the real (30s) default."
                      (values nil :eof)
                      (values (octets->string buffer count) :data)))
              (error (condition)
-               (values nil :read-error condition))))
-          (t
-           (values nil :timeout)))))))
+               (values nil :read-error condition)))))))))
 
 (defun %e2e-pty-read-until (fd needle &key (timeout 15.0) attempts (delay 0.05) process-id)
   (let ((output ""))
-    (labels ((check-output ()
+    (labels ((visible-controls (string)
+               (with-output-to-string (stream)
+                 (loop for character across string
+                       for code = (char-code character)
+                       do (cond
+                            ((<= code 31)
+                             (write-char #\^ stream)
+                             (write-char (code-char (+ code 64)) stream))
+                            ((= code 127)
+                             (write-string "^?" stream))
+                            ((<= 128 code 159)
+                             (format stream "\\x~2,'0X" code))
+                            (t
+                             (write-char character stream))))))
+             (check-output ()
                (when (search needle output :test #'char-equal)
                  (return-from %e2e-pty-read-until output)))
              (child-status ()
@@ -175,17 +189,13 @@ terminal without waiting out the real (30s) default."
                          (t
                           (child-status)))
                  (error "PTY wait for ~S failed: ~A~@[ (~A)~]; child ~A~@[ (~A)~]; output tail: ~S"
-                        needle reason detail
-                        (case child-state
-                          (:running "alive")
-                          (:exited "exited")
-                          (:signaled "signaled")
-                          (:stopped "stopped")
-                          (:no-child "no-child")
-                          (:unavailable "unavailable")
-                          (otherwise (string-downcase (symbol-name child-state))))
+                        (visible-controls needle) reason detail
+                        (if (eq child-state :running)
+                            "alive"
+                            (string-downcase (symbol-name child-state)))
                         child-detail
-                        (subseq output (max 0 (- (length output) 400))))))
+                        (visible-controls
+                         (subseq output (max 0 (- (length output) 400)))))))
              (check-child ()
                (when process-id
                  (multiple-value-bind (child-state child-detail) (child-status)
@@ -195,8 +205,6 @@ terminal without waiting out the real (30s) default."
              (read-once ()
                (multiple-value-bind (chunk state detail)
                    (%e2e-pty-read-available fd)
-                 (unless state
-                   (setf state (if chunk :data :timeout)))
                  (when chunk
                    (setf output (concatenate 'string output chunk))
                    (check-output))
@@ -558,11 +566,41 @@ The regular read timeout remains short for command-response assertions.")
             ('%e2e-pty-read-available
              (lambda (fd &rest arguments)
                (declare (ignore fd arguments))
-               (pop chunks)))
-          (expect (%e2e-pty-read-until -1 (format nil "~A /bin/sleep 3" status)
+               (values (pop chunks) :data)))
+          (expect (%e2e-pty-read-until -1 (format nil "[1] ~A /bin/sleep 3" status)
                                        :attempts 2 :delay 0)
                   :to-equal (format nil "[1] ~A /bin/sleep 3" status))
           (expect chunks :to-be-null)))))
+  (it "e2e-pty-wait-survives-unrelated-sigchld"
+    (cl-weave:expect-assertions 2)
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "waits through another child exiting"
+      (let ((pty nil)
+            (sleeper nil))
+        (unwind-protect
+             (progn
+               (setf pty
+                     (%e2e-pty-spawn
+                      "/bin/sh" '("-c" "sleep 1; printf pty-after-unrelated-sigchld")
+                      :rows 24 :cols 100))
+               (setf sleeper
+                     (sb-ext:run-program "/bin/sleep" '("0.3")
+                                         :search nil :wait nil))
+               (let* ((fd (nshell.infrastructure.acl:pty-process-master-fd pty))
+                      (output (%e2e-pty-read-until
+                               fd "pty-after-unrelated-sigchld"
+                               :timeout 3.0
+                               :process-id
+                               (nshell.infrastructure.acl:pty-process-pid pty))))
+                 (expect (search "pty-after-unrelated-sigchld" output)
+                         :to-be-truthy)
+                 (sb-ext:process-wait sleeper)
+                 (expect (sb-ext:process-exit-code sleeper) :to-equal 0)))
+          (when sleeper
+            (sb-ext:process-wait sleeper))
+          (%terminate-pty-process pty)))))
 
   (it "e2e-main-interactive-pty-job-control-lifecycle"
     "The public entry point exposes background completion and fg completion under a real PTY."

@@ -21,13 +21,14 @@ because subprocess bootstrap does not inherit the parent's registry.")
 
 (defparameter +e2e-child-environment-names+
   '("HOME" "LANG" "LC_ALL" "LC_CTYPE" "LC_MESSAGES" "LC_MONETARY"
-    "LC_NUMERIC" "LC_TIME" "LOGNAME" "PATH" "SHELL" "TERM" "TMPDIR"
+    "LC_NUMERIC" "LC_TIME" "LOGNAME" "PATH" "SHELL" "TMPDIR"
     "USER" "NSHELL_ASDF_OUTPUT_DIR")
   "Stable host values needed by real-process E2E tests.
 
 Do not pass the test runner's ASDF/SBCL, nshell, or tool-specific environment
 through a child PTY. Those values describe the runner rather than the shell
-under test and can change startup, source lookup, or persistent state.")
+under test and can change startup, source lookup, or persistent state. TERM is
+pinned for PTY children so startup does not depend on the test runner's TERM.")
 
 (defun %e2e-child-environment ()
   "Return the deliberately small environment used by E2E child processes."
@@ -36,13 +37,14 @@ under test and can change startup, source lookup, or persistent state.")
     (dolist (name +e2e-child-environment-names+)
       (setf (gethash name allowed) t))
     (append (list (format nil "HOME=~A" temporary)
-                  (format nil "XDG_CACHE_HOME=~A" temporary))
+                  (format nil "XDG_CACHE_HOME=~A" temporary)
+                  "TERM=xterm-256color")
             (remove-if
              (lambda (entry)
                (let ((separator (position #\= entry)))
                  (or (and separator
                           (member (subseq entry 0 separator)
-                                  '("HOME" "XDG_CACHE_HOME")
+                                  '("HOME" "XDG_CACHE_HOME" "TERM")
                                   :test #'string=))
                      (not (and separator
                                (gethash (subseq entry 0 separator) allowed))))))

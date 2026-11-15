@@ -52,7 +52,7 @@
              (setf pty (%e2e-pty-spawn
                         program (%nshell-main-pty-arguments) :rows 24 :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-               (%e2e-pty-await-ready fd)
+               (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                (funcall function pty fd
                         (lambda (pgid)
                           (when (and pgid (plusp pgid)

@@ -127,33 +127,94 @@ terminal without waiting out the real (30s) default."
       (sb-unix:fd-set fd (sb-alien:addr read-fds))
       (multiple-value-bind (ready errno)
           (sb-unix:unix-fast-select (1+ fd) (sb-alien:addr read-fds) nil nil 0 timeout-usec)
-        (declare (ignore errno))
-        (when (and ready (plusp ready) (sb-unix:fd-isset fd (sb-alien:addr read-fds)))
-          (let ((count (ignore-errors
-                         (nshell.infrastructure.acl:pty-read fd buffer limit))))
-            (when (and count (plusp count))
-              (octets->string buffer count))))))))
+        (cond
+          ((null ready)
+           (values nil :select-error errno))
+          ((zerop ready)
+           (values nil :timeout))
+          ((sb-unix:fd-isset fd (sb-alien:addr read-fds))
+           (handler-case
+               (let ((count (nshell.infrastructure.acl:pty-read fd buffer limit)))
+                 (if (zerop count)
+                     (values nil :eof)
+                     (values (octets->string buffer count) :data)))
+             (error (condition)
+               (values nil :read-error condition))))
+          (t
+           (values nil :timeout)))))))
 
-(defun %e2e-pty-read-until (fd needle &key (timeout 15.0) attempts (delay 0.05))
+(defun %e2e-pty-read-until (fd needle &key (timeout 15.0) attempts (delay 0.05) process-id)
   (let ((output ""))
-    (flet ((check-output ()
-             (when (search needle output :test #'char-equal)
-               (return-from %e2e-pty-read-until output))))
+    (labels ((check-output ()
+               (when (search needle output :test #'char-equal)
+                 (return-from %e2e-pty-read-until output)))
+             (child-status ()
+               (if process-id
+                   (multiple-value-bind (pid status detail)
+                       (nshell.infrastructure.acl:wait-job process-id :nohang t)
+                     (declare (ignore pid))
+                     (values status detail))
+                   (values :unavailable nil)))
+             (settled-child-status ()
+               ;; EOF or EIO can arrive before wait-job observes the child exit.
+               (loop repeat 20
+                     do (multiple-value-bind (child-state child-detail)
+                            (child-status)
+                          (unless (member child-state '(:running :interrupted))
+                            (return-from settled-child-status
+                              (values child-state child-detail))))
+                        (sleep 0.01))
+               (child-status))
+             (fail (reason detail
+                    &key (child-state nil child-state-p) child-detail settle-child-p)
+               (multiple-value-bind (child-state child-detail)
+                   (cond (child-state-p
+                          (values child-state child-detail))
+                         (settle-child-p
+                          (settled-child-status))
+                         (t
+                          (child-status)))
+                 (error "PTY wait for ~S failed: ~A~@[ (~A)~]; child ~A~@[ (~A)~]; output tail: ~S"
+                        needle reason detail
+                        (case child-state
+                          (:running "alive")
+                          (:exited "exited")
+                          (:signaled "signaled")
+                          (:stopped "stopped")
+                          (:no-child "no-child")
+                          (:unavailable "unavailable")
+                          (otherwise (string-downcase (symbol-name child-state))))
+                        child-detail
+                        (subseq output (max 0 (- (length output) 400))))))
+             (check-child ()
+               (when process-id
+                 (multiple-value-bind (child-state child-detail) (child-status)
+                   (unless (member child-state '(:running :interrupted))
+                     (fail "child ended while waiting" nil
+                           :child-state child-state :child-detail child-detail)))))
+             (read-once ()
+               (multiple-value-bind (chunk state detail)
+                   (%e2e-pty-read-available fd)
+                 (unless state
+                   (setf state (if chunk :data :timeout)))
+                 (when chunk
+                   (setf output (concatenate 'string output chunk))
+                   (check-output))
+                 (unless (member state '(:data :timeout))
+                   (fail (string-downcase (symbol-name state)) detail
+                         :settle-child-p (member state '(:eof :read-error))))
+                 (check-child))))
       (if attempts
           (loop repeat attempts
-                do (let ((chunk (%e2e-pty-read-available fd)))
-                     (when chunk
-                       (setf output (concatenate 'string output chunk))
-                       (check-output)))
+                do (read-once)
                    (sleep delay))
           (let ((deadline (+ (get-internal-real-time)
                              (round (* timeout internal-time-units-per-second)))))
             (loop while (< (get-internal-real-time) deadline)
-                  do (let ((chunk (%e2e-pty-read-available fd)))
-                       (when chunk
-                         (setf output (concatenate 'string output chunk))
-                         (check-output)))))))
-    output))
+                  do (read-once))
+            (when process-id
+              (fail "timed out" nil))))
+      output)))
 
 (defun %e2e-pty-write-line (fd line)
   (nshell.infrastructure.acl:pty-write fd (format nil "~A~%" line)))
@@ -162,10 +223,16 @@ terminal without waiting out the real (30s) default."
   "Allow the first real-process PTY test to compile the fresh child image.
 The regular read timeout remains short for command-response assertions.")
 
-(defun %e2e-pty-await-ready (fd)
-  (%e2e-pty-write-line fd "printf 'pty-%s\\n' e2e-ready")
-  (expect (search "pty-e2e-ready"
-                  (%e2e-pty-read-until fd "pty-e2e-ready")) :to-be-truthy))
+(defun %e2e-pty-await-ready (fd process-id)
+  (let ((ready (format nil "~c[?2004h" #\Escape)))
+    (%e2e-pty-read-until fd ready
+                         :timeout +e2e-pty-cold-start-timeout+
+                         :process-id process-id)
+    (%e2e-pty-write-line fd "printf 'pty-%s\\n' e2e-ready")
+    (expect (search "pty-e2e-ready"
+                    (%e2e-pty-read-until fd "pty-e2e-ready"
+                                         :process-id process-id))
+            :to-be-truthy)))
 
 (defun %wait-pty-child-exit (pty &key (attempts 40) (delay 0.05))
   (loop repeat attempts
@@ -215,7 +282,7 @@ The regular read timeout remains short for command-response assertions.")
                    (%e2e-pty-spawn
                     program (%nshell-main-pty-arguments) :rows 24 :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-               (%e2e-pty-await-ready fd)
+               (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                (when command
                  (%e2e-pty-write-line fd command))
                (if exit-command
@@ -374,7 +441,7 @@ The regular read timeout remains short for command-response assertions.")
                       :rows 24
                       :cols 100))
                 (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                  (%e2e-pty-await-ready fd)
+                  (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                   (%e2e-pty-write-line fd "exit")
                   (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!")) :to-be-truthy)
                   (%assert-pty-child-exit pty)))
@@ -406,7 +473,7 @@ The regular read timeout remains short for command-response assertions.")
                (setf pty (%e2e-pty-spawn
                           program (%nshell-main-pty-arguments) :rows 24 :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (%e2e-pty-await-ready fd)
+                 (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                  (dolist (case '(("false" "input-status:<1,1>")
                                  ("true" "input-status:<0,0>")))
                    (%e2e-pty-write-line fd (first case))
@@ -437,7 +504,7 @@ The regular read timeout remains short for command-response assertions.")
                       :rows 24
                       :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (%e2e-pty-await-ready fd)
+                 (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                  (nshell.infrastructure.acl:pty-write fd "printf 'pty-edit:<%s>\\n' okx")
                  (nshell.infrastructure.acl:pty-write fd (string (code-char 8)))
                  (nshell.infrastructure.acl:pty-write fd (string #\Newline))
@@ -467,7 +534,7 @@ The regular read timeout remains short for command-response assertions.")
                       :rows 24
                       :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (%e2e-pty-await-ready fd)
+                 (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                  (%e2e-pty-write-line
                   fd "sh -c 'printf \"ctrl-c-%s\\n\" foreground-ready > /dev/tty; exec sleep 10'")
                  (expect (search "ctrl-c-foreground-ready"
@@ -517,7 +584,7 @@ The regular read timeout remains short for command-response assertions.")
                       :rows 24
                       :cols 100))
                (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                 (%e2e-pty-await-ready fd)
+                 (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                  (%e2e-pty-write-line fd "/bin/sleep 3 &")
                  (%e2e-pty-write-line fd "jobs")
                  (let ((running-output (%e2e-pty-read-until fd "Running /bin/sleep 3")))
@@ -588,7 +655,7 @@ The regular read timeout remains short for command-response assertions.")
                     :rows 24
                     :cols 100))
              (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-               (%e2e-pty-await-ready fd)
+               (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
                ;; This probe must execute the submitted pipeline exactly as entered.
                (%e2e-pty-write-line
                 fd

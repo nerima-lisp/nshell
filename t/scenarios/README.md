@@ -55,27 +55,35 @@ root. Fixture paths cannot be duplicated or make one fixture path the parent
 directory of another.
 
 The `benchmark` mode is reserved for L02. It creates a disposable Git repository
-with 20,000 tracked files and runs nshell through a PTY. The result depends on
-five fresh sessions that put a fake `git` from `slow_git_directory` first on
-`PATH`. Its `status` command logs a start line, sleeps 3 seconds, and logs an
-end line. Each session passes when the prompt appears within `prompt_max_ms`
-(2,000 ms), the log shows a `status` call starting, the output of
-`echo <ready_marker>` arrives before any `status` call ends, and nshell exits
-cleanly after `exit`. A shell that waited for Git would need at least 3,000 ms
-for the prompt however loaded the host is, while a shell that does not wait only
-starts later under load. The bound stays 1,000 ms below that floor and well above
-the largest startup seen on shared macOS CI runners (327 ms).
+with 20,000 tracked files and runs nshell through a PTY. The result depends on a
+branch check with the real `git` and on five fresh sessions that put a fake
+`git` from `slow_git_directory` first on `PATH`. Each time its `status` command
+runs, the fake logs a start line, sleeps 3 seconds, and logs an end line. After
+the log shows a `status` call starting, the runner types
+`echo <ready_marker> >> <log>`, with the log path relative to the working
+directory, so the command appends its marker to the same log. An absolute path
+under a large `TMPDIR` would slow the typing itself, because autosuggestion
+rescans each directory in the line on every key. A session passes when the
+prompt appears within `prompt_max_ms` (2,000 ms), the first `status` start comes
+before the marker in the log, no `status` end comes before the marker, and
+nshell exits cleanly after `exit`.
+A `status` call that a later prompt starts may follow the marker. The runner
+judges the order from the log alone, not from PTY output, because nshell shows
+the typed line in the window title before it runs the command. A shell that
+waited for Git would need at least 3,000 ms for the prompt however loaded the
+host is, while a shell that does not wait only starts later under load. The
+bound stays 1,000 ms below that floor and well above the largest startup seen
+on shared macOS CI runners (327 ms).
 
-With the real `git`, the mode then records five warmups plus 30 samples in each
-of two runs. Each run reports the median and full sample range for startup,
-empty Enter, key echo, command output, and the next prompt, and the output
-compares startup and empty Enter with the manual 150 ms and 60 ms targets on a
-line marked `(not gating)`. These numbers do not decide the result; performance
-is guarded by later relative checks on a local machine
-(task P0-7 in `docs/design/tasks/P0-foundation.md`). A separate
-L02 PTY scenario uses a fake Git status command that sleeps 2 seconds, below the
-application's 5-second probe timeout, and checks that input and command output
-remain responsive.
+After those sessions, the mode records, with the real `git`, five warmups plus
+30 samples in each of two runs. Each run reports the median and full sample
+range for startup, empty Enter, key echo, command output, and the next prompt,
+and the output compares startup and empty Enter with the 150 ms and 60 ms
+targets on a line marked `(not gating)`. Performance is guarded by relative
+checks planned in task P0-7 (`docs/design/tasks/P0-foundation.md`).
+`L02/slow-git-status-does-not-block-input.json` is a separate PTY scenario: its
+fake Git status command sleeps 2 seconds, below nshell's 5-second Git probe
+timeout, and it checks that input and command output remain responsive.
 
 The `source` mode reads files under the repository root and checks their text.
 Each `source_checks` entry has a repository-relative `path` and at least one of

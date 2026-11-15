@@ -120,91 +120,12 @@ nix develop -c env HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/config" \
 
 Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
 
-The no-Nix procedure requires `jq`, `git`, and `cc` (a C compiler).
+The procedure requires network access, `jq`, `git`, `cc` (a C compiler), and SBCL >= 2.6.0 and < 2.6.10. SBCL 2.6.10 removed `sb-unix:unix-ioctl`, which `cl-tty-kit` uses.
+
+Run the complete no-Nix setup and test procedure from the repository root:
 
 ```sh
-# Start from the repository root. SBCL must be >= 2.6.0 and < 2.6.10 because
-# 2.6.10 removed sb-unix:unix-ioctl, which cl-tty-kit uses.
-repo_root="$PWD"
-test_root="$(mktemp -d)"
-mkdir -p "$test_root/home" "$test_root/config" "$test_root/data" \
-  "$test_root/state" "$test_root/cache" "$test_root/deps" "$test_root/helpers"
-export HOME="$test_root/home"
-export XDG_CONFIG_HOME="$test_root/config"
-export XDG_DATA_HOME="$test_root/data"
-export XDG_STATE_HOME="$test_root/state"
-export XDG_CACHE_HOME="$test_root/cache"
-export NSHELL_AI_COMMAND=/nonexistent
-```
-
-Check the installed compiler with `sbcl --version`.
-If it reports a version from 2.6.0 up to, but not including, 2.6.10, use that system SBCL and skip the optional source-build block below.
-Otherwise, run that block with an installed host SBCL older than 2.6.9 to build SBCL 2.6.9.
-
-```sh
-git clone --depth 1 --branch sbcl-2.6.9 https://github.com/sbcl/sbcl "$test_root/sbcl-source"
-cd "$test_root/sbcl-source"
-echo '"2.6.9"' > version.lisp-expr
-sh make.sh --prefix="$test_root/sbcl"
-sh install.sh
-cd "$repo_root" # Return to the nshell repository root.
-```
-
-Continue in the same shell session so `$repo_root`, `$test_root` and the isolated environment remain set.
-
-```sh
-# List the locked cl-* inputs, their GitHub repository, tag/ref, and commit:
-jq -r '.nodes as $nodes | .nodes.root.inputs | to_entries[] | select(.key | startswith("cl-")) | .key as $name | .value as $node | [$name, ("https://github.com/\($nodes[$node].locked.owner)/\($nodes[$node].locked.repo).git"), $nodes[$node].original.ref, $nodes[$node].locked.rev] | @tsv' flake.lock
-# cl-nix-forge is Nix build tooling, not an ASDF source dependency; the loop excludes it.
-# Clone the ASDF runtime inputs, transitive cl-log-kit, and test-only cl-weave
-# at their listed tags under the temporary dependency directory:
-deps_dir="$test_root/deps"
-jq -r '.nodes as $nodes | .nodes.root.inputs | to_entries[] | select(.key | startswith("cl-")) | .key as $name | .value as $node | [$name, ("https://github.com/\($nodes[$node].locked.owner)/\($nodes[$node].locked.repo).git"), $nodes[$node].original.ref, $nodes[$node].locked.rev] | @tsv' flake.lock |
-while IFS="$(printf '\t')" read -r name url ref locked_rev; do
-  case "$name" in
-    cl-prolog-kit|cl-parser-kit|cl-dataflow-kit|cl-boundary-kit|cl-cli|cl-tty-kit|cl-process-kit|cl-regex-kit|cl-history-kit|cl-host-kit|cl-codec-kit|cl-concurrent-kit|cl-date-kit|cl-json-kit|cl-log-kit|cl-weave)
-      git clone --depth 1 --branch "$ref" "$url" "$deps_dir/$name" || exit 1
-      git -C "$deps_dir/$name" checkout --detach "$locked_rev" || exit 1
-      ;;
-  esac
-done || exit 1
-
-# Build the cl-process-kit helpers used by the tests. Keep generated helpers in
-# the temporary root.
-helper_dir="$test_root/helpers"
-cc -std=c11 -O2 -Wall -Wextra -Werror \
-  "$deps_dir/cl-process-kit/native/spawn.c" \
-  -o "$helper_dir/cl-process-kit-spawn"
-export CL_PROCESS_KIT_SPAWN="$helper_dir/cl-process-kit-spawn"
-case "$(uname -s)" in
-  Darwin)
-    cc -O2 -fPIC -dynamiclib "$deps_dir/cl-process-kit/native/pty.c" \
-      -o "$helper_dir/libcl_process_kit_pty.dylib"
-    export CL_PROCESS_KIT_PTY_LIBRARY="$helper_dir/libcl_process_kit_pty.dylib"
-    cc -std=c11 -O2 -Wall -Wextra -Werror \
-      src/infrastructure/acl/pty-exec-bootstrap.c \
-      -o "$helper_dir/nshell-pty-bootstrap"
-    export NSHELL_PTY_BOOTSTRAP="$helper_dir/nshell-pty-bootstrap"
-    ;;
-  Linux)
-    cc -O2 -fPIC -shared "$deps_dir/cl-process-kit/native/pty.c" \
-      -o "$helper_dir/libcl_process_kit_pty.so" -lutil
-    export CL_PROCESS_KIT_PTY_LIBRARY="$helper_dir/libcl_process_kit_pty.so"
-    ;;
-esac
-
-# Source-installed SBCL needs these paths. Omit both exports with a system SBCL.
-if [ -x "$test_root/sbcl/bin/sbcl" ]; then
-  export PATH="$test_root/sbcl/bin:$PATH"
-  export SBCL_HOME="$test_root/sbcl/lib/sbcl"
-else
-  unset SBCL_HOME
-fi
-
-# Configure ASDF to find the repository and temporary dependency trees.
-export CL_SOURCE_REGISTRY="$deps_dir//:$PWD/"
-export NSHELL_TEST_PTY=1 CI=1
-sbcl --script run-tests.lisp
+./scripts/bootstrap-without-nix.sh
 ```
 
 On macOS and Linux, an unprivileged-user run is expected to finish with `0 failed` and `0 errored`, followed by the final `NSHELL_TESTS ... passed=T` marker.

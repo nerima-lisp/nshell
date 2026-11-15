@@ -20,16 +20,16 @@
     "cl-cli": {
       "flake": false,
       "locked": {
-        "lastModified": 1785672492,
-        "narHash": "sha256-pbuOSMgY3t6jV//R4i4k0PuRxKOw6x6MOz6K0eRQZMQ=",
+        "lastModified": 1794682678,
+        "narHash": "sha256-LQauTgxyycZYj0hb7dcGNd4HQyJADT0CU+a/Xo0Nt+M=",
         "owner": "nerima-lisp",
         "repo": "cl-cli",
-        "rev": "fec7686ea15b021757703f2fdad6bb18dbff422d",
+        "rev": "a6737ede78916ee9a0a25c7fc220ce7ce7c7040e",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v1.3.0",
+        "ref": "v1.4.1",
         "repo": "cl-cli",
         "type": "github"
       }
@@ -105,16 +105,16 @@
     "cl-history-kit": {
       "flake": false,
       "locked": {
-        "lastModified": 1785926178,
-        "narHash": "sha256-cUpYiyWHKTkl5TTnHuIFtJUrMeasUDM4T7dbchfgjaY=",
+        "lastModified": 1794682808,
+        "narHash": "sha256-QPuqEcqBtNKvIQ2Ul4HiP8+WsQhnRs9hK+ykQhAwteQ=",
         "owner": "nerima-lisp",
         "repo": "cl-history-kit",
-        "rev": "a4774ec83d8fa296bd50b75a58264c12ee0861eb",
+        "rev": "836dbb650da6e482066815c0d5e40de714644dab",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v1.0.4",
+        "ref": "v1.1.0",
         "repo": "cl-history-kit",
         "type": "github"
       }
@@ -341,16 +341,16 @@
     "cl-tty-kit": {
       "flake": false,
       "locked": {
-        "lastModified": 1786289076,
-        "narHash": "sha256-BITAAgbpxMVWgSCZPLWWO6gxh4KcPcHDy518Sbn0K8I=",
+        "lastModified": 1794711714,
+        "narHash": "sha256-7BZTGMKIJJpmB4bcreJ91ymvBNwBwUDMRepcA+rSzhg=",
         "owner": "nerima-lisp",
         "repo": "cl-tty-kit",
-        "rev": "add24964a286720baa9e08722f4b611fcefdf22f",
+        "rev": "d2474a499091a1c838e497b8d7f3e6663695dccb",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v1.6.1",
+        "ref": "v1.8.0",
         "repo": "cl-tty-kit",
         "type": "github"
       }

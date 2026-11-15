@@ -68,11 +68,11 @@
       flake = false;
     };
     cl-cli = {
-      url = "github:nerima-lisp/cl-cli/v1.3.0";
+      url = "github:nerima-lisp/cl-cli/v1.4.1";
       flake = false;
     };
     cl-tty-kit = {
-      url = "github:nerima-lisp/cl-tty-kit/v1.6.1";
+      url = "github:nerima-lisp/cl-tty-kit/v1.8.0";
       flake = false;
     };
     # cl-process-kit consolidates timeout-guarded process launch; it sits on
@@ -101,7 +101,7 @@
     # navigation cursor; nshell itself keeps only the tokenizer-coupled
     # `!$`/Alt-. last-argument extraction on top of it.
     cl-history-kit = {
-      url = "github:nerima-lisp/cl-history-kit/v1.0.4";
+      url = "github:nerima-lisp/cl-history-kit/v1.1.0";
       flake = false;
     };
     # cl-host-kit replaces uiop for this repository's host operations
@@ -391,16 +391,11 @@
           clCli = sibling {
             name = "cl-cli";
             source = cl-cli;
-            patches = [
-              ./nix/patches/cl-cli-prolog-kit-name.patch
-              ./nix/patches/cl-cli-zsh-render-cache.patch
-            ];
             dependencies = [ clHostKit ];
           };
           clTtyKit = sibling {
             name = "cl-tty-kit";
             source = cl-tty-kit;
-            patches = [ ./nix/patches/cl-tty-kit-prolog-kit-name.patch ];
             dependencies = [
               clCodecKit
               clConcurrentKit

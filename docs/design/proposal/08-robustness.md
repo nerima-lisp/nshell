@@ -38,7 +38,7 @@ bug-report だけで再現に必要な情報が揃う
 |---|---|---|
 | 終了時の端末復元 | [あり] | REPL を unwind-protect で囲み、raw mode を必ず戻す |
 | 想定外のエラーからの復帰 | [追加] | REPL の 1 周ごとに全エラーを捕まえ、handler-bind で取ったバックトレースをクラッシュログに書いてプロンプトへ戻る。バッチでもクラッシュログを書く。「同じ所」は condition の型と最も内側の nshell のフレームで判定し、3 回続いたら実行中のジョブを一覧表示してから、--safe で re-exec するか尋ねる |
-| 安全モード | [追加] | nshell --safe (NSHELL_SAFE=1 でも同じ): init.lisp・conf.d・.nshell.lisp・rules.pl・AI・functions の自動読み込み・NSHELL_PROMPT を読まずに起動。履歴は読む。--config との併用は使い方のエラー。プロンプトには利用者の書式の外に固定で `[safe] ` を出す。init.lisp を壊しても必ず入れる |
+| 安全モード | [追加] | nshell --safe (NSHELL_SAFE=1 でも同じ): init.lisp・conf.d・.nshell.lisp・rules.pl・AI・functions の自動読み込み・NSHELL_PROMPT を読まずに起動。履歴は読む。--config との併用は使い方のエラー。プロンプトには利用者の書式の外に固定で `[safe] ` を出す。init.lisp を壊しても必ず入れる。P0-5 での決定: NSHELL_SAFE は NSHELL_HISTORY_PRIVATE と同じく、空、0、false、no 以外の値で有効にする。--safe には否定形がないので、NSHELL_SAFE の値によらず有効になる。NSHELL_SAFE で有効にしたときも --config との併用は使い方のエラーにする (どちらかの指定を黙って捨てないため)。NSHELL_RIGHT_PROMPT も読まない。安全モードはセッションごとの状態ではなくプロセス全体で 1 つの事実とし、main がオプションと NSHELL_SAFE を読んだ直後、セッションやスレッドを作る前に `nshell.application:*safe-mode-p*` の大域値を 1 度だけ設定する。動的束縛し直さないので、パイプラインのワーカースレッドも同じ値を読む。読み込み処理はすべてこの値だけを見て判断し、argv や環境変数を個別に読み直さない。対象はすべての入口で、対話セッション、-i -c、標準入力のバッチ、--command、スクリプトのどれでも、その入口が読むもののうち上の対象を読まない。バッチ、--command、スクリプトはもともと init.lisp・conf.d・AI を読まないので、止まるのは functions の自動読み込みと、prompt 組み込みコマンドが返す NSHELL_PROMPT・NSHELL_RIGHT_PROMPT になる。[safe] の印は対話セッションのプロンプトにだけ出る |
 | メモリとスタックの枯渇 | [追加] | storage-condition とスタック溢れを捕まえて評価を中断。ヒープの上限は起動オプションで |
 | 入力を止めない | [強化] | git の問い合わせは既にタイムアウトつき。補完・知識ベース・プロンプトの外部問い合わせもすべて上限時間と深さ制限を持つ |
 | シグナル | [強化] | SIGINT・SIGTSTP・SIGCHLD・SIGWINCH・SIGHUP は処理あり。SIGHUP ではジョブに伝えて履歴を書いてから終了する順序をテストで固定 |

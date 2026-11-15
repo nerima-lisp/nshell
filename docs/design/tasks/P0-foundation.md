@@ -63,9 +63,9 @@
 
 ## P0-5 --safe
 
-- [ ] `nshell --safe`: init.lisp・conf.d・`.nshell.lisp`・rules.pl・AI・functions の自動読み込み・NSHELL_PROMPT を読まずに起動する。履歴は読む
-- [ ] `NSHELL_SAFE=1` でも同じになる。`--config` との併用は使い方のエラー
-- [ ] プロンプトに安全モードの印。利用者の書式の外に、固定で `[safe] ` と出す
+- [x] `nshell --safe`: init.lisp・conf.d・`.nshell.lisp`・rules.pl・AI・functions の自動読み込み・NSHELL_PROMPT を読まずに起動する。履歴は読む
+- [x] `NSHELL_SAFE=1` でも同じになる。`--config` との併用は使い方のエラー
+- [x] プロンプトに安全モードの印。利用者の書式の外に、固定で `[safe] ` と出す
 
 受け入れ条件: 壊れた init.lisp (構文エラー・無限ループ・存在しない関数の呼び出し) でも `--safe` で起動できる。
 

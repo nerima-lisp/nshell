@@ -62,7 +62,7 @@ permitted to know both the domain and infrastructure.")
             #:shell-function-binding-source-span
             #:shell-function-registry #:shell-function-registry-p
             #:make-shell-function-registry #:shell-function-registry-global-table
-            #:shell-function-registry-lookup-miss-hook
+            #:shell-function-registry-lookup-miss-hook #:*safe-mode-p*
             #:shell-function-scope #:shell-function-scope-p
             #:make-shell-function-scope #:shell-function-scope-table
             #:shell-function-scope-parent #:context-shell-function-registry

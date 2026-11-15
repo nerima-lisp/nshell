@@ -592,6 +592,7 @@
    (:file "unit/test-prompt-properties")
    (:file "unit/test-error-codes")
    (:file "main-test")
+   (:file "unit/test-safe-mode")
    (:file "unit/static-check-allowlist")
    (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is
@@ -647,6 +648,7 @@
    (:file "e2e/test-job-control")
    (:file "e2e/test-package-route")
    (:file "e2e/test-assistant-mcp")
+   (:file "e2e/test-safe-mode")
    (:file "perf/test-startup")
    (:file "perf/key-cost")
    (:file "perf/test-key-cost"))

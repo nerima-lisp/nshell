@@ -7,6 +7,14 @@
 
 (defvar *foreground-terminal-runner* nil)
 
+(defvar *safe-mode-p* nil
+  "True when the process runs in safe mode (--safe or NSHELL_SAFE).
+MAIN assigns the global value once at startup, before any session or thread
+exists, and nothing rebinds it, so pipeline worker threads see it too. Every
+loader that safe mode skips (startup files, the AI sidecar, function
+autoloading, NSHELL_PROMPT) reads this one value instead of re-reading argv or
+the environment.")
+
 (defstruct (shell-context
             (:constructor %allocate-shell-context
                 (&key history config knowledge-base environment filesystem

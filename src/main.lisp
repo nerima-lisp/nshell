@@ -32,6 +32,9 @@ result representation."
                         :description "Exit after a command failure.")
     (cl-cli:make-option :key :login :name "login" :short #\l :kind :flag
                         :description "Load the login environment.")
+    (cl-cli:make-option :key :safe :name "safe" :kind :flag
+                        :description
+                        "Start without user configuration, AI, or function autoloading.")
     (cl-cli:make-option :key :no-config :name "no-config" :kind :flag
                         :description "Do not load the interactive startup file.")
     (cl-cli:make-option :key :config :name "config" :kind :value
@@ -86,6 +89,29 @@ true when cl-cli rejected the arguments as a usage error."
 (defun %fatal-error (error)
   (format *error-output* "Fatal error: ~a~%" error)
   1)
+
+(defun %safe-mode-requested-p (safe-flag-p)
+  "Return true when --safe was given or NSHELL_SAFE enables safe mode.
+
+NSHELL_SAFE follows the boolean convention of NSHELL_HISTORY_PRIVATE: unset,
+empty, 0, false, and no (case-insensitive) leave safe mode off. The flag has
+no negative form, so --safe wins over any NSHELL_SAFE value."
+  (or safe-flag-p
+      (let ((value (host-kit:getenv "NSHELL_SAFE")))
+        (and value
+             (not (member value
+                          (list "" "0" "false" "no")
+                          :test (function string-equal)))))))
+
+(defun %establish-safe-mode (safe-flag-p)
+  "Set the process-wide NSHELL.APPLICATION:*SAFE-MODE-P* from SAFE-FLAG-P and
+NSHELL_SAFE, and return it.
+
+MAIN's dispatch calls this once, before any entry point builds a session or
+starts a thread. The value is assigned, never bound, so pipeline worker threads
+read the same value as the thread that started them."
+  (setf nshell.application:*safe-mode-p*
+        (not (null (%safe-mode-requested-p safe-flag-p)))))
 
 (defun %run-interactive (&key config-path load-config-p history-p private-p greeting-p)
   "Run the interactive entry point while preserving the no-option call path."
@@ -145,7 +171,8 @@ true when cl-cli rejected the arguments as a usage error."
           (cl-cli:option-value invocation :config)
           (not (null (cl-cli:option-value invocation :no-history)))
           (not (null (cl-cli:option-value invocation :private)))
-          (not (null (cl-cli:option-value invocation :errexit)))))
+          (not (null (cl-cli:option-value invocation :errexit)))
+          (not (null (cl-cli:option-value invocation :safe)))))
 
 (defun %print-startup-option-error (message)
   (format *error-output* "nshell: ~a~%" message)
@@ -163,16 +190,24 @@ true when cl-cli rejected the arguments as a usage error."
      (nshell.feature.assistant:run-assistant-mcp-server))
     (t
      (multiple-value-bind (interactive-p no-config-p config-path no-history-p
-                           private-p errexit-p)
+                           private-p errexit-p safe-flag-p)
          (%parsed-startup-options invocation)
        (let ((shell-command
                (cl-cli:option-value invocation :shell-command))
              (command-args
-               (cl-cli:positional-value invocation :command-args)))
+               (cl-cli:positional-value invocation :command-args))
+             (safe-p (%establish-safe-mode safe-flag-p)))
          (cond
            ((and no-config-p config-path)
             (%print-startup-option-error
              "--config and --no-config cannot be used together"))
+           ;; NSHELL_SAFE=1 is the same request as --safe, so it conflicts
+           ;; with --config too instead of silently dropping either one.
+           ((and safe-p config-path)
+            (%print-startup-option-error
+             (if safe-flag-p
+                 "--safe and --config cannot be used together"
+                 "NSHELL_SAFE and --config cannot be used together")))
            ((and (cl-cli:option-value invocation :command)
                  interactive-p)
             (%print-startup-option-error
@@ -223,8 +258,10 @@ true when cl-cli rejected the arguments as a usage error."
                (cond
                  ((null arguments)
                   ;; The common stdin batch path does not need a CLI specification.
+                  (%establish-safe-mode nil)
                   (%run-default-invocation))
                  ((not (%flag-argument-p (first arguments)))
+                  (%establish-safe-mode nil)
                   (nshell.presentation:run-repl-script
                    (first arguments) (rest arguments)))
                  (t

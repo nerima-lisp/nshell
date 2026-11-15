@@ -166,6 +166,24 @@ set it."
                     (list "" "0" "false" "no")
                     :test (function string-equal)))))
 
+(defparameter +safe-mode-assistant-reason+ "disabled in safe mode"
+  "Reason the assistant model boundary reports for every call in safe mode.")
+
+(defun %make-safe-mode-assistant-boundary ()
+  "Return a model boundary that refuses every turn without spawning a sidecar."
+  (nshell.feature.assistant:make-assistant-model-boundary
+   :start-fn (lambda () (values nil +safe-mode-assistant-reason+))
+   :request-fn (lambda (generation payload)
+                 (declare (ignore generation payload))
+                 (values nil +safe-mode-assistant-reason+))
+   :poll-fn (lambda (generation)
+              (declare (ignore generation))
+              (values nil nil))
+   :stop-fn (lambda () t)
+   :status-fn (lambda ()
+                (list :state :unavailable
+                      :reason +safe-mode-assistant-reason+))))
+
 (defun initialize-repl-state (&key (load-config-p t) config-path (history-p t)
                                    private-p)
   "Initialize an interactive session with explicit startup policy.
@@ -173,7 +191,9 @@ set it."
 CONFIG-PATH overrides the startup file when LOAD-CONFIG-P is true. HISTORY-P
 controls history reads and writes. PRIVATE-P prevents this session's commands
 and assistant state from being written. When HISTORY-P is true, existing
-history remains available in private mode."
+history remains available in private mode. In safe mode
+(NSHELL.APPLICATION:*SAFE-MODE-P*) the startup files and the AI sidecar are
+skipped, while history still follows HISTORY-P."
   (setf *boundaries* (make-real-boundary-context)
         *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
         *running* t
@@ -208,7 +228,9 @@ history remains available in private mode."
         nshell.application:*ai-reset-handler* #'reset-ai-session
         nshell.feature.assistant:*assistant-boundaries*
           (nshell.feature.assistant:make-assistant-boundary-context
-           (nshell.feature.assistant:make-assistant-sidecar-boundary))
+           (if nshell.application:*safe-mode-p*
+               (%make-safe-mode-assistant-boundary)
+               (nshell.feature.assistant:make-assistant-sidecar-boundary)))
         *completion-rendered-lines* 0
         *prompt-rendered-lines* 0
         *prompt-rendered-cursor-row* 0
@@ -245,7 +267,9 @@ history remains available in private mode."
         (%vi-mode-flag-enabled-p
          (nshell.infrastructure.acl:current-environment-value "NSHELL_VI_MODE")))
   (progn
-    (%load-interactive-config :enabled-p load-config-p :path config-path)
+    (%load-interactive-config
+     :enabled-p (and load-config-p (not nshell.application:*safe-mode-p*))
+     :path config-path)
     (setf *mouse-reporting-enabled-p*
           (%vi-mode-flag-enabled-p
            (nshell.domain.environment:env-get *environment* "NSHELL_MOUSE_REPORTING"))))

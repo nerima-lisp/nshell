@@ -306,6 +306,10 @@ terminal-effect half of the right prompt; the layout math lives in the caller."
               (list (nshell.domain.prompting:make-prompt-segment " " :literal)))
             (when assistant (list assistant)))))
 
+(defparameter +safe-mode-prompt-marker+ "[safe] "
+  "Fixed text written before the left prompt in safe mode. It is not part of
+any prompt format, so a custom format cannot remove it.")
+
 (defparameter *prompt-left-format* nil
   "NIL to render the built-in left-prompt layout, or a format string (see
 nshell.domain.prompting:render-prompt-format) installed by the PROMPT
@@ -321,8 +325,11 @@ hook, like *PROMPT-REMOTE-SESSION-P*, so tests can force NSHELL_PROMPT /
 NSHELL_RIGHT_PROMPT without depending on the real process environment.")
 
 (defun %prompt-format-from-environment (variable)
-  (let ((value (funcall *prompt-format-environment-reader* variable)))
-    (and value (plusp (length value)) value)))
+  ;; Safe mode ignores NSHELL_PROMPT and NSHELL_RIGHT_PROMPT so a broken
+  ;; format cannot keep the shell from drawing a usable prompt.
+  (unless nshell.application:*safe-mode-p*
+    (let ((value (funcall *prompt-format-environment-reader* variable)))
+      (and value (plusp (length value)) value))))
 
 (defun %effective-prompt-format (override variable)
   "OVERRIDE (set by the PROMPT builtin) wins; otherwise fall back to the
@@ -375,9 +382,13 @@ side names a format."
          (pm (%current-prompt-model last-exit last-command-duration-ms terminal-width))
          (left-format (%effective-prompt-format *prompt-left-format* "NSHELL_PROMPT"))
          (right-format (%effective-prompt-format *prompt-right-format* "NSHELL_RIGHT_PROMPT"))
-         (segments (if left-format
-                       (%format-segments left-format pm failure-explain-p)
-                       (nshell.domain.prompting:render-prompt-model pm)))
+         (segments (append
+                    (when nshell.application:*safe-mode-p*
+                      (list (nshell.domain.prompting:make-prompt-segment
+                             +safe-mode-prompt-marker+ :literal)))
+                    (if left-format
+                        (%format-segments left-format pm failure-explain-p)
+                        (nshell.domain.prompting:render-prompt-model pm))))
          (right-segments (if right-format
                              (%format-segments right-format pm failure-explain-p)
                              (%right-prompt-segments pm failure-explain-p))))

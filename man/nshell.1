@@ -8,6 +8,7 @@ nshell \- an interactive shell with an S-expression command language
 .RB [ \-i | \-\-interactive ]
 .RB [ \-e | \-\-errexit ]
 .RB [ \-l | \-\-login ]
+.RB [ \-\-safe ]
 .RB [ \-\-no\-config ]
 .RB [ \-\-config
 .IR PATH ]
@@ -86,6 +87,30 @@ terminal.
 .TP
 .BR \-e ", " \-\-errexit
 Exit after a command failure.
+.TP
+.B \-\-safe
+Run in safe mode, for recovering from a broken configuration. Safe mode
+applies to every way of running nshell: interactive sessions, batch input,
+.BR \-\-command ,
+.IR SCRIPT ,
+and
+.BR "\-i \-c" .
+It does not load
+.IR init.lisp ,
+the
+.I conf.d
+files, the assistant sidecar, or functions from the functions directory, and
+ignores
+.B NSHELL_PROMPT
+and
+.BR NSHELL_RIGHT_PROMPT .
+History is still read and written as usual. The prompt starts with a fixed
+.B [safe]
+marker that a custom prompt format cannot remove. Combining
+.B \-\-safe
+with
+.B \-\-config
+is a usage error.
 .TP
 .B \-\-no\-config
 Do not load the interactive startup file.
@@ -370,6 +395,16 @@ Enables private mode for interactive sessions when set to a non-empty value
 other than 0, false, or no (case-insensitive). Private mode reads existing
 history without saving commands and suppresses local assistant transcript,
 snapshot, and audit persistence.
+.TP
+.B NSHELL_SAFE
+Enables safe mode, as
+.B \-\-safe
+does, when set to a non-empty value other than 0, false, or no
+(case-insensitive). With this set,
+.B \-\-config
+is a usage error.
+.B \-\-safe
+enables safe mode whatever the value.
 .TP
 .B NSHELL_VI_MODE
 When set to a non-empty value other than 0, false, or no (case-insensitive),

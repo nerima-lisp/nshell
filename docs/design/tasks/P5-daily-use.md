@@ -30,7 +30,7 @@
 
 ## P5-5 場所に合わせる・使い回す
 
-- [ ] プロジェクト設定 `.nshell.lisp` と `nshell trust` (予約語 `trust` を登録する)。trust のハッシュは cl-crypto-kit の SHA-256 を使う
+- [ ] プロジェクト設定 `.nshell.lisp` と `nshell trust` (予約語 `trust` を登録する)。trust のハッシュは cl-crypto-kit の SHA-256 を使う。安全モード (`nshell.application:*safe-mode-p*`、P0-5) では読まない
 - [ ] Nix との連携。提案だけを行い、`nix develop` を自分で実行しない
 - [ ] 出力ストア `(out)`・`(view)`・`clip`・Alt-T のファイル挿入。`(view)` は P3-5 のレコードの表の部品を使うページャとして作る
 - [ ] bash からの書き換え
@@ -44,7 +44,7 @@
 
 ## P5-7 ユーザー規則の制限
 
-- [ ] rules.pl を読み込む (P1-5 の別の rulebase に入れ、結果は confirm までに抑える)
+- [ ] rules.pl を読み込む (P1-5 の別の rulebase に入れ、結果は confirm までに抑える)。安全モード (`nshell.application:*safe-mode-p*`、P0-5) では読まない
 - [ ] rules.pl から外部コマンドは呼べない。外部述語 (foreign predicate) は許可リストのものだけ
 - [ ] 推論数と時間の上限をかける
 

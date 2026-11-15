@@ -211,7 +211,9 @@
                                   reader-results)))
     (multiple-value-bind (name escaped-p)
         (autoload-name canonical-key)
-      (when (simple-function-name-p name)
+      ;; Safe mode never reads the functions directory, including from the
+      ;; derived contexts that install this hook on their own registries.
+      (when (and (not *safe-mode-p*) (simple-function-name-p name))
         (let* ((file-name (if escaped-p name (string-downcase name)))
                (path
                 (merge-pathnames

@@ -151,7 +151,8 @@ jobs:
             '39fac28407405841003e4c2abfbe0d96abd93b7701e8b61cdd35e713943b46d6' \
             "$archive" | sha256sum --check -
           tar -xjf "$archive" -C "$RUNNER_TEMP"
-          INSTALL_ROOT="$install_root" sh "$distribution/install.sh"
+          cd "$distribution"
+          INSTALL_ROOT="$install_root" sh ./install.sh
           printf '%s\n' "$install_root/bin" >> "$GITHUB_PATH"
           printf 'SBCL_HOME=%s\n' "$install_root/lib/sbcl" >> "$GITHUB_ENV"
           version="$(SBCL_HOME="$install_root/lib/sbcl" "$install_root/bin/sbcl" --version)"

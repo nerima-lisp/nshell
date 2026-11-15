@@ -1,12 +1,14 @@
 (in-package #:nshell.application)
 
-(define-condition command-failed (error)
+(define-condition command-failed
+    (error nshell.domain.error-codes:nshell-error-code-mixin)
   ((command :initarg :command :reader command-failed-command)
    (status :initarg :status :reader command-failed-status)
    (pipeline-status :initarg :pipeline-status :initform nil
                     :reader command-failed-pipeline-status)
    (stage-statuses :initarg :stage-statuses :reader command-failed-stage-statuses)
-   (signal :initarg :signal :reader command-failed-signal)))
+   (signal :initarg :signal :reader command-failed-signal))
+  (:default-initargs :error-code "E_COMMAND_FAILED"))
 
 (defvar *interactive-top-level-p* nil)
 

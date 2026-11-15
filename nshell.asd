@@ -68,6 +68,9 @@
     :pathname "."
     :serial t
     :components ((:file "package-user")))
+   (:file "domain/error-codes-data" :pathname "../data/domain/error-codes-data")
+   (:file "domain/error-code-table")
+   (:file "domain/error-codes")
    (:file "infrastructure/acl/timeout")
    (:module "feature-command-line"
     :pathname "../packages/feature/command-line/src"
@@ -615,6 +618,7 @@
    (:file "e2e/test-package-route")
    (:file "e2e/test-assistant-mcp")
    (:file "perf/test-startup")
+   (:file "unit/test-error-codes")
    ;; Appended rather than inserted next to helpers-runner: :serial t makes the
    ;; order load order, and every existing entry must keep its position.
    (:file "main-test")

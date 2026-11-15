@@ -788,8 +788,11 @@
       # Path literal, not `self`: `lib.fileset` refuses a flake's string-like
       # `self`. `./.` is the same directory.
       root = ./.;
-      # Read by the builtin inventory consistency test.
-      sourceInclude = [ ./docs/src/reference/builtins.md ];
+      # Read by the builtin inventory and error-code page consistency tests.
+      sourceInclude = [
+        ./docs/src/reference/builtins.md
+        ./docs/src/reference/error-codes.md
+      ];
 
       lispDependencies =
         ctx: with siblingsFor ctx; [

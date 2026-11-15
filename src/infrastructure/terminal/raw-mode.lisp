@@ -39,11 +39,13 @@
 ;;; resumes, so ENABLE-RAW-MODE saves settings only when *SAVED-TERMIOS* has no
 ;;; entry for FD.
 
-(define-condition terminal-mode-operation-failed (error)
+(define-condition terminal-mode-operation-failed
+    (error nshell.domain.error-codes:nshell-error-code-mixin)
   ((operation :initarg :operation
               :reader terminal-mode-operation-failed-operation)
    (fd :initarg :fd :reader terminal-mode-operation-failed-fd)
    (reason :initarg :reason :reader terminal-mode-operation-failed-reason))
+  (:default-initargs :error-code "E_INTERNAL")
   (:report
    (lambda (condition stream)
      (format stream "Terminal ~(~a~) failed on fd ~d: ~a"

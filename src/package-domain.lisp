@@ -234,4 +234,16 @@ transitions on a value.")
             #:suspend-job #:foreground-job #:background-job
             #:complete-job))
 
+(defpackage #:nshell.domain.error-codes
+  (:documentation
+   "Domain: the error-code table (E_* errors with their exit status, W_*
+warnings), the condition mixin that carries a code, and the renderer for the
+generated reference page. Loaded before any condition that mixes it in.")
+  (:use #:cl)
+  (:export #:+error-codes+
+           #:nshell-error-code-mixin #:condition-error-code
+           #:find-error-code
+           #:error-code-name #:error-code-kind #:error-code-exit-code
+           #:read-error-code-table #:render-error-codes-markdown))
+
 )

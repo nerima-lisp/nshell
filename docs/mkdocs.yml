@@ -57,6 +57,7 @@ nav:
       - Recipes: guide/recipes.md
   - Reference:
       - Built-in commands: reference/builtins.md
+      - Error codes: reference/error-codes.md
       - Architecture: reference/architecture.md
   - Project:
       - Roadmap: project/roadmap.md

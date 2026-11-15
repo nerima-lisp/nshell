@@ -26,9 +26,9 @@
 
 ## P0-3 エラーコードの一覧
 
-- [ ] `data/domain/error-codes-data.lisp` に全コードを定義 (名前・既定の終了コード・英語と日本語の短い説明・直し方の例)。domain 層と infrastructure 層からも参照できるように、data/application ではなく data/domain に置く
-- [ ] 対象: proposal/02 と ux/U6 の実行系 (E_COMMAND_NOT_FOUND, E_PERMISSION, E_TIMEOUT, E_INTERRUPTED, E_NEEDS_APPROVAL, E_BLOCKED_BY_POLICY, E_WAITING_FOR_INPUT, E_INTERACTIVE_PROGRAM) と language/L6 の言語系 (E_PARSE, E_UNSUPPORTED_SYNTAX, E_ARG_TYPE, E_VALUE_POSITION, E_NO_MATCH, E_REDIRECT_TARGET, E_LISP_ERROR, E_COMMAND_FAILED)、E_INTERNAL・E_NOT_IMPLEMENTED・E_PROTOCOL、警告用の W_*
-- [ ] 既定の終了コードは次の表に従う
+- [x] `data/domain/error-codes-data.lisp` に全コードを定義 (名前・既定の終了コード・英語と日本語の短い説明・直し方の例)。domain 層と infrastructure 層からも参照できるように、data/application ではなく data/domain に置く
+- [x] 対象: proposal/02 と ux/U6 の実行系 (E_COMMAND_NOT_FOUND, E_PERMISSION, E_TIMEOUT, E_INTERRUPTED, E_NEEDS_APPROVAL, E_BLOCKED_BY_POLICY, E_WAITING_FOR_INPUT, E_INTERACTIVE_PROGRAM) と language/L6 の言語系 (E_PARSE, E_UNSUPPORTED_SYNTAX, E_ARG_TYPE, E_VALUE_POSITION, E_NO_MATCH, E_REDIRECT_TARGET, E_LISP_ERROR, E_COMMAND_FAILED)、E_INTERNAL・E_NOT_IMPLEMENTED・E_PROTOCOL、警告用の W_*
+- [x] 既定の終了コードは次の表に従う
 
 | 終了コード | エラーコード |
 |---|---|
@@ -45,8 +45,8 @@
 | 6 | E_INTERACTIVE_PROGRAM |
 | 70 | E_INTERNAL |
 
-- [ ] condition の mixin に `error-code` スロットを足す (表示はまだ変えない)
-- [ ] 一覧から docs/src/reference/error-codes.md を生成するテスト (ずれたら失敗)
+- [x] condition の mixin に `error-code` スロットを足す (表示はまだ変えない)
+- [x] 一覧から docs/src/reference/error-codes.md を生成するテスト (ずれたら失敗)
 
 受け入れ条件: すべてのコードが 1 か所に定義され、ドキュメントと一致することがテストで保証される。
 

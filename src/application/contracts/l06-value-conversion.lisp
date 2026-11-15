@@ -1,13 +1,17 @@
 (in-package #:nshell.application)
 
-(define-condition command-argument-type-error (error)
+(define-condition command-argument-type-error
+    (error nshell.domain.error-codes:nshell-error-code-mixin)
   ((value :initarg :value :reader command-argument-type-error-value)
    (source-span :initarg :source-span
-                :reader command-argument-type-error-source-span)))
-(define-condition value-conversion-error (error)
+                :reader command-argument-type-error-source-span))
+  (:default-initargs :error-code "E_ARG_TYPE"))
+(define-condition value-conversion-error
+    (error nshell.domain.error-codes:nshell-error-code-mixin)
   ((operation :initarg :operation :reader value-conversion-error-operation)
    (input :initarg :input :reader value-conversion-error-input)
-   (cause :initarg :cause :reader value-conversion-error-cause)))
+   (cause :initarg :cause :reader value-conversion-error-cause))
+  (:default-initargs :error-code "E_LISP_ERROR"))
 (in-package #:nshell.user)
 (declaim
  (ftype (function (t) string) |to-json|)

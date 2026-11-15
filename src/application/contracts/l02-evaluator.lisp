@@ -1,17 +1,21 @@
 (in-package #:nshell.application)
 
-(define-condition command-macro-syntax-error (error)
+(define-condition command-macro-syntax-error
+    (error nshell.domain.error-codes:nshell-error-code-mixin)
   ((source-span :initarg :source-span
                 :reader command-macro-syntax-error-source-span)
    (source-path :initarg :source-path
                 :reader command-macro-syntax-error-source-path)
-   (cause :initarg :cause :reader command-macro-syntax-error-cause)))
-(define-condition sexp-evaluation-syntax-error (error)
+   (cause :initarg :cause :reader command-macro-syntax-error-cause))
+  (:default-initargs :error-code "E_PARSE"))
+(define-condition sexp-evaluation-syntax-error
+    (error nshell.domain.error-codes:nshell-error-code-mixin)
   ((source-span :initarg :source-span
                 :reader sexp-evaluation-syntax-error-source-span)
    (source-path :initarg :source-path
                 :reader sexp-evaluation-syntax-error-source-path)
-   (cause :initarg :cause :reader sexp-evaluation-syntax-error-cause)))
+   (cause :initarg :cause :reader sexp-evaluation-syntax-error-cause))
+  (:default-initargs :error-code "E_PARSE"))
 
 (define-value-struct evaluated-command-stage
     ((command-node nil)

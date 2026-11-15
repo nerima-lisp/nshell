@@ -2,11 +2,12 @@
 
 (progn
   (define-condition sexp-reader-error
-    (error)
+    (error nshell.domain.error-codes:nshell-error-code-mixin)
     ((source-span :initarg :source-span :reader sexp-reader-error-source-span)
      (source-path :initarg :source-path :reader sexp-reader-error-source-path)
      (source-map :initarg :source-map :reader sexp-reader-error-source-map)
-     (cause :initarg :cause :reader sexp-reader-error-cause)))
+     (cause :initarg :cause :reader sexp-reader-error-cause))
+    (:default-initargs :error-code "E_PARSE"))
   (defstruct reader-result
     form
     source

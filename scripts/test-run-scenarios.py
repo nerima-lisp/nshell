@@ -563,6 +563,75 @@ class ScenarioRunnerTests(unittest.TestCase):
         self.assertEqual(runner._benchmark_verdict([[149, 151], [140, 145]], 150), "inconclusive")
         self.assertEqual(runner._benchmark_verdict([[140, 145], [151, 160]], 150), "inconclusive")
 
+    def test_l02_slow_git_session_ignores_a_marker_seen_only_on_the_pty(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            slow_git = root / "slow-git"
+            slow_git.mkdir()
+            (slow_git / "git").write_text(
+                "#!/bin/sh\n"
+                "printf 'status-start\\n' >> \"$NSHELL_L02_GIT_LOG\"\n"
+                "/bin/sleep 0.2\n"
+                "printf 'status-end\\n' >> \"$NSHELL_L02_GIT_LOG\"\n",
+                encoding="utf-8",
+            )
+            # Shows the marker in a window title and as output, but never runs the command.
+            shell = root / "title-only-shell"
+            shell.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$NSHELL_PROMPT\"\n"
+                "git -C \"$PWD\" status >/dev/null 2>&1 &\n"
+                "while IFS= read -r line; do\n"
+                "  case \"$line\" in\n"
+                "    exit) wait; exit 0 ;;\n"
+                "    *) printf '\\033]0;%s\\007L02_READY\\n' \"$line\" ;;\n"
+                "  esac\n"
+                "done\n",
+                encoding="utf-8",
+            )
+            for path in (slow_git / "git", shell):
+                path.chmod(0o755)
+            scenario = {
+                "id": "L02-git-prompt-responsiveness",
+                "benchmark": {
+                    "interaction_timeout_seconds": 1,
+                    "prompt_max_ms": 2000,
+                    "prompt_prefix": "L02_PROMPT",
+                    "ready_marker": "L02_READY",
+                },
+            }
+            record, failures = runner._run_slow_git_session(
+                scenario, shell, root, {"PATH": "/usr/bin:/bin"}, slow_git, 1,
+                runner.time.monotonic() + 30,
+            )
+
+        self.assertTrue(record["status_started"])
+        self.assertFalse(record["marker_logged"])
+        self.assertFalse(record["order_ok"])
+        self.assertTrue(record["clean_exit"])
+        self.assertEqual(len(failures), 1)
+        self.assertIn("did not append 'L02_READY' to the Git log", failures[0])
+
+    def test_l02_slow_git_order_passes_when_the_marker_lands_while_status_sleeps(self) -> None:
+        lines = [
+            "call -C /repository status --porcelain --untracked-files=no",
+            "status-start",
+            "L02_READY",
+            "status-start",
+            "status-end",
+            "status-end",
+        ]
+
+        self.assertIsNone(runner._slow_git_order_failure(lines, "L02_READY"))
+
+    def test_l02_slow_git_order_fails_when_status_ends_before_the_marker(self) -> None:
+        lines = ["status-start", "status-end", "L02_READY"]
+
+        self.assertEqual(
+            runner._slow_git_order_failure(lines, "L02_READY"),
+            "a git status call ended before the command ran",
+        )
+
     def test_bounded_tmpdir_requires_a_small_empty_pty_filesystem(self) -> None:
         scenario = {
             "id": "Q07-bounded-filesystem",

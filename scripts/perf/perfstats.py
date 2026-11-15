@@ -147,6 +147,11 @@ def unjudgeable(metric: dict[str, Any]) -> tuple[str, str] | None:
     """
     support = metric.get("support", {"A": True, "B": True})
     missing = [arm for arm in ("A", "B") if not support.get(arm, True)]
+    # A measurement failure on either arm outweighs the other arm's n/a.
+    if missing and metric.get("errors"):
+        return "inconclusive", "measurement failed: " + "; ".join(str(e) for e in metric["errors"][:3])
+    if missing and metric.get("guard_failures"):
+        return "inconclusive", "correctness guard failed: " + "; ".join(metric["guard_failures"][:3])
     if missing:
         reasons = metric.get("unsupported", {})
         if all(reasons.get(arm) for arm in missing):

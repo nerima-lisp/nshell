@@ -41,9 +41,9 @@ def fake_binary(directory: Path, json_action: str, name: str = "nshell") -> Path
     return path
 
 
-def harness_args(binary: Path) -> argparse.Namespace:
+def harness_args(binary: Path, candidate: Path | None = None) -> argparse.Namespace:
     # Startup only: one warm-up and one measured block.
-    return argparse.Namespace(a=str(binary), b=str(binary), startup_blocks=1, key_blocks=0, path_key_blocks=0,
+    return argparse.Namespace(a=str(binary), b=str(candidate or binary), startup_blocks=1, key_blocks=0, path_key_blocks=0,
                               keys=2, warmup_keys=0, tab_blocks=0, tab_samples=1, prompt_blocks=0,
                               prompt_samples=1)
 
@@ -75,6 +75,17 @@ class ColdAndJsonTests(unittest.TestCase):
         json_row = judged_rows(raw)["startup.json_command_true"]
         self.assertEqual(json_row["verdict"], "n/a", json_row)
         self.assertIn("usage error", json_row["reason"])
+
+    def test_measurement_failure_on_one_arm_outweighs_unsupported_on_the_other(self):
+        # Arm A rejects --json (an older binary); arm B prints non-JSON, which
+        # is a measurement failure and must not be hidden behind A's n/a.
+        with tempfile.TemporaryDirectory() as directory:
+            base = fake_binary(Path(directory), JSON_USAGE_ERROR, "nshell-a")
+            cand = fake_binary(Path(directory), JSON_GARBLED, "nshell-b")
+            raw = perfharness.run(harness_args(base, cand))
+        json_row = judged_rows(raw)["startup.json_command_true"]
+        self.assertEqual(json_row["verdict"], "inconclusive", json_row)
+        self.assertIn("JSON", json_row["reason"])
 
 
 class JsonProbeTests(unittest.TestCase):

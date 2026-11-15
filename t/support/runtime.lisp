@@ -26,9 +26,10 @@ because subprocess bootstrap does not inherit the parent's registry.")
   "Stable host values needed by real-process E2E tests.
 
 Do not pass the test runner's ASDF/SBCL, nshell, or tool-specific environment
-through a child PTY. Those values describe the runner rather than the shell
-under test and can change startup, source lookup, or persistent state. TERM is
-pinned for PTY children so startup does not depend on the test runner's TERM.")
+through an E2E child process. Those values describe the runner rather than the
+shell under test and can change startup, source lookup, or persistent state.
+TERM is pinned for all E2E children, including batch processes, so startup does
+not depend on the test runner's TERM.")
 
 (defun %e2e-child-environment ()
   "Return the deliberately small environment used by E2E child processes."

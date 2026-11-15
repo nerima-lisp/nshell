@@ -231,16 +231,19 @@ terminal without waiting out the real (30s) default."
   "Allow the first real-process PTY test to compile the fresh child image.
 The regular read timeout remains short for command-response assertions.")
 
-(defun %e2e-pty-await-ready (fd process-id)
+(defun %e2e-pty-await-startup (fd process-id)
   (let ((ready (format nil "~c[?2004h" #\Escape)))
     (%e2e-pty-read-until fd ready
                          :timeout +e2e-pty-cold-start-timeout+
-                         :process-id process-id)
-    (%e2e-pty-write-line fd "printf 'pty-%s\\n' e2e-ready")
-    (expect (search "pty-e2e-ready"
-                    (%e2e-pty-read-until fd "pty-e2e-ready"
-                                         :process-id process-id))
-            :to-be-truthy)))
+                         :process-id process-id)))
+
+(defun %e2e-pty-await-ready (fd process-id)
+  (%e2e-pty-await-startup fd process-id)
+  (%e2e-pty-write-line fd "printf 'pty-%s\\n' e2e-ready")
+  (expect (search "pty-e2e-ready"
+                  (%e2e-pty-read-until fd "pty-e2e-ready"
+                                       :process-id process-id))
+          :to-be-truthy))
 
 (defun %wait-pty-child-exit (pty &key (attempts 40) (delay 0.05))
   (loop repeat attempts

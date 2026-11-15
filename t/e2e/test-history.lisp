@@ -35,7 +35,7 @@
                               (setf pty (%e2e-pty-spawn
                                          program arguments :rows 24 :cols 100))
                               (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
-                                (%e2e-pty-await-ready
+                                (%e2e-pty-await-startup
                                  fd (nshell.infrastructure.acl:pty-process-pid pty))
                                 (funcall action pty fd)
                                 (nshell.infrastructure.acl:pty-write fd (string (code-char 4)))
@@ -50,7 +50,7 @@
                (await-command fd "history-newest:<second>")))
             (let ((nshell.infrastructure.persistence::*history-file-path-override*
                     history-path))
-              (expect (list "printf 'pty-%s\\n' e2e-ready" older newer)
+              (expect (list older newer)
                       :to-equal
                       (mapcar #'nshell.infrastructure.persistence:history-record-text
                               (nshell.infrastructure.persistence:load-history-file))))
@@ -58,7 +58,7 @@
              (lambda (pty fd)
                (expect (= first-pid (nshell.infrastructure.acl:pty-process-pid pty))
                        :to-be-falsy)
-               (nshell.infrastructure.acl:pty-write fd (format nil "~c[A~c[A~c" #\Escape #\Escape #\Return))
+               (nshell.infrastructure.acl:pty-write fd (format nil "~c[A~c" #\Escape #\Return))
                (await-command fd "history-newest:<second>"))))))))
 
   (it "e2e-history-builtin-filters-failed-records"

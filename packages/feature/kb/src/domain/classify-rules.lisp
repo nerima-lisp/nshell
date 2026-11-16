@@ -47,6 +47,13 @@
     ("cat" :flags "nbvets" :positionals :any)
     ("file" :flags "bLhks" :long ("--mime-type" "--mime-encoding")
             :positionals :any)
+    ("grep" :flags "ivnclLrREFwxohHsqz"
+            :value-flags (("A" :count) ("B" :count) ("C" :count) ("e" :any)
+                          ("f" :any))
+            :long ("--color")
+            :exact ("--color=auto" "--color=never" "--color=always")
+            :value-long (("--include" :any) ("--exclude" :any))
+            :positionals :any)
     ("rg" :flags "iSsvnNclLwxFoHu."
           :value-flags (("e" :any) ("g" :any) ("t" :any) ("T" :any)
                         ("A" :count) ("B" :count) ("C" :count) ("m" :count))

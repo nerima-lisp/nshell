@@ -312,18 +312,28 @@ first, as (SOURCE ORIGIN APPROVAL)."
           (expect nil :to-be nshell.presentation::*assistant-command-approval*)
           (expect "" :to-equal (%approval-buffer))))))
 
+  ;; The alias target is a fixture script that drains its input and exits 42.
+  ;; A missing command would not do: a pipeline that spawns one fails, and
+  ;; whether the echo stage or the spawn fails first depends on timing.
   (it "stops-at-the-gate-when-an-alias-in-a-pipeline-turns-confirm"
-    (with-repl-test-state
-      (repl-test-define-alias "ls" "nshell-approval-test-missing-command")
-      (let ((nshell.presentation::*input-state* (%approval-proposal-state "echo hi | ls")))
-        (with-approval-gate-execution ()
-          (%approval-press-enter)
-          (expect 126 :to-equal nshell.presentation::*last-exit-code*)
-          (expect '("echo hi | ls" . :pending) :to-equal
-                  nshell.presentation::*assistant-command-approval*)
-          (%approval-press-enter)
-          (expect 127 :to-equal nshell.presentation::*last-exit-code*)
-          (expect nil :to-be nshell.presentation::*assistant-command-approval*)))))
+    (host-kit:with-temporary-directory (directory)
+      (let ((target (merge-pathnames "approval-test-pipeline-target" directory)))
+        (with-open-file (stream target :direction :output :if-exists :supersede)
+          (format stream "#!/bin/sh~%while read -r _; do :; done~%exit 42~%"))
+        (sb-posix:chmod (namestring target) #o700)
+        (with-repl-test-state
+          (repl-test-define-alias "ls" (namestring target))
+          (let ((nshell.presentation::*input-state*
+                  (%approval-proposal-state "echo hi | ls")))
+            (with-approval-gate-execution ()
+              (%approval-press-enter)
+              (expect 126 :to-equal nshell.presentation::*last-exit-code*)
+              (expect '("echo hi | ls" . :pending) :to-equal
+                      nshell.presentation::*assistant-command-approval*)
+              (%approval-press-enter)
+              (expect 42 :to-equal nshell.presentation::*last-exit-code*)
+              (expect nil :to-be
+                      nshell.presentation::*assistant-command-approval*)))))))
 
   ;; Passes once the closed-world ls spec allows --color=auto (D-P1-5 2.6).
   (it "does-not-stop-a-safe-proposal-at-the-gate-for-an-ls-color-alias"
@@ -440,7 +450,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
         (nshell.application:*execution-gate-stopped-p* nil)
         (status nil))
     (capture-standard-output
-      (let ((*error-output* (make-broadcast-stream)))
+      (let ((*error-output* (make-string-output-stream)))
         (dolist (reader-result (nshell.domain.parsing:read-submission
                                 source :reader-context reader-context))
           (setf status

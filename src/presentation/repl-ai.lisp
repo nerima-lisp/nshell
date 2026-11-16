@@ -11,8 +11,7 @@
         *assistant-request-kind* nil
         *assistant-explain-candidates* nil
         *assistant-explain-candidate-index* 0
-        *assistant-command-origin* :typed
-        *assistant-command-confirmed-p* nil
+        *assistant-command-approval* nil
         *agent-session* nil
         *input-state* (make-repl-input-state))
   (ignore-errors

@@ -7,7 +7,10 @@
   "Number of active shell loops in the current dynamic execution context.")
 
 (defvar *execution-origin* :typed)
-(defvar *execution-confirmed-p* nil)
+(defvar *execution-approval* nil
+  "Level the user approved for the line being executed: NIL, :SAFE or :CONFIRM.")
+(defvar *execution-gate-stopped-p* nil
+  "Set to true when the AI execution gate refuses a command; the caller binds it.")
 (defvar *execution-gate-parent-kind* nil)
 
 ;;; Control flow execution and AST dispatch.
@@ -133,31 +136,35 @@ its own."
                          (nshell.feature.assistant:classify-ast effective))))))
       (let* ((classification (classify-effective ast))
              (agent-p (eq *execution-origin* :agent))
-             (confirmed-p (and *execution-confirmed-p*
-                               (or (null *execution-gate-parent-kind*)
-                                   (member *execution-gate-parent-kind*
-                                           '(:sequence :pipeline)
-                                           :test #'eq)))))
-        (case (nshell.feature.assistant:assistant-safety-result-classification
-               classification)
-          (:safe
-           (when (and agent-p (not confirmed-p))
-             (list
-              "nshell: AI proposal requires approval before execution~%"
-              126)))
-          (:confirm
-           (unless confirmed-p
-             (list
-              (format nil "nshell: AI proposal requires confirmation: ~a~%"
-                      (nshell.feature.assistant:assistant-safety-result-reason
-                       classification))
-              126)))
-          (otherwise
-           (list
-            (format nil "nshell: AI proposal blocked: ~a~%"
-                    (nshell.feature.assistant:assistant-safety-result-reason
-                     classification))
-            126)))))))
+             (approval (and (or (null *execution-gate-parent-kind*)
+                                (member *execution-gate-parent-kind*
+                                        '(:sequence :pipeline)
+                                        :test #'eq))
+                            *execution-approval*))
+             (stop
+               (case (nshell.feature.assistant:assistant-safety-result-classification
+                      classification)
+                 (:safe
+                  (when (and agent-p (null approval))
+                    (list
+                     "nshell: AI proposal requires approval before execution~%"
+                     126)))
+                 (:confirm
+                  (unless (eq approval :confirm)
+                    (list
+                     (format nil "nshell: AI proposal requires confirmation: ~a~%"
+                             (nshell.feature.assistant:assistant-safety-result-reason
+                              classification))
+                     126)))
+                 (otherwise
+                  (list
+                   (format nil "nshell: AI proposal blocked: ~a~%"
+                           (nshell.feature.assistant:assistant-safety-result-reason
+                            classification))
+                   126)))))
+        (when stop
+          (setf *execution-gate-stopped-p* t))
+        stop))))
 
 (defun %assistant-gated-command-dispatch (context command args thunk)
   (let ((gate (%assistant-execution-gate

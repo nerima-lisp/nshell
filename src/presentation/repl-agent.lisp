@@ -65,8 +65,7 @@
         *assistant-turn-started-at* nil
         *assistant-last-event-at* nil
         *assistant-request-kind* nil
-        *assistant-command-origin* :typed
-        *assistant-command-confirmed-p* nil
+        *assistant-command-approval* nil
         *input-state* (make-repl-input-state))
   (render-prompt-cont)
   (render-transient-panel (list (format nil "agent: ~a" reason)))
@@ -79,8 +78,7 @@
         (%finish-agent-session "maximum step count reached")
         (progn
           (setf *assistant-request-kind* :agent
-                *assistant-command-origin* :typed
-                *assistant-command-confirmed-p* nil
+                *assistant-command-approval* nil
                 *input-state*
                   (copy-input-state-with
                    (make-repl-input-state
@@ -88,15 +86,24 @@
                    :mode :ask-waiting))
           (%process-ask-submit-output-event)))))
 
+(defun %agent-approve-step (step)
+  "Record the Enter on STEP as approval of its text at the level shown."
+  (setf *assistant-command-approval*
+        (cons (nshell.application:agent-step-text step)
+              (nshell.feature.assistant:assistant-safety-result-classification
+               (nshell.application:agent-step-classification step)))))
+
 (defun %agent-execute-current-step ()
   (let* ((session *agent-session*)
          (step (and session
                     (nshell.application:agent-session-current-step session))))
-    (unless (and *assistant-command-confirmed-p*
-                 (nshell.application:agent-step-executable-p step))
+    (unless (and step
+                 (nshell.application:agent-step-executable-p step)
+                 (member (%assistant-approval-level
+                          (nshell.application:agent-step-text step))
+                         '(:safe :confirm)))
       (return-from %agent-execute-current-step
         (%render-agent-step-panel)))
-    (setf *assistant-command-origin* :agent)
     (clear-rendered-transient-panel)
     (clear-rendered-prompt)
     (%execute-complete-command
@@ -139,7 +146,7 @@
            (input-state-buffer *input-state*))))
     (if (nshell.application:agent-step-executable-p step)
         (progn
-          (setf *assistant-command-confirmed-p* t)
+          (%agent-approve-step step)
           (%agent-execute-current-step))
         (%render-agent-step-panel))))
 
@@ -169,7 +176,7 @@
       ((eq type :enter)
        (if (nshell.application:agent-step-executable-p step)
            (progn
-             (setf *assistant-command-confirmed-p* t)
+             (%agent-approve-step step)
              (%agent-execute-current-step))
            (%render-agent-step-panel)))
       ((and char (char= char #\e))
@@ -214,8 +221,7 @@
   (setf *agent-session*
         (nshell.application:make-agent-session task :max-steps max-steps)
         *assistant-request-kind* :agent
-        *assistant-command-origin* :typed
-        *assistant-command-confirmed-p* nil
+        *assistant-command-approval* nil
         *input-state*
           (copy-input-state-with
            (make-repl-input-state :buffer task)

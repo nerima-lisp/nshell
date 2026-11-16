@@ -84,7 +84,8 @@ permitted to know both the domain and infrastructure.")
             #:wait-byte-stream-execution #:command-node-external-p
             #:execute-reader-ast-in-context #:argv-scalar-string
             ;; Runtime seams consumed by presentation and assistant adapters.
-            #:*builtin-registry* #:*execution-confirmed-p* #:*execution-origin*
+            #:*builtin-registry* #:*execution-approval* #:*execution-origin*
+            #:*execution-gate-stopped-p*
             #:*foreground-terminal-runner*
             #:*agent-start-handler*
             #:*ai-reset-handler*

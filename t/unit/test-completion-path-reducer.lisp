@@ -198,7 +198,9 @@ WHILE-PAUSED first. Return true when the thread reached that point."
                                  :name "PATH key lock contender"))
                           (loop repeat 2000
                                 until (eql 2 (references))
-                                do (sleep 0.001))))
+                                do (sleep 0.001))
+                          ;; The contender shares the record the victim holds.
+                          (expect (references) :to-equal 2)))
                        :to-be-truthy)
                (expect (sb-thread:join-thread contender :default :timeout :timeout 2)
                        :to-equal :finished)

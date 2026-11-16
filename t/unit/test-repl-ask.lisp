@@ -429,6 +429,126 @@
               (capture-process-output-event :execute)
               (expect 1 :to-be execute-count))))))))
 
+(defun %send-proposal-test-keys (&rest events)
+  (with-temporary-function
+      ('nshell.presentation::process-output-event
+       (lambda (event) (declare (ignore event)) nil))
+    (dolist (event events)
+      (nshell.presentation::%process-input-event event))))
+
+(describe "repl-proposal-cancel-regressions"
+  (it "runs-a-typed-command-with-one-enter-after-ctrl-c-cancels-a-confirm-proposal"
+    (with-repl-test-state
+      (let ((nshell.presentation::*history-persistence-enabled-p* nil)
+            (execute-count 0)
+            (execution-origin nil)
+            (panel nil))
+        (with-repl-input-state (:mode :insert
+                                :buffer "rm -rf target"
+                                :cursor-pos 13)
+          (let ((nshell.presentation::*assistant-command-origin* :proposal)
+                (nshell.presentation::*assistant-command-confirmed-p* nil))
+            (%send-proposal-test-keys (input-key-event :ctrl-c)
+                                      (input-key-event :char #\l)
+                                      (input-key-event :char #\s))
+            (expect "ls" :to-equal
+                    (nshell.presentation:input-state-buffer
+                     nshell.presentation::*input-state*))
+            (expect :typed :to-be nshell.presentation::*assistant-command-origin*)
+            (with-temporary-functions
+                (('nshell.application:evaluate-reader-result-in-context
+                  (lambda (context reader-result)
+                    (declare (ignore context reader-result))
+                    (incf execute-count)
+                    (setf execution-origin nshell.application:*execution-origin*)
+                    0))
+                 ('nshell.presentation::render-transient-panel
+                  (lambda (content &rest arguments)
+                    (declare (ignore arguments))
+                    (setf panel content)))
+                 ('nshell.presentation::render-prompt-cont
+                  (lambda () nil)))
+              (capture-process-output-event :execute)
+              (expect 1 :to-be execute-count)
+              (expect :typed :to-be execution-origin)
+              (expect nil :to-be panel)))))))
+
+  (it "resets-the-proposal-origin-when-ctrl-c-clears-in-vi-command-mode"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :vi-command
+                              :buffer "rm -rf target"
+                              :cursor-pos 12)
+        (let ((nshell.presentation::*assistant-command-origin* :proposal)
+              (nshell.presentation::*assistant-command-confirmed-p* nil))
+          (%send-proposal-test-keys (input-key-event :ctrl-c))
+          (expect "" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect :typed :to-be nshell.presentation::*assistant-command-origin*)))))
+
+  (it "drops-the-undo-history-of-a-proposal-cancelled-with-ctrl-c"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :insert
+                              :buffer "rm -rf target"
+                              :cursor-pos 13)
+        (let ((nshell.presentation::*assistant-command-origin* :proposal)
+              (nshell.presentation::*assistant-command-confirmed-p* nil))
+          (%send-proposal-test-keys (input-key-event :char #\x)
+                                    (input-key-event :ctrl-c)
+                                    (input-key-event :ctrl-underscore))
+          (expect "" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect :typed :to-be nshell.presentation::*assistant-command-origin*)))))
+
+  (it "keeps-the-proposal-origin-when-ctrl-u-empties-the-buffer"
+    (with-repl-test-state
+      (with-repl-input-state (:mode :insert
+                              :buffer "rm -rf target"
+                              :cursor-pos 13)
+        (let ((nshell.presentation::*assistant-command-origin* :proposal)
+              (nshell.presentation::*assistant-command-confirmed-p* t))
+          (%send-proposal-test-keys (input-key-event :ctrl-u))
+          (expect "" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect :proposal :to-be nshell.presentation::*assistant-command-origin*)
+          (%send-proposal-test-keys (input-key-event :ctrl-y))
+          (expect "rm -rf target" :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect :proposal :to-be nshell.presentation::*assistant-command-origin*)
+          (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)))))
+
+  (it "drops-the-proposal-on-the-first-enter-of-an-emptied-buffer"
+    (with-repl-test-state
+      (let ((nshell.presentation::*history-persistence-enabled-p* nil)
+            (panel nil))
+        (with-repl-input-state (:mode :insert
+                                :buffer "rm -rf target"
+                                :cursor-pos 13)
+          (let ((nshell.presentation::*assistant-command-origin* :proposal)
+                (nshell.presentation::*assistant-command-confirmed-p* nil))
+            (%send-proposal-test-keys (input-key-event :ctrl-u))
+            (with-temporary-functions
+                (('nshell.presentation::render-transient-panel
+                  (lambda (content &rest arguments)
+                    (declare (ignore arguments))
+                    (setf panel content)))
+                 ('nshell.presentation::render-prompt-cont
+                  (lambda () nil)))
+              (capture-standard-output
+                (let ((continuation
+                        (nshell.presentation::%process-input-event
+                         (input-key-event :enter))))
+                  (when (functionp continuation)
+                    (funcall continuation)))))
+            (expect nil :to-be panel)
+            (expect :typed :to-be nshell.presentation::*assistant-command-origin*)
+            (expect nil :to-be
+                    (nshell.presentation::input-state-kill-ring
+                     nshell.presentation::*input-state*))))))))
+
 (describe "command-not-found-fallback-tests"
   (it "sends-the-missing-command-line-to-ask-with-one-key"
     (with-repl-test-state

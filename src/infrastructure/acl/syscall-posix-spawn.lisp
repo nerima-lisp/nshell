@@ -136,6 +136,13 @@
   "Unreaped native processes by pid. Synchronized so REGISTERED-PROCESSES can
 copy it without *NATIVE-PROCESS-REGISTRY-LOCK*, which a thread suspended in an
 interrupt may hold.")
+(defvar *process-group-log* nil
+  "NIL, or a cons whose car lists the id of every process group a spawn
+created while it was bound, newest first. Unlike the registry, the record
+outlives the group leader's reaping, so a caller can still stop a group whose
+leader exited and left members behind. Threads that share the cons share the
+record.")
+
 (defvar *native-process-registry-lock*
   (sb-thread:make-mutex :name "native process registry"))
 (defvar *native-process-waitpid-lock*
@@ -814,7 +821,10 @@ interrupt may hold.")
                                         ((integerp process-group) process-group)
                                         (t (ignore-errors
                                              (sb-posix:getpgid pid))))))
-                               (%register-native-process process))
+                               (%register-native-process process)
+                               (when (and *process-group-log*
+                                          (eq process-group :new))
+                                 (sb-ext:atomic-push pid (car *process-group-log*))))
                              (let ((input-copier-threads nil)
                                    (output-copier-threads nil))
                                (multiple-value-bind (stream thread remaining-fds)

@@ -349,28 +349,46 @@ reaped before its status is recorded, and then its pid may be reused."
            (and (eql actual pgid) (cons :group pgid)))
           ((eql actual own-pgid) (cons :process pid)))))))
 
-(defun stop-process-groups (processes &key (grace-seconds 0.5))
+(defun %recorded-group-target (pgid own-pgid)
+  "Return (:GROUP . PGID) for a group id from *PROCESS-GROUP-LOG* while the
+group still has a member, or NIL.
+
+A group id is its leader's pid, and the kernel does not reuse a pid while a
+process group with that id exists. So while kill(-PGID, 0) succeeds, PGID
+names the group this run created, even after its leader was reaped. The id
+can name another group only if the group empties and a new process takes the
+id as its own group between this check and the signal."
+  (and (integerp pgid) (plusp pgid) (/= pgid own-pgid)
+       (handler-case (progn (kill-process (- pgid) 0) (cons :group pgid))
+         (sb-posix:syscall-error () nil))))
+
+(defun stop-process-groups (processes &key groups (grace-seconds 0.5))
   "Send SIGTERM, wait GRACE-SECONDS, then send SIGKILL to each of PROCESSES:
 to its whole process group when it was spawned into a group of its own, and
-to the process alone when it shares this shell's group. Each target is
-checked again before each signal (see %SIGNAL-TARGET).
+to the process alone when it shares this shell's group. GROUPS are further
+process group ids, taken from *PROCESS-GROUP-LOG*, to signal as groups. Each
+target is checked again before each signal (see %SIGNAL-TARGET and
+%RECORDED-GROUP-TARGET); no target is this shell's group or an id <= 0.
 
 It neither waits for nor reaps the processes and takes no process lock, so it
 cannot block on a thread that is suspended in their wait."
   (let ((own-pgid (sb-posix:getpgrp)))
-    (flet ((send (signal)
-             (loop for target in (remove-duplicates
-                                  (remove nil
-                                          (mapcar (lambda (process)
-                                                    (%signal-target process own-pgid))
-                                                  processes))
-                                  :test #'equal)
-                   for (kind . id) = target
-                   do (ignore-errors
-                        (if (eq kind :group)
-                            (%send-process-group-signal id signal)
-                            (kill-process id signal))))))
-      (when processes
+    (labels ((targets ()
+               (remove-duplicates
+                (remove nil
+                        (append
+                         (mapcar (lambda (process) (%signal-target process own-pgid))
+                                 processes)
+                         (mapcar (lambda (pgid) (%recorded-group-target pgid own-pgid))
+                                 groups)))
+                :test #'equal))
+             (send (signal)
+               (loop for (kind . id) in (targets)
+                     do (ignore-errors
+                          (if (eq kind :group)
+                              (%send-process-group-signal id signal)
+                              (kill-process id signal))))))
+      (when (targets)
         (send sb-unix:sigterm)
         (sleep grace-seconds)
         (send sb-unix:sigkill)))))

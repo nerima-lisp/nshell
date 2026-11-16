@@ -241,6 +241,36 @@ an orphan needs its new parent to reap it before kill 0 fails."
       ;; The run stops at the deadline: the command after it never runs.
       (expect (json-at envelope "stdout" "text") :to-equal (format nil "a~%"))))
 
+  (it "stops a grandchild whose parent exited before the deadline"
+    ;; sh is reaped long before the deadline, so only the record of the
+    ;; process groups the run created leads to the sleep it left behind.
+    (host-kit:with-temporary-directory (directory)
+      (let* ((pid-file (format nil "~Apid" (sb-ext:native-namestring directory)))
+             (input (format nil "sh -c 'sleep 60 >/dev/null 2>&1 & echo $! > ~A; ~
+                                 exit 0'; sleep 30"
+                            pid-file)))
+        (multiple-value-bind (envelope status seconds) (json-command input :timeout 1)
+          (expect status :to-equal 124)
+          (expect (json-at envelope "error" "code") :to-equal "E_TIMEOUT")
+          (expect seconds :to-be-less-than 3)
+          (let ((pid (parse-integer (uiop:read-file-string pid-file) :junk-allowed t)))
+            (expect (integerp pid) :to-be-truthy)
+            (expect (json-wait-until-dead (list pid) 2) :to-be-null))))))
+
+  (it "leaves a background grandchild running when the run ends normally"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((pid-file (format nil "~Apid" (sb-ext:native-namestring directory)))
+             (input (format nil "sh -c 'sleep 60 >/dev/null 2>&1 & echo $! > ~A; exit 0'"
+                            pid-file))
+             (pid nil))
+        (unwind-protect
+             (let ((envelope (json-command input :timeout 5)))
+               (expect (json-at envelope "ok") :to-equal t)
+               (setf pid (parse-integer (uiop:read-file-string pid-file) :junk-allowed t))
+               (expect (json-pid-alive-p pid) :to-be-truthy))
+          (when pid
+            (ignore-errors (sb-posix:kill pid sb-unix:sigkill)))))))
+
   (it "rejects a deadline that is not a positive number of seconds"
     (dolist (timeout (list 0 -1 "5" nil))
       (expect (handler-case

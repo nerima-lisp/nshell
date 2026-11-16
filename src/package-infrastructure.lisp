@@ -88,7 +88,8 @@ tests rebind these boundary functions when they need deterministic behavior.")
            #:close-reader-process-substitution-resource
            #:open-reader-redirect-file #:open-reader-redirect-data)
   (:export #:process-input #:process-output #:process-error #:process-close)
-  (:export #:registered-processes #:stop-process-groups))
+  (:export #:registered-processes #:stop-process-groups)
+  (:export #:*process-group-log*))
 
 (defpackage #:nshell.infrastructure.terminal
   (:documentation

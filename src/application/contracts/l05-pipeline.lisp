@@ -9,7 +9,9 @@
    *execution-origin*
    *execution-approval*
    *execution-gate-parent-kind*
-   *execution-gate-refusal*))
+   *execution-gate-refusal*
+   *exec-exit-function*
+   nshell.infrastructure.acl:*process-group-log*))
 
 (define-condition byte-stream-execution-error (error)
   ((operation :initarg :operation :reader byte-stream-execution-error-operation)
@@ -240,6 +242,10 @@ execution errors that wrap it on the way out."
         (execution-approval *execution-approval*)
         (execution-gate-parent-kind *execution-gate-parent-kind*)
         (execution-gate-refusal *execution-gate-refusal*)
+        ;; exec in a stage ends the run the way the caller decided, and the
+        ;; stage's processes join the caller's record of process groups.
+        (exec-exit-function *exec-exit-function*)
+        (process-group-log nshell.infrastructure.acl:*process-group-log*)
         (positional-args
           (copy-list nshell.domain.expansion:*positional-args*))
         (upstream-stage-p
@@ -263,7 +269,9 @@ execution errors that wrap it on the way out."
                    (*execution-origin* execution-origin)
                    (*execution-approval* execution-approval)
                    (*execution-gate-parent-kind* execution-gate-parent-kind)
-                   (*execution-gate-refusal* execution-gate-refusal))
+                   (*execution-gate-refusal* execution-gate-refusal)
+                   (*exec-exit-function* exec-exit-function)
+                   (nshell.infrastructure.acl:*process-group-log* process-group-log))
                (unwind-protect
                     (handler-case
                         (let ((*standard-input*

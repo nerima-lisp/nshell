@@ -23,6 +23,7 @@
 ;;;   spec-command(S)                   the command word has a spec row
 ;;;   spec-match(S)                     every argument matched it
 ;;;   spec-operand(S, Word)             ... and the row read Word as an operand
+;;;   dash-stdin(S)                     ... and the row reads - as standard input
 ;;;   argument-not-allowed(S, Text)     the words that did not match
 ;;; and from the argument words that hold a substitution
 ;;;   substituted-argument(S, Word)     what Word names the line does not show
@@ -45,7 +46,10 @@
     ;; :long, :value-long, :exact (whole words), :positionals (:any or a
     ;; maximum), :listing-options (options that allow any operands),
     ;; :plus-options (reject + words as unsupported options before --),
-    ;; :subcommands, and :grammar for find and echo/printf.  :resolution
+    ;; :subcommands, and :grammar for find and echo/printf.  :dash-stdin
+    ;; says the operand - may be standard input, before or after --; the
+    ;; macOS and GNU tools differ for wc, head, tail and stat, so it is set
+    ;; where either reads standard input.  :resolution
     ;; :builtin marks a row that describes the nshell builtin of that name;
     ;; it applies only when the executor resolves the name to the builtin,
     ;; never to a forced (^name) command.  Other rows describe external
@@ -53,20 +57,21 @@
     ("ls" :flags "1aAlhdFRtSrin" :long ("--all" "--color")
           :exact ("--color=auto" "--color=never" "--color=always")
           :positionals :any)
-    ("cat" :flags "nbvets" :positionals :any)
+    ("cat" :flags "nbvets" :positionals :any :dash-stdin t)
     ("pwd" :positionals 0 :resolution :builtin)
     ("which" :positionals :any :resolution :builtin)
     ("type" :positionals :any :resolution :builtin)
     ("command" :flags "vV" :positionals :any :resolution :builtin)
-    ("head" :value-flags (("n" :count) ("c" :count)) :positionals :any)
+    ("head" :value-flags (("n" :count) ("c" :count)) :positionals :any
+            :dash-stdin t)
     ("tail" :value-flags (("n" :count) ("c" :count))
-            :plus-options t :positionals :any)
-    ("wc" :flags "lwcm" :positionals :any)
-    ("stat" :flags "L" :positionals :any)
+            :plus-options t :positionals :any :dash-stdin t)
+    ("wc" :flags "lwcm" :positionals :any :dash-stdin t)
+    ("stat" :flags "L" :positionals :any :dash-stdin t)
     ("du" :flags "shkacx" :value-flags (("d" :count)) :positionals :any)
     ("df" :flags "hkliP" :positionals :any)
     ("file" :flags "bLhks" :long ("--mime-type" "--mime-encoding")
-            :positionals :any)
+            :positionals :any :dash-stdin t)
     ("grep" :flags "ivnclLrREFwxohHsqz"
             :value-flags (("A" :count) ("B" :count) ("C" :count) ("e" :any)
                           ("f" :any))
@@ -178,10 +183,12 @@ changes no other command.")
     ((path-operand-reader "tail"))
     ;; Commands that read the working directory when given no operand.
     ((working-directory-reader "ls"))
-    ;; The operand that names standard input, which is no path.  An operand
-    ;; that holds a substitution names a path the line does not show, so it
-    ;; gets no reads effect either (substituted-argument).
+    ;; The operand that names standard input for a command whose spec row
+    ;; says so (dash-stdin), which is no path; ls reads a file named -.  An
+    ;; operand that holds a substitution names a path the line does not
+    ;; show, so it gets no reads effect either (substituted-argument).
     ((standard-input-operand "-"))
+    ((stdin-operand ?c ?p) (dash-stdin ?c) (standard-input-operand ?p))
 
     ;; --- effect model (B) ---------------------------------------------------
     ((effect ?c (deletes ?p)) (command ?c "rm") (operand ?c ?p))
@@ -189,7 +196,7 @@ changes no other command.")
     ((effect ?c :network) (command ?c ?n) (network-command ?n))
     ((effect ?c (reads ?p))
      (command ?c ?n) (path-operand-reader ?n) (spec-operand ?c ?p)
-     (not (standard-input-operand ?p)) (not (substituted-argument ?c ?p)))
+     (not (stdin-operand ?c ?p)) (not (substituted-argument ?c ?p)))
     ((effect ?c (reads "."))
      (command ?c ?n) (working-directory-reader ?n) (spec-match ?c)
      (not (spec-operand ?c ?p)))

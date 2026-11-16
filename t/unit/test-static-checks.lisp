@@ -79,7 +79,8 @@
       (append (static-check-system-source-paths "nshell")
               (static-check-system-source-paths "nshell/test")
               (static-check-system-source-paths "nshell/test-unit")
-              (static-check-system-source-paths "nshell/weave")))
+              (static-check-system-source-paths "nshell/weave")
+              (static-check-system-source-paths "nshell/spec")))
      :test
      #'string=))
   (defun static-check-unregistered-files-from-paths (discovered registered)

@@ -719,3 +719,19 @@ primary suite in nshell/test."
   :components ((:file "package")
                (:file "completion")
                (:file "process")))
+(asdf:defsystem "nshell/spec"
+  :version "0.7.0"
+  :description "cl-weave conformance suite for the nshell language."
+  :depends-on ("nshell" "cl-weave" "cl-json-kit" "cl-host-kit")
+  :pathname "t"
+  :serial t
+  :components ((:file "spec/package")
+               (:file "spec/support")
+               (:file "spec/l7-rows")
+               (:file "spec/probes")
+               (:file "spec/entry"))
+  :perform (asdf:test-op (operation system)
+             (declare (ignore operation system))
+             (unless (funcall (find-symbol "RUN" (find-package "NSHELL/SPEC"))
+                              :reporter :spec)
+               (error "cl-weave language spec failed"))))

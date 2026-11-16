@@ -502,7 +502,8 @@ and RESOLVE are as for classify-ast."
 
 (defun command-effects (node)
   "Return the effects of the command NODE runs: (DELETES PATH), (WRITES PATH),
-and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
+:NETWORK, and (READS PATH).  Writes come from the redirects in the AST
+(D-P1-5 2.5)."
   (multiple-value-bind (argv assignments words writes)
       (%assistant-command-parts node :bare-line nil)
     (declare (ignore assignments words))

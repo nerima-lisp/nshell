@@ -80,4 +80,5 @@ of ux/U6, its builders, and its JSON serialization.")
              #:make-machine-context
              #:explain-input
              #:initialize-envelope
-             #:policy-envelope)))
+             #:policy-envelope
+             #:read-output-envelope)))

@@ -68,7 +68,7 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 | help | ビルトインの仕様 (引数・オプション・例) を返す |
 | initialize | 版・メソッド・制限・ポリシーの要約 (U5) |
 | policy | 安全規則の一覧 (U7) |
-| read_output | 省略された出力の続き。不透明な id と offset で読み、出力の保存先の外は拒否する (U6) |
+| read_output | 省略された出力の続き。不透明な id と offset で読み、出力の保存先の外は拒否する。引数・単位・上限・エラーは U6「read_output で続きを読む」 |
 | query | 知識ベースへの問い合わせ (06-F) |
 
 実行ポリシー

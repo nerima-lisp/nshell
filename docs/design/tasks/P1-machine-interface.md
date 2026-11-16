@@ -36,8 +36,8 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 
 - [x] explain: 実行せずに AST・各リストの分類・effects・safety。P1 では分類の `kind` だけを返し、`rule` (language/L2 の規則番号) は P2-2 まで null
 - [x] CLI は予約語 `explain` を登録し、`nshell [--json] explain '…'` とする (language/L2 2.5)
-- [ ] initialize / policy / read_output (ux/U5・U6・U7)
-- [ ] read_output は不透明な id と offset で読む。出力の保存ディレクトリの外は拒否する
+- [x] initialize / policy / read_output (ux/U5・U6・U7)
+- [x] read_output は不透明な id と offset で読む。出力の保存ディレクトリの外は拒否する
 
 ## P1-5 危険度判定と効果モデルを Prolog の規則に
 

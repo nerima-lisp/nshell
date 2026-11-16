@@ -1,11 +1,11 @@
 (in-package #:nshell.feature.machine)
 
-;;; The machine methods that need a shell context: explain, initialize and
-;;; policy.  explain reads and classifies its input with the code Enter uses
-;;; and runs nothing.  Its verdict is for display only (D-81): nothing here
+;;; The machine methods: explain, initialize, policy and read_output.
+;;; explain reads and classifies its input with the code Enter uses and runs
+;;; nothing.  Its verdict is for display only (D-81): nothing here
 ;;; touches the execution gate's approval state.
 
-(defparameter *machine-methods* '("explain" "initialize" "policy")
+(defparameter *machine-methods* '("explain" "initialize" "policy" "read_output")
   "The methods implemented now, in name order.  initialize lists exactly
 these (ux/U5); a task that implements a method adds its name here.")
 
@@ -145,3 +145,52 @@ be read, or that holds no form, is E_PARSE."
                                    (make-machine-context))))
   "Return the policy response (ux/U7) in the envelope's value."
   (%method-envelope (policy-value :user-rules (%user-rule-count)) cwd))
+
+(defun %read-output-error (code message cwd)
+  (error-envelope code
+                  :message message
+                  :duration-ms 0
+                  :stdout (output-from-text "")
+                  :stderr (output-from-text "")
+                  :safety (make-envelope-safety :level :safe)
+                  :state (make-envelope-state :cwd cwd)))
+
+(defun read-output-envelope (&key id (seq 1) (stream "stdout") (offset 0)
+                                  (limit +default-max-output-bytes+)
+                                  (cwd (nshell.application:context-current-directory
+                                        (make-machine-context)))
+                                  (root (output-store-root)))
+  "Return the read_output response (ux/U6): the text of the output stream STREAM
+of run SEQ in session ID that the store under ROOT saved, from byte OFFSET and
+at most LIMIT bytes, in the envelope's value.  A malformed request is
+E_PROTOCOL; a store that refuses the file is E_PERMISSION."
+  (cond
+    ((not (and (integerp seq) (plusp seq)))
+     (%read-output-error "E_PROTOCOL" "seq must be a positive integer" cwd))
+    ((not (member stream '("stdout" "stderr") :test #'equal))
+     (%read-output-error "E_PROTOCOL" "stream must be \"stdout\" or \"stderr\"" cwd))
+    (t
+     (handler-case
+         (multiple-value-bind (text next-offset bytes)
+             (read-saved-output id (format nil (if (equal stream "stdout")
+                                                   "~D.txt"
+                                                   "~D.stderr.txt")
+                                           seq)
+                                :offset offset :limit limit :root root)
+           (%method-envelope
+            (json-kit:make-json-object
+             (list (cons "id" id)
+                   (cons "seq" seq)
+                   (cons "stream" stream)
+                   (cons "offset" offset)
+                   (cons "next_offset" next-offset)
+                   (cons "bytes" bytes)
+                   (cons "eof" (if (= next-offset bytes) t json-kit:+json-false+))
+                   (cons "text" text)))
+            cwd))
+       (saved-output-error (condition)
+         (%read-output-error (ecase (saved-output-error-reason condition)
+                               (:request "E_PROTOCOL")
+                               (:store "E_PERMISSION"))
+                             (saved-output-error-message condition)
+                             cwd))))))

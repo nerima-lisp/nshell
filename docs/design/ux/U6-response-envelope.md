@@ -54,6 +54,29 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 - バイナリは中身を返さず、種類とサイズだけ。
 - max_output_bytes と tail_lines は呼び出しごとに指定できる。
 
+### read_output で続きを読む
+
+- 引数は次のとおり。
+  - id: 応答の session の文字列 (例 `s_ab12cd`)。要求そのものの id とは別。クライアントは中身を解釈しない。サーバーは `s_` と英数字 6 文字であることを確かめる。
+  - seq: 正の整数。既定は 1。
+  - stream: "stdout" か "stderr"。既定は "stdout"。
+  - offset: 0 以上の整数。既定は 0。
+  - limit: 1 から 32768 の整数。既定は 32768。
+- 読むファイルの名前はサーバーが seq と stream から作る (`<seq>.txt` か `<seq>.stderr.txt`)。クライアントの入力のうちパスに入るのは、確かめた id だけ。
+- offset と limit の単位は保存したファイルの UTF-8 のバイト。応答の stdout.bytes・stderr.bytes と同じ単位。
+- 文字の途中で切らないよう、終わりは文字の境目まで戻す。ただし offset がファイルの終わりより前なら、limit より長い文字でも 1 文字は必ず返す。このとき next_offset と offset の差は limit を超える。
+- 成功すると value に次の object を入れる。応答の stdout と stderr は空。
+  - id・seq・stream・offset: 要求の値。
+  - next_offset: 次に読む位置。
+  - bytes: ファイル全体のバイト数。
+  - eof: next_offset が bytes に達したら true。
+  - text: 読んだ部分。
+- offset が bytes と同じなら、text は空で eof は true。
+- 要求の形が不正なら E_PROTOCOL。id が文字列でないか規則に合わない、seq が正の整数でない、stream が 2 つのどちらでもない、offset が負か整数でない、limit が範囲外、offset がファイルの大きさを超える、offset が文字の途中を指す、のいずれか。
+- 保存先の状態のために読めないときは E_PERMISSION。保存先のルート・セッションのディレクトリ・ファイルのどれかが、ない (存在しない id、--private で保存していない、その seq と stream のファイルがない)、シンボリックリンク、自分の所有でない、group か other に権限がある、のいずれか。セッションがディレクトリでないときと、ファイルが通常のファイルでない (FIFO・デバイス) ときも同じ。message にはどれに当たったかを書き、保存先のパスは出さない (示すのは id とファイル名だけ)。ないときも E_PERMISSION にするのは、error.code の enum に「ない」を表すコードがないため。E_NO_MATCH は glob 用なので使わない。
+- ルート・セッション・ファイルはどれもシンボリックリンクをたどらずに開き、開いた記述子で種類・所有者・権限を確かめる。セッションとファイルは上のディレクトリの記述子からの相対で開く (openat)。確かめたあとにパスを解決し直さず、読むのは確かめたファイルの記述子からだけ。
+- --serve と MCP ができるまでは、エラーも ok:false の応答の形で返す。proposal/02 のトップレベルの `{"id":…,"error":…}` の形は、それを運ぶ --serve と MCP ができてから使う。
+
 ## 非対話で詰まらないように
 
 - 機械向けモード (--json・--serve・MCP) と NSHELL_AGENT=1 のときは、PAGER=cat・GIT_PAGER=cat・TERM=dumb・NO_COLOR=1・stdin は /dev/null を既定にする。

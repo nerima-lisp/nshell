@@ -57,109 +57,77 @@
       (%assistant-unparsable-result
        "an empty compound command cannot be classified safely")))
 
-(defun %assistant-wrapper-index-and-kind (command args)
-  (let* ((separator (position (code-char 47) command :from-end t))
-         (name (if separator (subseq command (1+ separator)) command))
-        (value-options '("-u" "--user" "-g" "--group" "-C" "--chdir"
-                         "-n" "--adjustment" "-f" "--format" "-I" "--replace")))
-    (labels ((target-index (start env-p)
-               (loop with index = start
-                     while (< index (length args))
-                     for arg = (nth index args)
-                     do (cond
-                          ((string= arg "--") (return (1+ index)))
-                          ((and env-p (search "=" arg)) (incf index))
-                          ((and (plusp (length arg))
-                                (char= (char arg 0) (code-char 45)))
-                           (incf index)
-                           (when (and (< index (length args))
-                                      (member arg value-options :test #'string=))
-                             (incf index)))
-                          (t (return index))))))
-      (cond
-        ((member name '("command" "builtin" "exec" "and" "or" "not")
-                 :test #'string=)
-         (values (target-index 0 nil) :command))
-        ((member name '("env" "sudo" "doas" "nice" "time" "nohup" "xargs")
-                 :test #'string=)
-         (values (target-index 0 (string= name "env")) :command))
-        (t (values nil nil))))))
+;;; Commands a wrapper runs stay argv lists and are classified by recursion.
+;;; Only text that is itself a command line is read again, with the reader
+;;; that runs it (D-P1-5 2.1 item 5): sh -c SCRIPT, eval with one argument,
+;;; and the bodies of substitutions.
 
 (defun assistant-command-after-wrappers (command args)
   "Return the effective command and arguments after known wrappers."
   (loop
-    (multiple-value-bind (index kind)
-        (%assistant-wrapper-index-and-kind command args)
-      (declare (ignore kind))
-      (if index
-          (setf command (nth index args)
-                args (nthcdr (1+ index) args))
+    (multiple-value-bind (kind inner)
+        (nshell.feature.kb:command-wrapper command args)
+      (if (and kind inner)
+          (setf command (first inner)
+                args (rest inner))
           (return (values (%assistant-command-basename command) args))))))
 
-(defun %assistant-parse-and-classify-text (text)
+(defun %assistant-classify-command-line (text)
+  "Classify TEXT as a bare command line: the reader of eval, sh -c, and
+process substitutions."
   (let ((parsed (nshell.domain.parsing:parse-command-line text)))
     (if (nshell.domain.parsing:parse-complete-p parsed)
         (classify-ast (nshell.domain.parsing:parse-result-ast parsed))
         (%assistant-unparsable-result "the wrapped command could not be parsed"))))
 
-(defun %assistant-assignment-name (word)
-  "Return the variable name of a NAME=value word, or NIL."
-  (let ((equals (and (stringp word) (position #\= word))))
-    (when (and equals
-               (plusp equals)
-               (let ((first (char word 0)))
-                 (or (alpha-char-p first) (char= first #\_)))
-               (every (lambda (character)
-                        (or (alphanumericp character) (char= character #\_)))
-                      (subseq word 0 equals)))
-      (subseq word 0 equals))))
+(defun %assistant-classify-substitution-text (text)
+  "Classify TEXT as a command substitution runs it: one bare line is parsed
+as a command line, anything else goes through the auto reader
+(execute-command-substitution.lisp)."
+  (let* ((scan (nshell.domain.parsing:scan-input text :reader-context :auto))
+         (complete-p (eq (nshell.domain.parsing:scan-result-status scan) :complete))
+         (first-token
+           (and complete-p
+                (find-if-not (lambda (token)
+                               (member (nshell.domain.parsing:scan-token-kind token)
+                                       '(:whitespace :line-comment :block-comment)))
+                             (nshell.domain.parsing:scan-result-tokens scan)))))
+    (cond
+      ((not complete-p)
+       (%assistant-unparsable-result
+        "an incomplete command substitution cannot be classified safely"))
+      ((and first-token
+            (not (find #\Newline text))
+            (eq (nshell.domain.parsing:scan-token-reader-context first-token)
+                :bare-line))
+       (%assistant-classify-command-line text))
+      (t
+       (handler-case
+           (classify-ast (nshell.domain.parsing:read-submission
+                          text :reader-context :auto))
+         (error ()
+           (%assistant-unparsable-result
+            "the command substitution could not be read")))))))
 
-(defun %assistant-leading-assignment-names (command args)
-  "Return the names a bare line assigns before its command word."
-  (when (%assistant-assignment-name command)
-    (loop for word in (cons command args)
-          for name = (%assistant-assignment-name word)
-          while name
-          collect name)))
+(defparameter +assistant-substitution-markers+
+  '(("$(" . :substitution) ("(" . :substitution)
+    ("<(" . :command-line) (">(" . :command-line))
+  "Substitution openers and the reader their body runs with.")
 
-(defun %assistant-env-prefix (command args)
-  "For env, return the names it assigns and the options it is given before
-the command it runs."
-  (when (string= (%assistant-command-basename command) "env")
-    (let ((end (or (%assistant-wrapper-index-and-kind command args)
-                   (length args)))
-          (names nil)
-          (options nil))
-      (loop for word in args
-            for index from 0 below end
-            for name = (%assistant-assignment-name word)
-            do (cond
-                 (name (push name names))
-                 ((and (plusp (length word))
-                       (char= (char word 0) #\-)
-                       (string/= word "--"))
-                  (push word options))))
-      (values (nreverse names) (nreverse options)))))
-
-(defun %assistant-wrapped-result (command args)
-  "Classify the command that an assignment prefix, a wrapper, eval, or sh -c
-runs, or return NIL."
-  (cond
-    ((%assistant-assignment-name command)
-     (let ((rest (member-if-not #'%assistant-assignment-name args)))
-       (when rest
-         (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" rest)))))
-    ((let ((index (%assistant-wrapper-index-and-kind command args)))
-       (when index
-         (%assistant-parse-and-classify-text
-          (format nil "~{~a~^ ~}" (nthcdr index args))))))
-    ((string= command "eval")
-     (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" args)))
-    ((member command '("sh" "bash" "zsh" "fish") :test #'string=)
-     (let ((index (position "-c" args :test #'string=)))
-       (when (and index (nth (1+ index) args))
-         (%assistant-parse-and-classify-text (nth (1+ index) args)))))
-    (t nil)))
+(defun %assistant-substitution-results (words)
+  (loop for word in words
+        nconc (loop for (marker . reader) in +assistant-substitution-markers+
+                    nconc (mapcar
+                           (lambda (text)
+                             (cond
+                               ((eq text :incomplete)
+                                (%assistant-unparsable-result
+                                 "an incomplete command substitution cannot be classified safely"))
+                               ((eq reader :command-line)
+                                (%assistant-classify-command-line text))
+                               (t (%assistant-classify-substitution-text text))))
+                           (nshell.domain.parsing:parenthesized-substitution-texts
+                            word marker)))))
 
 (defun %assistant-embedded-command-result (args)
   "Classify the operands from the first word that names a command able to
@@ -170,52 +138,56 @@ so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
                      '("rm" "mkfs" "dd" "chmod" "git" "curl" "wget"
                        "sh" "bash" "zsh" "fish")
                      :test #'string=)
-          return (%assistant-parse-and-classify-text
-                  (format nil "~{~a~^ ~}" tail))))
+          return (%assistant-classify-argv tail)))
 
-(defun %assistant-substitution-results (command args)
-  (let ((results nil))
-    (dolist (arg (cons command args) (nreverse results))
-      (dolist (marker '("$(" "<(" ">(" "("))
-        (dolist (text (nshell.domain.parsing:parenthesized-substitution-texts
-                       arg marker))
-          (push (if (eq text :incomplete)
-                    (%assistant-unparsable-result
-                     "an incomplete command substitution cannot be classified safely")
-                    (%assistant-parse-and-classify-text text))
-                results))))))
+(defun %assistant-classify-argv (words &key assignments nested)
+  "Classify the command the argv WORDS run.  ASSIGNMENTS are the environment
+names assigned before it and NESTED the reasons of its substitutions."
+  (let ((command (first words))
+        (args (rest words)))
+    (multiple-value-bind (kind inner mismatches names env-options source)
+        (nshell.feature.kb:command-wrapper command args)
+      (let ((wrapped (cond
+                       (source (%assistant-classify-command-line source))
+                       (inner (%assistant-classify-argv inner))))
+            (embedded (unless kind (%assistant-embedded-command-result args))))
+        (%assistant-subject-result
+         command
+         :command (%assistant-command-basename command)
+         :invoked-as command
+         :arguments args
+         :wraps (and kind t)
+         :opaque (eq kind :opaque)
+         :wrapper-mismatches mismatches
+         :assignments (append assignments names)
+         :wrapper-options env-options
+         :nested (append (and wrapped (%assistant-result-reasons wrapped)) nested)
+         :embedded (and embedded (%assistant-result-reasons embedded)))))))
+
+(defun %assistant-assignment-prefix (words)
+  "Split the leading NAME=value words off WORDS when a command follows them.
+Any word with `=' counts; the rules judge the name (D-P1-5 2.4)."
+  (let ((command (member-if-not (lambda (word) (find #\= word)) words)))
+    (if command
+        (values (ldiff words command) command)
+        (values nil words))))
 
 (defun classify-command (node)
   "Classify a command-node using its effective command and arguments."
   (if (nshell.domain.parsing:command-node-p node)
-      (let* ((command (nshell.domain.parsing:command-node-command node))
-             (args (nshell.domain.parsing:command-node-arg-values node))
-             (wrapped (%assistant-wrapped-result command args))
-             (embedded (unless wrapped
-                         (%assistant-embedded-command-result args))))
-        (multiple-value-bind (env-names env-options)
-            (%assistant-env-prefix command args)
-          (%assistant-subject-result
-           command
-           :command (%assistant-command-basename command)
-           :invoked-as command
-           :arguments args
-           :wraps (and wrapped t)
+      (let ((words (cons (nshell.domain.parsing:command-node-command node)
+                         (nshell.domain.parsing:command-node-arg-values node))))
+        (multiple-value-bind (prefix argv) (%assistant-assignment-prefix words)
+          (%assistant-classify-argv
+           argv
            :assignments
-           (append (mapcar (lambda (assignment)
-                             (or (%assistant-assignment-name
-                                  (nshell.domain.parsing:command-arg-value
-                                   assignment))
-                                 ""))
-                           (nshell.domain.parsing:command-node-environment-assignments
-                            node))
-                   (%assistant-leading-assignment-names command args)
-                   env-names)
-           :wrapper-options env-options
+           (mapcar #'nshell.feature.kb:assignment-name
+                   (append (mapcar #'nshell.domain.parsing:arg-value
+                                   (nshell.domain.parsing:command-node-environment-assignments
+                                    node))
+                           prefix))
            :nested (mapcan #'%assistant-result-reasons
-                           (append (and wrapped (list wrapped))
-                                   (%assistant-substitution-results command args)))
-           :embedded (and embedded (%assistant-result-reasons embedded)))))
+                           (%assistant-substitution-results words)))))
       (%assistant-unparsable-result "the value is not a command AST node")))
 
 (defun classify-pipeline (node)

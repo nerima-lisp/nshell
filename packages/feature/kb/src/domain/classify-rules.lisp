@@ -89,7 +89,38 @@
             ;; An operand creates a branch unless --list makes it a pattern.
             ("branch" :flags "arv" :long ("--list" "--show-current")
                       :positionals 0 :listing-options ("--list"))
-            ("remote" :flags "v" :long ("--verbose") :positionals 0))))
+            ("remote" :flags "v" :long ("--verbose") :positionals 0)))
+    ;; --- wrappers (2.4) ----------------------------------------------------
+    ;; A transparent wrapper written as a bare name reads its own options
+    ;; with the row; its command is then classified as argv.  Written as a
+    ;; path it is opaque.  An opaque wrapper is confirm at least; its command
+    ;; is classified only to find a block.  :skip-values names the short
+    ;; options whose value follows them when the wrapper's command is looked
+    ;; for; :operands counts the wrapper's own operands before the command.
+    ("nice" :wrapper :transparent :value-flags (("n" :count)))
+    ("timeout" :wrapper :transparent :value-flags (("s" :any) ("k" :any))
+               :operands 1)
+    ("time" :wrapper :transparent :flags "p" :skip-values "of")
+    ;; env with any option is opaque.
+    ("env" :wrapper :transparent :assignments t :opaque-on-options t
+           :skip-values "uCS")
+    ("and" :wrapper :transparent)
+    ("or" :wrapper :transparent)
+    ("not" :wrapper :transparent)
+    ("sudo" :wrapper :opaque :assignments t :skip-values "ugCDhpRrTUt")
+    ("doas" :wrapper :opaque :skip-values "uC")
+    ("xargs" :wrapper :opaque :skip-values "ILnPsdEa")
+    ("nohup" :wrapper :opaque)
+    ("exec" :wrapper :opaque :skip-values "a")
+    ("builtin" :wrapper :opaque)
+    ;; command -v and -V only look a name up (2.4 "query").
+    ("command" :wrapper :opaque :query-options ("-v" "-V"))
+    ;; The command is source text: eval with one argument, or sh -c SCRIPT.
+    ("eval" :wrapper :opaque :source :eval)
+    ("sh" :wrapper :opaque :source :dash-c)
+    ("bash" :wrapper :opaque :source :dash-c)
+    ("zsh" :wrapper :opaque :source :dash-c)
+    ("fish" :wrapper :opaque :source :dash-c))
   "The closed-world allow list (D-P1-5 2.2).  A command is safe only when
 its row matches every argument; anything else is confirm.  Adding a row
 changes no other command.")
@@ -142,6 +173,9 @@ changes no other command.")
      (invoked-as ?c "git") (not (read-only-command ?c)))
     ((classify ?c :confirm "classify/argument-not-allowed" ?text)
      (argument-not-allowed ?c ?text) (not (invoked-as ?c "git")))
+    ((classify ?c :confirm "classify/opaque-wrapper"
+               "the command this wrapper runs cannot be checked")
+     (opaque-wrapper ?c))
     ((classify ?c :confirm "classify/device-write"
                "writing a device can destroy data")
      (command ?c "dd") (argument ?c ?a) (:when (string-prefix-p "of=/dev/" ?a)))

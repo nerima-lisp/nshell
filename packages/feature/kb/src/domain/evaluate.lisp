@@ -22,7 +22,8 @@ rules.pl into it; until then only tests set it.")
     (nested :none :safe "" "") (embedded :none :safe "" "")
     (unparsable :none "") (form-redirect :none) (sexp-unforced :none)
     (unclassifiable :none "") (assignment :none "") (wrapper-option :none "")
-    (spec-command :none) (spec-match :none) (argument-not-allowed :none ""))
+    (spec-command :none) (spec-match :none) (argument-not-allowed :none "")
+    (opaque-wrapper :none))
   "One clause per input predicate about the atom :NONE, which never names a
 subject.  A rule that asks about an input the evaluator did not supply then
 fails instead of raising existence_error, while a misspelled predicate in
@@ -54,15 +55,126 @@ collected with findall under the inference and deadline budgets."
                  *classify-deadline-seconds*)))))
 
 (defun find-command-spec (word)
-  "Return the +safe-command-specs+ row named exactly WORD, or NIL."
-  (assoc word +safe-command-specs+ :test #'equal))
+  "Return the +safe-command-specs+ row named exactly WORD, or NIL.
+Wrapper rows describe how a command runs another one, not a safe command."
+  (find-if (lambda (row)
+             (and (equal (first row) word) (not (getf (rest row) :wrapper))))
+           +safe-command-specs+))
+
+(defun %find-wrapper-row (name)
+  (find-if (lambda (row)
+             (and (equal (first row) name) (getf (rest row) :wrapper)))
+           +safe-command-specs+))
+
+(defun %word-basename (word)
+  (let ((separator (position #\/ word :from-end t)))
+    (if separator (subseq word (1+ separator)) word)))
+
+(defun %assignment-word-p (word)
+  (and (find #\= word) t))
+
+(defun assignment-name (word)
+  "Return the name a NAME=value word assigns: the text before the first `='.
+The name is not checked against any grammar (D-P1-5 2.4)."
+  (subseq word 0 (position #\= word)))
+
+(defun %wrapper-command (spec words)
+  "Skip the wrapper options, assignments, and operands at the start of WORDS.
+Return the command words (a tail of WORDS), the assigned names, and the
+option words."
+  (let ((value-letters (format nil "~{~a~}~a"
+                               (mapcar #'first (getf spec :value-flags))
+                               (getf spec :skip-values "")))
+        (assignments-p (getf spec :assignments))
+        (names nil)
+        (options nil))
+    (loop while words
+          do (let ((word (first words)))
+               (cond
+                 ((string= word "--")
+                  (push (pop words) options)
+                  (return))
+                 ((option-word-p word)
+                  (push (pop words) options)
+                  (unless (string-prefix-p "--" word)
+                    (loop for index from 1 below (length word)
+                          when (find (char word index) value-letters)
+                            do (when (= index (1- (length word))) (pop words))
+                               (return))))
+                 ((and assignments-p (%assignment-word-p word))
+                  (push (assignment-name (pop words)) names))
+                 (t (return)))))
+    (loop while (and assignments-p words (%assignment-word-p (first words)))
+          do (push (assignment-name (pop words)) names))
+    (values (nthcdr (getf spec :operands 0) words)
+            (nreverse names)
+            (nreverse options))))
+
+(defun %dash-c-script (arguments)
+  "Return SCRIPT of `sh -c SCRIPT', or NIL when -c is not given."
+  (let ((dash-c nil)
+        (words arguments))
+    (loop while (and words
+                     (option-word-p (first words))
+                     (string/= (first words) "--"))
+          do (let ((word (pop words)))
+               (unless (string-prefix-p "--" word)
+                 (when (find #\c word :start 1) (setf dash-c t))
+                 (when (find (char word (1- (length word))) "oO") (pop words)))))
+    (when (equal (first words) "--") (pop words))
+    (and dash-c (first words))))
+
+(defun command-wrapper (word arguments)
+  "Describe how the command WORD with ARGUMENTS runs another command
+(D-P1-5 2.4), or return NIL when it does not.  The values are KIND
+(:TRANSPARENT or :OPAQUE), the argv of the command it runs, the wrapper
+words its spec row does not allow, the environment names it assigns, the
+options given to env, and source text that runs as a command line (sh -c
+SCRIPT, eval with one argument).  A transparent wrapper must be written as
+a bare name; with a path it is opaque."
+  (let* ((name (%word-basename word))
+         (row (%find-wrapper-row name))
+         (spec (rest row)))
+    (when (and row
+               (not (member (first arguments) (getf spec :query-options)
+                            :test #'equal)))
+      (case (getf spec :source)
+        (:eval
+         (if (= (length arguments) 1)
+             (values :opaque nil nil nil nil (first arguments))
+             (values :opaque arguments)))
+        (:dash-c
+         (let ((script (%dash-c-script arguments)))
+           (when script
+             (values :opaque nil nil nil nil script))))
+        (t
+         (multiple-value-bind (command names options)
+             (%wrapper-command spec arguments)
+           (let ((env-options (and (getf spec :opaque-on-options) options)))
+             (cond
+               ((or (string/= word name)
+                    (eq (getf spec :wrapper) :opaque)
+                    env-options)
+                (values :opaque command nil names env-options))
+               (command
+                (let ((own-words (remove-if (if (getf spec :assignments)
+                                                #'%assignment-word-p
+                                                (constantly nil))
+                                            (ldiff arguments command))))
+                  (values :transparent
+                          command
+                          (%option-spec-mismatches
+                           (list* :positionals (getf spec :operands 0) spec)
+                           own-words)
+                          names
+                          nil)))))))))))
 
 (defun %mismatch-text (words)
   (format nil "arguments outside the command's allowed form: ~{~a~^, ~}" words))
 
 (defun %subject-facts (&key command invoked-as arguments nested embedded wraps
-                         unparsable unclassifiable form-redirect sexp-unforced
-                         assignments wrapper-options)
+                         opaque wrapper-mismatches unparsable unclassifiable
+                         form-redirect sexp-unforced assignments wrapper-options)
   (let ((facts (copy-list +subject-fact-schema+)))
     (flet ((add (&rest fact) (push fact facts)))
       (when command
@@ -96,6 +208,9 @@ collected with findall under the inference and deadline budgets."
                   (add 'argument-not-allowed 'subject (%mismatch-text mismatches))
                   (add 'spec-match 'subject))))))
       (when wraps (add 'wraps 'subject))
+      (when opaque (add 'opaque-wrapper 'subject))
+      (when wrapper-mismatches
+        (add 'argument-not-allowed 'subject (%mismatch-text wrapper-mismatches)))
       (dolist (name assignments) (add 'assignment 'subject name))
       (dolist (option wrapper-options) (add 'wrapper-option 'subject option))
       (dolist (reason nested)
@@ -157,21 +272,23 @@ collected with findall under the inference and deadline budgets."
                             "no safety rule applied to the command"))))))
 
 (defun classify-subject (&rest subject &key command invoked-as arguments nested
-                                         embedded wraps unparsable unclassifiable
-                                         form-redirect sexp-unforced assignments
-                                         wrapper-options)
+                                         embedded wraps opaque wrapper-mismatches
+                                         unparsable unclassifiable form-redirect
+                                         sexp-unforced assignments wrapper-options)
   "Classify one subject with the built-in and user rules.
 
 COMMAND is the basename and INVOKED-AS the command word as written;
-ARGUMENTS are the argument words.  NESTED and EMBEDDED are (LEVEL RULE TEXT)
-results of classifying embedded command text; WRAPS says a wrapper target
-was read.  UNPARSABLE and UNCLASSIFIABLE are lists of reason texts.
+ARGUMENTS are the argument words; a command that is not a wrapper is matched
+against its spec row.  NESTED and EMBEDDED are (LEVEL RULE TEXT) results of
+classifying embedded command text.  WRAPS says the command runs another one,
+OPAQUE that the wrapper is opaque (D-P1-5 2.4), and WRAPPER-MISMATCHES lists
+the wrapper's own words its spec row does not allow.  UNPARSABLE and UNCLASSIFIABLE are lists of reason texts.
 ASSIGNMENTS are the environment names the command is run with and
 WRAPPER-OPTIONS the options given to env.
 Returns the level and the (RULE . TEXT) reasons at that level."
-  (declare (ignore command invoked-as arguments nested embedded wraps
-                   unparsable unclassifiable form-redirect sexp-unforced
-                   assignments wrapper-options))
+  (declare (ignore command invoked-as arguments nested embedded wraps opaque
+                   wrapper-mismatches unparsable unclassifiable form-redirect
+                   sexp-unforced assignments wrapper-options))
   (let ((facts (apply #'%subject-facts subject)))
     (%top-level-reasons
      (append (%builtin-solutions facts) (%user-solutions facts)))))

@@ -787,13 +787,16 @@
       # `self`. `./.` is the same directory.
       root = ./.;
       # Read by the builtin inventory and error-code page consistency tests,
-      # the bug-report golden test, and the response envelope schema
-      # conformance test.
+      # the bug-report golden test, the response envelope schema
+      # conformance test, and the machine --json golden tests, which read
+      # the examples from the two design documents.
       sourceInclude = [
         ./docs/src/reference/builtins.md
         ./docs/src/reference/error-codes.md
         ./t/golden/bug-report.txt
         ./docs/design/conformance/envelope.schema.json
+        ./docs/design/proposal/02-machine-interface.md
+        ./docs/design/ux/U6-response-envelope.md
       ];
 
       lispDependencies =
@@ -943,7 +946,11 @@
           checks.default = ctx.generated.checks.default.overrideAttrs (
             previous:
             {
-              nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.coreutils ];
+              # git: the machine --json golden tests run it in a temporary repository.
+              nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [
+                ctx.pkgs.coreutils
+                ctx.pkgs.git
+              ];
             }
             // ptyBootstrapEnvironmentFor ctx
           );
@@ -1071,7 +1078,14 @@
                 name = "nshell-src-coverage";
                 timeoutSeconds = 1800;
               }).overrideAttrs
-                (_: ptyBootstrapEnvironmentFor ctx);
+                (
+                  previous:
+                  {
+                    # The machine --json golden tests run git in a temporary repository.
+                    nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.git ];
+                  }
+                  // ptyBootstrapEnvironmentFor ctx
+                );
 
             # Keep every Lisp source structurally readable before the more
             # expensive ASDF checks run. This is the same paredit executable

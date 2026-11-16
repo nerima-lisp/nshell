@@ -136,7 +136,7 @@ the environment.")
 (defun shell-context-job-processes (context job-id)
   "Return registered process objects for JOB-ID in CONTEXT."
   (let ((entry (gethash job-id (shell-context-process-registry context))))
-    (if (listp entry) (remove-if #'integerp entry) entry)))
+    (if (listp entry) (nshell.infrastructure.acl:pipeline-stage-processes entry) entry)))
 
 (defun %stop-shell-context (context)
   (unwind-protect

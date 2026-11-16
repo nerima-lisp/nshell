@@ -85,7 +85,6 @@
       (nshell.infrastructure.acl:spawn-pipeline-async
        commands :redirects redirects :start-p nil
        :stage-environments *pipeline-stage-environments*)
-    (setf stage-results (or stage-results processes))
     (unless processes
       (return-from %run-terminal-pipeline
         (values nil 127 stage-results)))
@@ -114,18 +113,17 @@
                      (nshell.domain.job-control:suspend-job monitor id nil)
                      (setf retained-p t)
                      (values nil (+ 128 sb-unix:sigtstp)
-                             (mapcar (lambda (stage)
-                                       (cond
-                                         ((integerp stage) stage)
-                                         ((eq :stopped (nshell.infrastructure.acl:process-status stage))
-                                          (+ 128 sb-unix:sigtstp))
-                                         (t (nshell.infrastructure.acl:process-exit-status-code stage))))
-                                     stage-results)))
+                             (mapcar
+                              (lambda (stage)
+                                (nshell.infrastructure.acl:pipeline-stage-status
+                                 stage
+                                 (lambda (process)
+                                   (if (eq :stopped (nshell.infrastructure.acl:process-status process))
+                                       (+ 128 sb-unix:sigtstp)
+                                       (nshell.infrastructure.acl:process-exit-status-code process)))))
+                              stage-results)))
                    (let ((statuses
-                           (mapcar (lambda (stage)
-                                     (if (integerp stage)
-                                         stage
-                                         (nshell.infrastructure.acl:process-exit-status-code stage)))
+                           (mapcar #'nshell.infrastructure.acl:pipeline-stage-status
                                    stage-results)))
                      (values nil
                              (if (shell-context-pipefail-p context)

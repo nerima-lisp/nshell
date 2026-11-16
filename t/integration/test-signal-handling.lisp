@@ -1,6 +1,63 @@
 (in-package #:nshell/test)
 
 (describe "signal-handling-tests"
+  (it "BUG-3 SIGHUP reaches live jobs when a pipeline stage failed to start"
+    (cl-weave:expect-assertions 11)
+    (let* ((context (make-test-shell-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (registry (nshell.application::shell-context-process-registry context))
+           (nshell.application:*job-monitor* monitor)
+           (nshell.application:*shell-pgid* (nshell.infrastructure.acl:current-process-id))
+           (nshell.presentation::*proc-registry* registry)
+           (nshell.presentation::*running* t)
+           (nshell.presentation::*last-exit-code* 0)
+           (nshell.infrastructure.acl::*pending-shell-termination-signal* nil)
+           (nshell.infrastructure.acl::*foreground-pgid* 0)
+           (processes nil) (failure nil) (result nil))
+      (with-output-to-string (*error-output*)
+        (unwind-protect
+             (progn
+               (expect 0 :to-equal
+                       (nth-value 1
+                         (nshell.application::%spawn-background-pipeline-in-context
+                          context
+                          (nshell.domain.parsing:make-pipeline-node
+                           (list (nshell.domain.parsing:make-command-node
+                                  "/nshell-bug-3-command-does-not-exist" nil)
+                                 (nshell.domain.parsing:make-command-node
+                                  "/bin/sh" '("-c" "sleep 100")))))))
+               (setf processes
+                     (loop for entry being the hash-values of registry append
+                       (remove-if #'integerp (if (listp entry) entry (list entry)))))
+               (expect 0 :to-equal
+                       (nth-value 1
+                         (nshell.application::%spawn-background-command-in-context
+                          context (nshell.domain.parsing:make-command-node
+                                   "/bin/sh" '("-c" "sleep 100")))))
+               (setf processes
+                     (loop for entry being the hash-values of registry append
+                       (remove-if #'integerp (if (listp entry) entry (list entry)))))
+               (expect 2 :to-equal (hash-table-count registry))
+               (expect 2 :to-equal (length processes))
+               (expect (loop for entry being the hash-values of registry
+                             thereis (and (listp entry) (member 127 entry)))
+                       :to-be-truthy)
+               (nshell.infrastructure.acl::shell-sighup-handler nil nil nil)
+               (handler-case
+                   (setf result (nshell.presentation::%handle-pending-shell-termination))
+                 (error (condition) (setf failure condition)))
+               (expect nil :to-equal failure)
+               (expect nshell.presentation::+repl-exit+ :to-equal result)
+               (expect 129 :to-equal nshell.presentation::*last-exit-code*)
+               (expect nil :to-equal nshell.presentation::*running*)
+               (loop repeat 200
+                     while (some #'nshell.infrastructure.acl:process-alive-p processes)
+                     do (sleep 0.01))
+               (expect nil :to-equal (some #'nshell.infrastructure.acl:process-alive-p processes))
+               (dolist (process processes) (nshell.infrastructure.acl:process-wait process))
+               (expect '(129 129) :to-equal
+                       (mapcar #'nshell.infrastructure.acl:process-exit-status-code processes)))
+          (nshell.infrastructure.acl:%abort-pipeline (reverse processes) nil)))))
   (it "rejects-invalid-domain-signal-values"
     "Signal value objects enforce their keyword and POSIX number invariants."
     (dolist (arguments '((:sigint 0)

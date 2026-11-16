@@ -16,10 +16,10 @@
       (progn
         (nshell.domain.job-control:suspend-job monitor job-id nil)
         (values job (+ 128 sb-unix:sigtstp)))
-    (let ((code (%job-process-exit-code job (gethash job-id registry))))
-      (nshell.domain.job-control:complete-job monitor job-id code)
-      (remhash job-id registry)
-      (values job code))))
+      (let ((code (%job-process-exit-code job (gethash job-id registry))))
+        (nshell.domain.job-control:complete-job monitor job-id code)
+        (remhash job-id registry)
+        (values job code))))
 
 (defun %job-wait-event-from-observation (pid state detail)
   (case state
@@ -121,18 +121,16 @@ exit status when the reaper has already completed the domain job."
 
 (defun %job-process-exit-code (job processes)
   (let ((statuses
-         (mapcar
-          (lambda (process)
-            (if (integerp process) process (nshell.infrastructure.acl:process-exit-status-code process)))
-          (remove nil (if (listp processes) processes (list processes))))))
+          (mapcar #'nshell.infrastructure.acl:pipeline-stage-status
+                  (remove nil (if (listp processes) processes (list processes))))))
     (if (nshell.domain.execution:job-pipefail-p job)
         (or (find-if (lambda (status)
                        (not (zerop status)))
                      statuses)
             0)
-      (or (car (last statuses))
-          (nshell.domain.execution:job-exit-code job)
-          0))))
+        (or (car (last statuses))
+            (nshell.domain.execution:job-exit-code job)
+            0))))
 
 (defun %wait-job-processes (processes)
   (dolist (process processes)
@@ -141,7 +139,4 @@ exit status when the reaper has already completed the domain job."
   processes)
 
 (defun %job-process-list (entry)
-  (cond
-   ((null entry) nil)
-   ((listp entry) (remove-if #'integerp entry))
-   (t (list entry))))
+  (nshell.infrastructure.acl:pipeline-stage-processes entry))

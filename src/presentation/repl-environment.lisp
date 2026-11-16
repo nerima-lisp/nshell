@@ -30,7 +30,7 @@ variables to offer, the directory git-aware sources probe, the home directory
       (maphash
        (lambda (job-id processes)
          (declare (ignore job-id))
-         (dolist (process (if (listp processes) processes (list processes)))
+         (dolist (process (nshell.infrastructure.acl:pipeline-stage-processes processes))
            (let ((pid (ignore-errors
                         (nshell.infrastructure.acl:process-pid process))))
              (when (and (integerp pid) (plusp pid))

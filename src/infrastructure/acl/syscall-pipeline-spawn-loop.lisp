@@ -47,7 +47,7 @@
                             (when (and next-pipe (second next-pipe))
                               (sb-posix:close (second next-pipe))
                               (setf (second next-pipe) nil))))))
-           (when after-spawn (funcall after-spawn))
+           (when (and procs after-spawn) (funcall after-spawn))
            (setf complete t)
            (values procs pgid redirect-streams (nreverse stage-results)))
       (unless complete

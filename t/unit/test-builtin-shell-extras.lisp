@@ -372,6 +372,40 @@ unchanged directory must come from the cache."
                     (nshell.infrastructure.acl::cached-completion-subdirectories "/tmp/"))
             (expect 2 :to-equal reads))))))
 
+  (it "a-symlink-to-an-unsearchable-directory-does-not-hide-its-siblings"
+    "A symlink whose target cannot be stat'ed (EACCES, as with
+/usr/sbin/weakpass_edit on macOS) is listed like a dangling symlink instead of
+failing the listing of every other entry in its directory."
+    (let* ((root (format nil "/tmp/nshell-symlink-eacces-~36r/"
+                         (random most-positive-fixnum (make-random-state t))))
+           (listed (concatenate 'string root "listed/"))
+           (locked (concatenate 'string root "locked/")))
+      (ensure-directories-exist listed)
+      (ensure-directories-exist locked)
+      (unwind-protect
+           (progn
+             (with-open-file (stream (concatenate 'string listed "tool")
+                                     :direction :output :if-does-not-exist :create)
+               (write-line "#!/bin/sh" stream))
+             (sb-posix:symlink (concatenate 'string locked "target")
+                               (concatenate 'string listed "locked-link"))
+             (sb-posix:chmod (string-right-trim "/" locked) #o000)
+             ;; Root can stat through a mode-000 directory; the test needs EACCES.
+             (unless (handler-case
+                         (progn (sb-posix:stat (concatenate 'string locked "target")) nil)
+                       (sb-posix:syscall-error (condition)
+                         (= (sb-posix:syscall-errno condition) sb-posix:eacces)))
+               (skip "stat through a mode-000 directory does not fail with EACCES here"))
+             (nshell.infrastructure.acl:clear-directory-listing-cache)
+             (expect '("locked-link" "tool") :to-equal
+                     (sort (mapcar #'file-namestring
+                                   (nshell.infrastructure.acl::cached-completion-directory-files
+                                    listed))
+                           #'string<)))
+        (sb-posix:chmod (string-right-trim "/" locked) #o700)
+        (nshell.infrastructure.acl:clear-directory-listing-cache)
+        (host-kit:delete-directory-tree root :if-does-not-exist :ignore))))
+
   (it "a-subsecond-ctime-change-invalidates-the-entry"
     "A directory change can keep mtime and ctime seconds fixed while ctime nanoseconds change."
     (let ((reads 0)

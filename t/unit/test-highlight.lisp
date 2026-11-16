@@ -268,6 +268,201 @@
         (when (probe-file directory)
           (host-kit:delete-directory-tree directory :if-does-not-exist :ignore))))))
 
+;;; PATH lookups for highlighting are memoized per name and validated against
+;;; PATH directory stamps taken once per prompt. These tests count per-directory
+;;; searches and stamp calls through injected hooks, not through the classifier.
+
+(defun %highlight-temp-directory (label)
+  (let ((directory (format nil "/tmp/nshell-highlight-~a-~36r/" label
+                           (random most-positive-fixnum (make-random-state t)))))
+    (ensure-directories-exist directory)
+    directory))
+
+(defun %highlight-write-file (directory name mode)
+  (let ((path (concatenate 'string directory name)))
+    (with-open-file (stream path :direction :output
+                                 :if-exists :supersede :if-does-not-exist :create)
+      (write-line "#!/bin/sh" stream))
+    (sb-posix:chmod path mode)
+    path))
+
+(defun %highlight-age-directory (directory)
+  ;; An hour-old mtime is settled, and any later change gets a newer mtime.
+  (let ((past (- (sb-posix:time) 3600)))
+    (sb-posix:utimes (string-right-trim "/" directory) past past)))
+
+(defun %highlight-kind (name)
+  (nshell.presentation::%repl-command-kind name))
+
+(defun %highlight-new-prompt ()
+  (nshell.presentation::refresh-repl-command-path-stamps))
+
+(defmacro with-counting-path-lookups ((searches stamps now) &body body)
+  "Run BODY in a REPL test state whose PATH searches (one per directory) are
+counted in SEARCHES, stamp calls in STAMPS, and whose memo clock reads NOW."
+  `(let* ((,searches 0)
+          (,stamps 0)
+          (,now (get-universal-time)))
+     (let ((nshell.presentation::*repl-command-path-memo* (make-hash-table :test #'equal))
+           (nshell.presentation::*repl-command-path-stamps* nil)
+           (nshell.presentation::*repl-command-path-search-fn*
+             (lambda (name directory)
+               (incf ,searches)
+               (host-kit:find-program name :path directory)))
+           (nshell.presentation::*repl-command-path-stamp-fn*
+             (lambda (directory)
+               (incf ,stamps)
+               (file-write-date directory)))
+           (nshell.presentation::*repl-command-path-clock-fn*
+             (lambda () ,now)))
+       (with-repl-test-state
+         ,@body))))
+
+(describe "repl-command-kind-path-memo-tests"
+  (it "repl-command-kind-does-not-search-again-for-a-repeated-name"
+    "Each name is searched once; repeating it costs no search and no stat, and
+a longer name typed after it is searched once like any new name."
+    (let ((directory (%highlight-temp-directory "repeat")))
+      (unwind-protect
+           (progn
+             (%highlight-write-file directory "mytool" #o700)
+             (%highlight-age-directory directory)
+             (with-counting-path-lookups (searches stamps now)
+               (repl-test-set-env "PATH" (string-right-trim "/" directory))
+               (%highlight-new-prompt)
+               (expect 1 :to-equal stamps)
+               (expect :external :to-be (%highlight-kind "mytool"))
+               (expect :external :to-be (%highlight-kind "mytool"))
+               (expect 1 :to-equal searches)
+               (dolist (name '("m" "my" "myt" "m" "my" "myt"))
+                 (expect nil :to-be (%highlight-kind name)))
+               ;; Three new names on a one-directory PATH: three searches.
+               (expect 4 :to-equal searches)
+               (expect 1 :to-equal stamps)))
+        (host-kit:delete-directory-tree directory :if-does-not-exist :ignore))))
+
+  (it "repl-command-kind-finds-an-executable-added-to-a-path-directory"
+    "A file added to a PATH directory changes its mtime, so after the next
+prompt's stamp snapshot the memoized NIL is discarded and the name is found."
+    (let ((directory (%highlight-temp-directory "added")))
+      (unwind-protect
+           (progn
+             (%highlight-age-directory directory)
+             (with-counting-path-lookups (searches stamps now)
+               (repl-test-set-env "PATH" (string-right-trim "/" directory))
+               (%highlight-new-prompt)
+               (expect nil :to-be (%highlight-kind "newtool"))
+               (%highlight-write-file directory "newtool" #o700)
+               ;; Same prompt: the memo still answers.
+               (expect nil :to-be (%highlight-kind "newtool"))
+               (expect 1 :to-equal searches)
+               (%highlight-new-prompt)
+               (expect :external :to-be (%highlight-kind "newtool"))
+               (expect 2 :to-equal searches)))
+        (host-kit:delete-directory-tree directory :if-does-not-exist :ignore))))
+
+  (it "repl-command-kind-sees-a-missing-path-directory-appear"
+    "A missing PATH directory is memoized as missing; once it exists the next
+prompt's stamp differs and the name is searched again."
+    (let* ((parent (%highlight-temp-directory "appear"))
+           (later (concatenate 'string parent "later/")))
+      (unwind-protect
+           (with-counting-path-lookups (searches stamps now)
+             (repl-test-set-env "PATH" (string-right-trim "/" later))
+             (%highlight-new-prompt)
+             (expect nil :to-be (%highlight-kind "latetool"))
+             (ensure-directories-exist later)
+             (%highlight-write-file later "latetool" #o700)
+             (%highlight-age-directory later)
+             (%highlight-new-prompt)
+             (expect :external :to-be (%highlight-kind "latetool"))
+             (expect 2 :to-equal searches))
+        (host-kit:delete-directory-tree parent :if-does-not-exist :ignore))))
+
+  (it "repl-command-kind-searches-again-when-path-changes"
+    "A different PATH value misses the memo, so the new directory is searched
+at once; dropping it from PATH drops the name."
+    (let ((first (%highlight-temp-directory "first"))
+          (second (%highlight-temp-directory "second")))
+      (unwind-protect
+           (progn
+             (%highlight-write-file second "othertool" #o700)
+             (%highlight-age-directory first)
+             (%highlight-age-directory second)
+             (with-counting-path-lookups (searches stamps now)
+               (let ((first-path (string-right-trim "/" first))
+                     (second-path (string-right-trim "/" second)))
+                 (repl-test-set-env "PATH" first-path)
+                 (%highlight-new-prompt)
+                 (expect nil :to-be (%highlight-kind "othertool"))
+                 (expect 1 :to-equal searches)
+                 (repl-test-set-env "PATH" (format nil "~a:~a" first-path second-path))
+                 (expect :external :to-be (%highlight-kind "othertool"))
+                 (expect 3 :to-equal searches)
+                 (repl-test-set-env "PATH" first-path)
+                 (expect nil :to-be (%highlight-kind "othertool")))))
+        (host-kit:delete-directory-tree first :if-does-not-exist :ignore)
+        (host-kit:delete-directory-tree second :if-does-not-exist :ignore))))
+
+  (it "repl-command-kind-drops-aged-entries-for-permission-changes"
+    "chmod does not change the directory mtime; the memo entry is dropped at the
+first prompt after the maximum age, and the name is searched again."
+    (let ((directory (%highlight-temp-directory "chmod")))
+      (unwind-protect
+           (let ((path (%highlight-write-file directory "plain" #o600)))
+             (%highlight-age-directory directory)
+             (with-counting-path-lookups (searches stamps now)
+               (repl-test-set-env "PATH" (string-right-trim "/" directory))
+               (%highlight-new-prompt)
+               (expect nil :to-be (%highlight-kind "plain"))
+               (sb-posix:chmod path #o700)
+               (%highlight-new-prompt)
+               (expect nil :to-be (%highlight-kind "plain"))
+               (expect 1 :to-equal searches)
+               (incf now (1+ nshell.presentation::*repl-command-path-memo-max-age-seconds*))
+               (%highlight-new-prompt)
+               (expect :external :to-be (%highlight-kind "plain"))
+               (expect 2 :to-equal searches)))
+        (host-kit:delete-directory-tree directory :if-does-not-exist :ignore))))
+
+  (it "repl-command-kind-does-not-memoize-a-relative-path-element"
+    "An empty PATH element means the working directory, so lookups through it
+are searched every time and follow a cd."
+    (let ((with-tool (%highlight-temp-directory "cwd-tool"))
+          (without-tool (%highlight-temp-directory "cwd-empty")))
+      (unwind-protect
+           (progn
+             (%highlight-write-file with-tool "cwdtool" #o700)
+             (with-counting-path-lookups (searches stamps now)
+               (repl-test-set-env "PATH" "/nonexistent-nshell-path:")
+               (%highlight-new-prompt)
+               (host-kit:call-with-working-directory
+                (lambda ()
+                  (expect :external :to-be (%highlight-kind "cwdtool"))
+                  (expect :external :to-be (%highlight-kind "cwdtool")))
+                with-tool)
+               (host-kit:call-with-working-directory
+                (lambda ()
+                  (expect nil :to-be (%highlight-kind "cwdtool")))
+                without-tool)
+               (expect 6 :to-equal searches)))
+        (host-kit:delete-directory-tree with-tool :if-does-not-exist :ignore)
+        (host-kit:delete-directory-tree without-tool :if-does-not-exist :ignore))))
+
+  (it "a-new-prompt-takes-path-stamps-without-a-key"
+    "The stamp snapshot is taken by the prompt render that follows a command,
+not by key handling."
+    (with-counting-path-lookups (searches stamps now)
+      (repl-test-set-env "PATH" "/nonexistent-nshell-a:/nonexistent-nshell-b")
+      (let ((nshell.presentation::*prompt-hook-pending-p* t)
+            (nshell.presentation::*input-state*
+              (nshell.presentation::make-repl-input-state))
+            (*standard-output* (make-broadcast-stream)))
+        (nshell.presentation::render-prompt-cont))
+      (expect 2 :to-equal stamps)
+      (expect '("/nonexistent-nshell-a:/nonexistent-nshell-b" . #(:missing :missing))
+              :to-equalp nshell.presentation::*repl-command-path-stamps*))))
+
 (describe "repl-command-correction-tests"
   (it "edit-distance-within-one-covers-every-single-edit"
     (flet ((near (a b) (nshell.presentation::%edit-distance-within-one-p a b)))

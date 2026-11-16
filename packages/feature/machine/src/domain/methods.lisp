@@ -46,6 +46,15 @@ initialize announces it.")
                                     :path (and (consp effect) (second effect)))))
           effects))
 
+(defun knowledge-base-fixes (fixes)
+  "Return ENVELOPE-FIXes for the diagnosis rules' FIXES, plists with :INPUT,
+:WHY and :RULE."
+  (mapcar (lambda (fix)
+            (make-envelope-fix :input (getf fix :input)
+                               :why (getf fix :why)
+                               :rule (getf fix :rule)))
+          fixes))
+
 (defun initialize-value (&key version methods cwd os
                               (rules (nshell.feature.kb:classify-rule-catalog))
                               (user-rules 0))

@@ -303,6 +303,16 @@ replaced by the noninteractive form."
                                    (subseq input end))
                :why why))))))
 
+(defun %missing-command-fixes (input status start end)
+  "Return the fixes diagnose/typo gives for the command name written between
+START and END in INPUT that could not be found: INPUT with the name replaced
+by a name the shell can run now, builtins, functions, aliases and PATH
+included."
+  (knowledge-base-fixes
+   (nshell.feature.kb:diagnose-typo
+    :input input :status status :command-start start :command-end end
+    :known-commands (nshell.presentation::%repl-known-command-names))))
+
 (defun %first-line (text)
   (let ((line (string-trim '(#\Space #\Tab #\Return)
                            (subseq text 0 (or (position #\Newline text)
@@ -385,7 +395,8 @@ did."
          (multiple-value-bind (start end) (%input-name-span input name-span)
            (values "E_COMMAND_NOT_FOUND" nil
                    (format nil "~A: command not found" command)
-                   (and start (%input-span input start (- end start)))))))
+                   (and start (%input-span input start (- end start)))
+                   (and start (%missing-command-fixes input status start end))))))
       ((eql status 126) (values "E_PERMISSION" nil message))
       ((eql status 130) (values "E_INTERRUPTED" nil message))
       (t

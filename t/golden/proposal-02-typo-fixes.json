@@ -1,0 +1,58 @@
+{
+  "env": {
+    "PATH": "$WORK/bin"
+  },
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "error": {
+      "code": "E_COMMAND_NOT_FOUND",
+      "fixes": [
+        {
+          "input": "git status",
+          "rule": "diagnose/typo",
+          "why": "edit distance 1"
+        }
+      ],
+      "message": "gti: command not found",
+      "span": {
+        "column": 1,
+        "end": 4,
+        "line": 1
+      }
+    },
+    "nshell_api": 1,
+    "ok": false,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/unknown-command",
+          "text": "unknown command"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 127,
+    "stderr": {
+      "bytes": 58,
+      "lines": 2,
+      "text": "nshell: gti: command not found\nnshell: did you mean: git?\n",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    }
+  },
+  "files": {
+    "bin/git": "#!/bin/sh\nexit 0\n"
+  },
+  "input": "gti status"
+}

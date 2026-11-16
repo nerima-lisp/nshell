@@ -6,7 +6,8 @@
 ;;; diagnose(Failure, fix(Input), Rule, Evidence) holds for every fix a rule
 ;;; proposes.  The evaluator describes the failure with status/2, input/2,
 ;;; command-span/3, and command-name/2, and the runnable names with
-;;; candidate-command/1.
+;;; candidate-command/1.  diagnose/typo holds for every name one or two edits
+;;; away; the evaluator reports only the names at the smallest distance found.
 
 (defparameter *builtin-diagnose-rulebase*
   (cl-prolog-kit:prolog

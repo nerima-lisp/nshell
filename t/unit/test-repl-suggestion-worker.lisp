@@ -145,10 +145,13 @@
                (release (sb-thread:make-semaphore :count 0))
                (event (nshell.domain.input:make-key-event :right))
                (caller-thread sb-thread:*current-thread*)
-               (armed nil)
+               (awaiting nil)
                (polls 0)
                (original-alive-p
                  (symbol-function 'nshell.presentation::%suggestion-worker-alive-p))
+               (original-await
+                 (symbol-function
+                  'nshell.presentation::%await-current-suggestion-before-acceptance))
                (nshell.presentation::*suggestion-acceptance-wait-seconds* 5)
                ;; Releases the computation only once the acceptance is
                ;; polling for it, so the result cannot be ready before the
@@ -168,14 +171,20 @@
                        (sb-thread:wait-on-semaphore release)
                        " ps"))
                     ;; The acceptance wait checks the worker on every poll.
-                    ;; Scheduling checks it too, so count only once armed.
+                    ;; Scheduling checks it too, so count only inside the
+                    ;; wait.
                     ('nshell.presentation::%suggestion-worker-alive-p
                      (lambda (state)
-                       (when (and armed
+                       (when (and awaiting
                                   (eq sb-thread:*current-thread* caller-thread)
                                   (= 1 (incf polls)))
                          (sb-thread:signal-semaphore waiting))
-                       (funcall original-alive-p state))))
+                       (funcall original-alive-p state)))
+                    ('nshell.presentation::%await-current-suggestion-before-acceptance
+                     (lambda ()
+                       (setf awaiting t)
+                       (unwind-protect (funcall original-await)
+                         (setf awaiting nil)))))
                  (setf nshell.presentation::*input-state*
                        (nshell.presentation:make-input-state
                         :buffer "docker" :cursor-pos 6))
@@ -185,7 +194,6 @@
                  (expect
                   (nshell.presentation::%suggestion-acceptance-key-event-p event)
                   :to-be-truthy)
-                 (setf armed t)
                  (expect (nshell.presentation::%await-current-suggestion-before-acceptance)
                          :to-be-truthy)
                  ;; More than one poll: the wait saw the request still running.

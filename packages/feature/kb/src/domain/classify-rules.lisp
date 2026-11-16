@@ -22,6 +22,7 @@
 ;;; and from matching the arguments against +safe-command-specs+ (2.2)
 ;;;   spec-command(S)                   the command word has a spec row
 ;;;   spec-match(S)                     every argument matched it
+;;;   spec-operand(S, Word)             ... and the row read Word as an operand
 ;;;   argument-not-allowed(S, Text)     the words that did not match
 ;;; and the results it obtained by classifying embedded command text:
 ;;;   wraps(S)                       S runs another command (2.4)
@@ -165,22 +166,29 @@ changes no other command.")
     ((covered-command "rm")) ((covered-command "curl"))
     ((network-command "curl")) ((network-command "wget")) ((network-command "ssh"))
     ;; Read-only commands of the spec table whose every operand is a path
-    ;; they read; none of their options takes a value.  Without an operand
-    ;; cat and wc read only standard input, which is no path.
+    ;; they read.  Operands are the words the command's spec row reads as
+    ;; operands (spec-operand), so option values are none, and they exist
+    ;; only when every argument matched the row: an option the row does not
+    ;; describe may take the next word as its value.
     ((path-operand-reader "cat")) ((path-operand-reader "ls"))
     ((path-operand-reader "wc")) ((path-operand-reader "stat"))
-    ((path-operand-reader "file"))
+    ((path-operand-reader "file")) ((path-operand-reader "head"))
+    ((path-operand-reader "tail"))
     ;; Commands that read the working directory when given no operand.
     ((working-directory-reader "ls"))
+    ;; The operand that names standard input, which is no path.
+    ((standard-input-operand "-"))
 
     ;; --- effect model (B) ---------------------------------------------------
     ((effect ?c (deletes ?p)) (command ?c "rm") (operand ?c ?p))
     ((effect ?c (writes ?p)) (redirect ?c ?p))
     ((effect ?c :network) (command ?c ?n) (network-command ?n))
     ((effect ?c (reads ?p))
-     (command ?c ?n) (path-operand-reader ?n) (operand ?c ?p))
+     (command ?c ?n) (path-operand-reader ?n) (spec-operand ?c ?p)
+     (not (standard-input-operand ?p)))
     ((effect ?c (reads "."))
-     (command ?c ?n) (working-directory-reader ?n) (not (operand ?c ?p)))
+     (command ?c ?n) (working-directory-reader ?n) (spec-match ?c)
+     (not (spec-operand ?c ?p)))
     ;; git status reads the working tree (proposal/02).
     ((effect ?c (reads ".")) (command ?c "git") (subcommand ?c "status"))
 

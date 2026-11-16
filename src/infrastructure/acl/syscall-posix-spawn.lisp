@@ -318,10 +318,16 @@ record.")
     (when (sb-thread:thread-alive-p thread)
       (ignore-errors (sb-thread:terminate-thread thread)))
     (ignore-errors (sb-thread:join-thread thread)))
-  (dolist (thread (native-process-output-copier-threads process))
-    (ignore-errors (sb-thread:join-thread thread)))
-  (setf (native-process-input-copier-threads process) nil
-        (native-process-output-copier-threads process) nil)
+  (let ((output-results
+          (mapcar (lambda (thread) (ignore-errors (sb-thread:join-thread thread)))
+                  (native-process-output-copier-threads process))))
+    (setf (native-process-input-copier-threads process) nil
+          (native-process-output-copier-threads process) nil)
+    ;; As %WAIT-PROCESS-WITH-COPIERS does for the other copiers: output a
+    ;; copier could not deliver, such as bytes the stream cannot decode, is a
+    ;; failure of the command, not a silent loss.
+    (unless (every (lambda (result) (eq :eof result)) output-results)
+      (error "Process output copier did not reach EOF")))
   process)
 
 (defun %spawn-check-result (operation result)

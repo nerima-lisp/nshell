@@ -282,3 +282,27 @@ seconds the run took, and whether the sh process is gone afterwards."
       (expect (nshell.feature.machine:full-screen-program-kind
                (first command) (rest command))
               :to-be-truthy))))
+
+(defun %copy-failure-batch-run (line)
+  "Run LINE through the --command batch path; return its standard output,
+exit status and standard error."
+  (let* ((err (make-string-output-stream))
+         (status nil)
+         (out (with-output-to-string (*standard-output*)
+                (let ((*error-output* err))
+                  (setf status (nshell.presentation:run-repl-batch :line line))))))
+    (values out status (get-output-stream-string err))))
+
+(describe "child output copy failures"
+  (it "fails a batch run whose child output cannot be decoded, on every copy route"
+    (with-noninteractive-test-state ()
+      (multiple-value-bind (plain-out plain-status plain-err)
+          (%copy-failure-batch-run "sh -c 'printf \"\\377after\"'")
+        (expect (/= plain-status 0) :to-be-truthy)
+        (expect (search "nshell error:" plain-err) :to-be-truthy)
+        (dolist (line '("X=1 sh -c 'printf \"\\377after\"'"
+                        "sh -c 'printf \"\\377after\" >&2'"))
+          (multiple-value-bind (out status err) (%copy-failure-batch-run line)
+            (expect out :to-equal plain-out)
+            (expect status :to-equal plain-status)
+            (expect (search "nshell error:" err) :to-be-truthy)))))))

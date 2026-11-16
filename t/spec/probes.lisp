@@ -3,10 +3,12 @@
 ;;; Generation invariant:
 ;;; - the fixed bin directory's false exits 1;
 ;;; - a JSON case gets "language-probe ID v0.7.0 baseline" unless it is the
-;;;   probe of a row whose :v08 :expect is not :v07 (warning mode :optional
-;;;   when that :v07 row has a :warning, :none otherwise);
-;;; - every row gets one v0.8 test, `it` without owners and `it-fails` with;
-;;; - every row with :v09 gets an `it-fails` v0.9.0 test;
+;;;   probe of a row whose :v08 :expect is not :v07, or of a *probe-changes*
+;;;   entry (warning mode :optional when that :v07 row has a :warning, :none
+;;;   otherwise);
+;;; - every row and probe change gets one v0.8 test, `it` without owners and
+;;;   `it-fails` with, except an :unsettled probe change without :warning;
+;;; - every row and probe change with :v09 gets an `it-fails` v0.9.0 test;
 ;;; - every crash probe gets "no crash log for ID", `it-fails` with an owner.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -79,7 +81,7 @@
         (%validate-basis (getf entry :input-basis)
                          (format nil "~a :input-basis" where)))))
 
-  (defun %validate-v08 (v08 row where)
+  (defun %validate-v08 (v08 row where &key unsettled-without-warning)
     (%plist-keys-within v08 '(:expect :conflict :warning :owners :basis) where)
     (dolist (key '(:expect :warning :owners :basis))
       (unless (%plist-key-p v08 key)
@@ -94,7 +96,7 @@
          (when (getf row :input)
            (error "~a: :expect :v07 runs the fixture src; :input must be nil" where)))
         (:unsettled
-         (unless (getf v08 :warning)
+         (unless (or (getf v08 :warning) unsettled-without-warning)
            (error "~a: :expect :unsettled needs a :warning" where))
          (let ((conflict (getf v08 :conflict)))
            (unless (and (stringp conflict) (plusp (length conflict)))
@@ -102,6 +104,15 @@
         (t (%validate-expectation expect where)))
       (when (and (%plist-key-p v08 :conflict) (not (eq expect :unsettled)))
         (error "~a: :conflict belongs only to :expect :unsettled" where))))
+
+  (defun %validate-v09 (entry where)
+    (when (%plist-key-p entry :v09)
+      (let ((v09 (getf entry :v09))
+            (where (format nil "~a :v09" where)))
+        (%plist-keys-within v09 '(:expect :input :input-basis :basis) where)
+        (%validate-expectation (getf v09 :expect) where)
+        (%validate-input v09 where)
+        (%validate-basis (getf v09 :basis) where))))
 
   (defun %validate-row (row ids)
     (let ((where (format nil "L7.1 row ~s" (getf row :row))))
@@ -112,13 +123,21 @@
         (error "~a: unknown probe id ~s" where (getf row :probe)))
       (%validate-input row where :require-basis t)
       (%validate-v08 (getf row :v08) row where)
-      (when (%plist-key-p row :v09)
-        (let ((v09 (getf row :v09))
-              (where (format nil "~a :v09" where)))
-          (%plist-keys-within v09 '(:expect :input :input-basis :basis) where)
-          (%validate-expectation (getf v09 :expect) where)
-          (%validate-input v09 where)
-          (%validate-basis (getf v09 :basis) where)))))
+      (%validate-v09 row where)))
+
+  (defun %validate-probe-change (entry ids row-probes)
+    (let ((where (format nil "probe change ~s" (getf entry :probe))))
+      (%plist-keys-within entry '(:probe :input :input-basis :v08 :v09) where)
+      (unless (member (getf entry :probe) ids :test #'equal)
+        (error "~a: unknown probe id" where))
+      (when (member (getf entry :probe) row-probes :test #'equal)
+        (error "~a: the probe of an L7.1 row belongs in *l7-rows*" where))
+      (%validate-input entry where :require-basis t)
+      (let ((v08 (getf entry :v08)))
+        (when (eq (getf v08 :expect) :v07)
+          (error "~a: :expect :v07 is only for L7.1 rows" where))
+        (%validate-v08 v08 entry where :unsettled-without-warning t))
+      (%validate-v09 entry where)))
 
   (defun %validate-crash-probe (entry ids)
     (let ((where (format nil "crash probe ~s" (getf entry :probe))))
@@ -152,6 +171,7 @@
   (defmacro register-language-probes ()
     (let ((ids (%probe-ids-at-expansion))
           (rows *l7-rows*)
+          (probe-changes *probe-changes*)
           (crash-probes *crash-probes*))
       (%require-unique ids "language-probe fixture ids")
       (unless (= 30 (length rows))
@@ -159,12 +179,17 @@
       (dolist (row rows) (%validate-row row ids))
       (%require-unique (mapcar (lambda (row) (getf row :row)) rows) "L7.1 row numbers")
       (%require-unique (mapcar (lambda (row) (getf row :probe)) rows) "L7.1 row probes")
+      (let ((row-probes (mapcar (lambda (row) (getf row :probe)) rows)))
+        (dolist (entry probe-changes) (%validate-probe-change entry ids row-probes)))
+      (%require-unique (mapcar (lambda (entry) (getf entry :probe)) probe-changes)
+                       "probe change ids")
       (dolist (entry crash-probes) (%validate-crash-probe entry ids))
       (%require-unique (mapcar (lambda (entry) (getf entry :probe)) crash-probes)
                        "crash probe ids")
-      (let ((changed (loop for row in rows
-                           unless (eq :v07 (getf (getf row :v08) :expect))
-                             collect (getf row :probe))))
+      (let ((changed (append (loop for row in rows
+                                   unless (eq :v07 (getf (getf row :v08) :expect))
+                                     collect (getf row :probe))
+                             (mapcar (lambda (entry) (getf entry :probe)) probe-changes))))
         `(progn
            (it "the fixed t/spec false executable exits 1"
              (%check-spec-false-exits-nonzero))
@@ -181,6 +206,19 @@
                      collect `(it-fails ,(format nil "L7.1 row ~d probe ~a v0.9.0"
                                                  (getf row :row) (getf row :probe))
                                 (%check-v09 ,(getf row :row))))
+           ;; An unsettled probe change without a warning has nothing to
+           ;; assert; its :conflict text and :owners are the record.
+           ,@(loop for entry in probe-changes
+                   for id = (getf entry :probe)
+                   for v08 = (getf entry :v08)
+                   unless (and (eq (getf v08 :expect) :unsettled)
+                               (null (getf v08 :warning)))
+                     collect (%maybe-failing (getf v08 :owners)
+                                             (format nil "language-probe ~a v0.8" id)
+                                             `(%check-v08 ,id))
+                   when (getf entry :v09)
+                     collect `(it-fails ,(format nil "language-probe ~a v0.9.0" id)
+                                (%check-v09 ,id)))
            ,@(loop for entry in crash-probes
                    collect (%maybe-failing
                             (getf entry :owners)

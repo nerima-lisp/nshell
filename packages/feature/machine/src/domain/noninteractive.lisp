@@ -93,18 +93,19 @@ output without a terminal, and why, or NIL when there is no such text."
 its alternate screen.")
 
 (defun make-alternate-screen-scanner ()
-  "Return a function of a chunk of output, a string and the end of the chunk
-in it, that returns true once the chunks it has seen hold
+  "Return a function of a chunk of output, a vector of characters or octets and
+the end of the chunk in it, that returns true once the chunks it has seen hold
 +ALTERNATE-SCREEN-SEQUENCE+, which may be split across them."
   (let ((matched 0)
-        (sequence +alternate-screen-sequence+))
+        (codes (map 'vector #'char-code +alternate-screen-sequence+)))
     (lambda (buffer end)
-      (or (= matched (length sequence))
+      (or (= matched (length codes))
           (loop for index below end
-                for char = (char buffer index)
+                for element = (aref buffer index)
+                for code = (if (characterp element) (char-code element) element)
                 ;; ESC occurs only first in the sequence, so a mismatch can
                 ;; restart a match only at an ESC.
-                do (setf matched (cond ((char= char (char sequence matched)) (1+ matched))
-                                       ((char= char #\Esc) 1)
+                do (setf matched (cond ((= code (aref codes matched)) (1+ matched))
+                                       ((= code (aref codes 0)) 1)
                                        (t 0)))
-                thereis (= matched (length sequence)))))))
+                thereis (= matched (length codes)))))))

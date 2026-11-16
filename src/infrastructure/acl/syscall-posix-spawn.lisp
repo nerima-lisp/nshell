@@ -455,14 +455,56 @@ record.")
         (when close-source-p
           (close source))))))
 
-(defun %spawn-copy-output (child-stream destination)
-  (unwind-protect
-       (let ((buffer (%spawn-stream-copy-buffer destination)))
-         (loop for count = (read-sequence buffer child-stream)
-               while (plusp count)
-               do (write-sequence buffer destination :end count))
-         (finish-output destination))
-    (close child-stream)))
+(defvar *process-output-watch* nil
+  "NIL, or a function of no arguments that %START-OUTPUT-COPIER calls, in the
+thread starting the copier, for the function of (BUFFER END) the copier then
+calls with each chunk it has copied, held in BUFFER below END as characters or
+octets.")
+
+(defun %read-available (buffer input)
+  "Fill BUFFER from INPUT with what it holds now, waiting only for the first
+element, and return the count, 0 at end of file. A watcher sees output as it
+comes; READ-SEQUENCE would wait for a full buffer."
+  (flet ((next (wait-p)
+           (if (stringp buffer)
+               (if wait-p (read-char input nil) (read-char-no-hang input nil))
+               (and (or wait-p (listen input)) (read-byte input nil)))))
+    (loop for count from 0 below (length buffer)
+          for element = (next (zerop count))
+          while element
+          do (setf (aref buffer count) element)
+          finally (return count))))
+
+(defun %copy-output (input output read-function watcher)
+  (let ((buffer (%spawn-stream-copy-buffer input)))
+    (loop for count = (funcall (if watcher (function %read-available) read-function)
+                               buffer input)
+          while (plusp count)
+          do (if (stringp buffer)
+                 (write-string buffer output :end count)
+                 (write-sequence buffer output :end count))
+             (when watcher
+               (funcall watcher buffer count)))
+    (when (streamp output)
+      (finish-output output))
+    :eof))
+
+(defun %start-output-copier (input output name
+                             &key (read-function (function read-sequence)) close-input-p)
+  "Start and return a thread that copies INPUT, a child process's standard
+output or error, to OUTPUT until end of file and returns :EOF, or NIL after an
+error. READ-FUNCTION fills a buffer from INPUT and returns the count, unless a
+watcher needs %READ-AVAILABLE; with CLOSE-INPUT-P the thread closes INPUT
+afterwards. Every copy of a child's output starts here, so the watcher
+*PROCESS-OUTPUT-WATCH* gives sees all of them."
+  (let ((watcher (and *process-output-watch* (funcall *process-output-watch*))))
+    (sb-thread:make-thread
+     (lambda ()
+       (ignore-errors
+        (unwind-protect (%copy-output input output read-function watcher)
+          (when close-input-p
+            (close input)))))
+     :name name)))
 
 (defun %spawn-make-channel (spec direction target)
   (cond
@@ -718,12 +760,9 @@ record.")
                       :external-format :default :auto-close t)
                      owned-fds (remove fd owned-fds :test #'eql)
                      thread
-                     (sb-thread:make-thread
-                      (lambda ()
-                        (%spawn-copy-output
-                         stream
-                         (%native-spawn-channel-copy-destination channel)))
-                      :name "native process output copier"))
+                     (%start-output-copier
+                      stream (%native-spawn-channel-copy-destination channel)
+                      "native process output copier" :close-input-p t))
                (values nil thread owned-fds))
            (error (condition)
              (when stream (ignore-errors (close stream)))

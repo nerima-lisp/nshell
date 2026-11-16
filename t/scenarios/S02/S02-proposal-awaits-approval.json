@@ -80,15 +80,6 @@
       "key": "Enter"
     },
     {
-      "type": "wait",
-      "contains": "AI proposal requires confirmation; press Enter again to execute.",
-      "timeout_seconds": 10
-    },
-    {
-      "type": "key",
-      "key": "Enter"
-    },
-    {
       "type": "wait_exit",
       "timeout_seconds": 10
     }

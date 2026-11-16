@@ -159,7 +159,8 @@
        ("tail -n +2 a" :confirm) ("tail -c 1K a" :confirm)
        ("tail -n" :confirm) ("tail -f a" :confirm) ("tail -F a" :confirm)
        ("tail --follow a" :confirm) ("tail --retry a" :confirm)
-       ("tail -fn 2 a" :confirm) ("tail a -f" :confirm))))
+       ("tail -fn 2 a" :confirm) ("tail a -f" :confirm)
+       ("tail --follow=name a" :confirm) ("tail -n 2 -f a" :confirm))))
 
   (it "matches wc against its spec row"
     (%closed-world-expect-levels
@@ -206,9 +207,19 @@
   (it "matches command query options against its spec row"
     (%closed-world-expect-levels
      '(("command -v ls" :safe) ("command -V ls git" :safe)
+       ("command -v -- ls" :safe)
        ("command ls" :confirm) ("command -p ls" :confirm)
        ("command -vV ls" :confirm) ("command -v" :confirm)
-       ("command -v --unknown ls" :confirm))))
+       ("command -v --unknown ls" :confirm)))
+    (let ((context (make-test-shell-context)))
+      (multiple-value-bind (plain plain-status)
+          (nshell.application::%builtin-command context '("-v" "ls"))
+        (multiple-value-bind (sentinel sentinel-status)
+            (nshell.application::%builtin-command context '("-v" "--" "ls"))
+          (expect plain-status :to-equal 0)
+          (expect sentinel-status :to-equal 0)
+          (expect (> (length plain) 0) :to-be-truthy)
+          (expect sentinel :to-equal plain)))))
 
   (it "confirms each excluded ls option in the policy row"
     (%closed-world-expect-levels

@@ -98,7 +98,8 @@ The name must equal a listed one; LC_ needs a tail of A-Z and `_'."
 
 (defun read-spec-options (spec words &key (permute t))
   "Read WORDS with SPEC's :FLAGS, :VALUE-FLAGS, :LONG, :VALUE-LONG, and
-:EXACT.  Return the operands, the words SPEC does not allow, and the words
+:EXACT.  :PLUS-OPTIONS rejects words beginning with + before `--'.
+Return the operands, the words SPEC does not allow, and the words
 left unread.  With PERMUTE, options may follow operands and only `--' ends
 them; without it, the first operand or `--' ends the options and it and the
 rest are left unread.  Long names match exactly, never by prefix."

@@ -75,13 +75,16 @@ nshell's own output has no color. The interactive shell never reads it.")
     (apply *batch-outcome-observer* kind value details)))
 
 (defun %run-batch-source-lines (lines)
-  (let ((command-not-found-command nil))
+  (let ((command-not-found-command nil)
+        (command-not-found-span nil))
     (call-with-crash-capture
      (lambda ()
         (multiple-value-bind (output code)
             (let ((nshell.infrastructure.acl:*command-not-found-hook*
                     (lambda (command)
-                      (setf command-not-found-command command))))
+                      (setf command-not-found-command command
+                            command-not-found-span
+                            nshell.infrastructure.acl:*external-command-span*))))
               (%with-repl-shell-context (context)
                 (handler-case
                     (nshell.application:source-lines-to-stream context lines)
@@ -97,7 +100,8 @@ nshell's own output has no color. The interactive shell never reads it.")
           (declare (ignore output))
           (setf *last-exit-code* (or code 0))
           (when command-not-found-command
-            (%observe-batch-outcome :missing-command command-not-found-command))
+            (%observe-batch-outcome :missing-command command-not-found-command
+                                   command-not-found-span))
           (when (and (= *last-exit-code* 127)
                      command-not-found-command)
             (let ((corrections
@@ -129,7 +133,8 @@ SCRIPT-ARGS are exposed as $argv for --command."
 
 (defun run-repl-batch-observed (line observer &key script-args errexit-p)
   "Run LINE as RUN-REPL-BATCH does and return its exit status. OBSERVER is
-called with :MISSING-COMMAND and the last command name that was not found,
+called with :MISSING-COMMAND, the last command name that was not found and its
+source span (NIL when unknown),
 :COMMAND-FAILED and the condition that ended the run, or :CRASH, the condition
 and whether the user's own Lisp code signalled it."
   (let ((*batch-outcome-observer* observer))

@@ -14,7 +14,8 @@
    *full-screen-program-guard*
    nshell.infrastructure.acl:*process-group-log*
    nshell.infrastructure.acl:*detach-child-standard-input*
-   nshell.infrastructure.acl:*process-output-watch*))
+   nshell.infrastructure.acl:*process-output-watch*
+   nshell.infrastructure.acl:*external-command-span*))
 
 (define-condition byte-stream-execution-error (error)
   ((operation :initarg :operation :reader byte-stream-execution-error-operation)
@@ -428,10 +429,14 @@ execution errors that wrap it on the way out."
                               (setf (aref statuses stage-index) 127)
                               (%byte-stream-launch-thread
                                state stage-index
-                               (lambda ()
-                                 (write-string
-                                  (nshell.infrastructure.acl::%external-command-not-found-message command)
-                                  *error-output*)))))))
+                               (let ((span (nshell.domain.parsing:ast-node-span
+                                           (evaluated-command-stage-command-node stage))))
+                                 (lambda ()
+                                   (let ((nshell.infrastructure.acl:*external-command-span* span))
+                                     (write-string
+                                      (nshell.infrastructure.acl::%external-command-not-found-message
+                                       command)
+                                      *error-output*)))))))))
                      ((:builtin :shell-function :source-function)
                       (let ((stage-to-dispatch stage)
                             (stage-io-to-dispatch stage-io)

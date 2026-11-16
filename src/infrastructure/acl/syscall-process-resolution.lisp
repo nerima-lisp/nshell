@@ -2,6 +2,11 @@
 
 (defvar *command-not-found-hook* nil)
 
+(defvar *external-command-span* nil
+  "The source span of the external command being started, for
+*COMMAND-NOT-FOUND-HOOK* to read when the command is not found; NIL when
+unknown.")
+
 (defun %external-command-timeout-message (command timeout-seconds)
   (format nil "nshell: ~a: timed out after ~a seconds~%" command timeout-seconds))
 

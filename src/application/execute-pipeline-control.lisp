@@ -18,7 +18,8 @@ each refusal: E_NEEDS_APPROVAL or E_BLOCKED_BY_POLICY. The caller binds a fresh
 cons; pipeline stage threads share it, so a refusal in a stage reaches it.")
 
 (defvar *full-screen-program-guard* nil
-  "NIL, or a function of an external command's name and argument strings that
+  "NIL, or a function of an external command's name, its argument strings and
+the source span of the command in the input (NIL when it has none) that
 returns true when the command is a full-screen program that must not start.
 Machine mode binds it (ux/U6); the execution gate then refuses the command
 with E_INTERACTIVE_PROGRAM.")
@@ -209,7 +210,8 @@ or NIL. PATH and RESOLVE are as for %ASSISTANT-EXECUTION-GATE."
                                 command
                                 (mapcar #'nshell.domain.parsing:arg-value
                                         (nshell.domain.parsing:command-node-args
-                                         run-node))))
+                                         run-node))
+                                (nshell.domain.parsing:ast-node-span node)))
               (return
                 (%gate-refusal
                  "E_INTERACTIVE_PROGRAM"

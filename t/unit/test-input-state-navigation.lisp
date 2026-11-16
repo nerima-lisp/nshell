@@ -66,7 +66,7 @@
           :redraw
           (:buffer "git status" :cursor-pos 4 :suggestion nil))))
 
-  (it "input-state-modified-arrows-move-by-word-and-handle-mouse-redraw"
+  (it "input-state-modified-arrows-move-by-word"
     (let ((state (input-state
                   :buffer "git checkout main"
                   :cursor-pos 17)))
@@ -75,7 +75,8 @@
           (reduce-once state :ctrl-left)
           :redraw
           (:cursor-pos 13)
-        (with-reduced-input-state (checkout-state) (reduce-once main-state :alt-left)
+        (with-reduced-input-state (checkout-state)
+            (reduce-once main-state :alt-left)
           (is-input-state checkout-state :cursor-pos 4))))
     (let ((state (input-state
                   :buffer "git checkout main"
@@ -85,16 +86,9 @@
           (reduce-once state :alt-right)
           :redraw
           (:cursor-pos 4)
-        (with-reduced-input-state (checkout-state) (reduce-once git-state :ctrl-right)
-          (is-input-state checkout-state :cursor-pos 13))))
-    (let ((state (input-state
-                  :buffer "abc"
-                  :cursor-pos 2)))
-      (with-reduced-input-state (mouse-state mouse-output)
-          (reduce-once state :mouse nil 0
-                       '(:protocol :sgr :button 0 :column 2 :row 1))
-        (is-input-state mouse-state :buffer "abc" :cursor-pos 2)
-        (expect :redraw :to-be mouse-output))))
+        (with-reduced-input-state (checkout-state)
+            (reduce-once git-state :ctrl-right)
+          (is-input-state checkout-state :cursor-pos 13)))))
 
   (it "input-state-meta-b-and-f-move-by-word"
     (let ((state (input-state

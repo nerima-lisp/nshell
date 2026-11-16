@@ -433,8 +433,7 @@ never undone leaves SGR mouse reporting on in the user's next shell."
     (let ((calls nil)
           (foreground-groups nil)
           (nshell.application:*shell-pgid* nil)
-          (nshell.presentation::*interactive-terminal-restore-pgid* nil)
-          (nshell.presentation::*mouse-reporting-enabled-p* t))
+          (nshell.presentation::*interactive-terminal-restore-pgid* nil))
       (with-temporary-function
           ((quote nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
            (lambda () t))
@@ -470,10 +469,6 @@ never undone leaves SGR mouse reporting on in the user's next shell."
               (lambda (&rest args)
                 (declare (ignore args))
                 (push :ansi-enable-bracketed-paste calls)))
-             ('nshell.infrastructure.terminal:ansi-enable-sgr-mouse
-              (lambda (&rest args)
-                (declare (ignore args))
-                (push :ansi-enable-sgr-mouse calls)))
              ('nshell.infrastructure.terminal:ansi-disable-sgr-mouse
               (lambda (&rest args)
                 (declare (ignore args))
@@ -495,7 +490,6 @@ never undone leaves SGR mouse reporting on in the user's next shell."
                       :enable-raw-mode
                       :restore-terminal-mode
                       :ansi-enable-bracketed-paste
-                      :ansi-enable-sgr-mouse
                       :ansi-disable-sgr-mouse
                       :ansi-disable-bracketed-paste))
         (expect (member call calls) :to-be-truthy)))))

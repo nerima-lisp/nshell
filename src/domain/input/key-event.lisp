@@ -12,5 +12,4 @@
 
 TYPE is a keyword such as :CHAR, :PASTE, :ENTER, :TAB, :LEFT, :CTRL-C, or :SHIFT-TAB.
 CHAR is populated for printable character events. NUMBER and DATA carry optional
-structured payloads for terminal protocols such as mouse reporting or
-bracketed paste.")
+structured payloads for terminal protocols such as bracketed paste.")

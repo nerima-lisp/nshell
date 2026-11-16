@@ -47,32 +47,6 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
          last-cancel-at
          (<= 0 (- now last-cancel-at) +assistant-cancel-window-ticks+))))
 
-(defun %map-rendered-mouse-event-to-buffer (event)
-  (let ((data (and *input-state*
-                   (nshell.domain.input:key-event-p event)
-                   (nshell.domain.input:key-event-data event))))
-    (if (and data
-             (eq :sgr (getf data :protocol))
-             (member (getf data :event) '(:press :drag :release))
-             (null (getf data :buffer-index)))
-        (let ((index
-                (%rendered-buffer-index-at-position
-                 (input-state-buffer *input-state*)
-                 (getf data :row)
-                 (getf data :column)
-                 *prompt-rendered-prompt-width*
-                 :terminal-width *prompt-rendered-terminal-width*
-                 :origin-row *prompt-rendered-origin-row*
-                 :origin-column *prompt-rendered-origin-column*)))
-          (if (integerp index)
-              (nshell.domain.input:make-key-event
-               :mouse
-               nil
-               (nshell.domain.input:key-event-number event)
-               (list* :buffer-index index data))
-              event))
-        event)))
-
 (defun %transient-panel-expand-event-p (event)
   (and (transient-panel-displayed-p)
        (nshell.domain.input:key-event-p event)
@@ -246,9 +220,7 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
                (and *interactive-terminal-installed-p*
                     *suggestion-worker-state*
                     #'%poll-suggestion-worker-event)))
-            (event (unless (nshell.feature.assistant:assistant-model-event-p
-                            raw-event)
-                     (%map-rendered-mouse-event-to-buffer raw-event))))
+            (event (unless (nshell.feature.assistant:assistant-model-event-p raw-event) raw-event)))
        (cond
          ((not *running*)
           +repl-exit+)

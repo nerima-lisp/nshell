@@ -1,43 +1,5 @@
 (in-package #:nshell.infrastructure.terminal)
 
-(defun mouse-modifiers (button-code)
-  (loop for (mask modifier) in '((4 :shift) (8 :alt) (16 :ctrl))
-        when (not (zerop (logand button-code mask)))
-          collect modifier))
-
-(defun mouse-event-kind (button-code final)
-  (cond
-    ((char= final #\m) :release)
-    ((not (zerop (logand button-code 64)))
-     (case (logand button-code 3)
-       (0 :wheel-up)
-       (1 :wheel-down)
-       (otherwise :wheel)))
-    ((not (zerop (logand button-code 32))) :drag)
-    (t :press)))
-
-(defun decode-sgr-mouse-event (body final)
-  "Decode an SGR mouse report body such as \"<0;10;5\".
-
-Returns NIL when BODY/FINAL is not an SGR mouse report."
-  (when (and (> (length body) 0)
-             (char= (char body 0) #\<)
-             (or (char= final #\M) (char= final #\m)))
-    (let* ((parts (split-string-on-char (subseq body 1) #\;))
-           (button-code (parse-integer-or-nil (or (first parts) "")))
-           (column (parse-integer-or-nil (or (second parts) "")))
-           (row (parse-integer-or-nil (or (third parts) ""))))
-      (if (and button-code column row)
-          (make-key-event :mouse nil button-code
-                          (list :protocol :sgr
-                                :button (logand button-code 3)
-                                :button-code button-code
-                                :column column
-                                :row row
-                                :event (mouse-event-kind button-code final)
-                                :modifiers (mouse-modifiers button-code)))
-          (make-key-event :unknown)))))
-
 (defun csi-modifier (body)
   (let* ((parts (split-string-on-char body #\;))
          (modifier-text (second parts)))
@@ -72,7 +34,6 @@ Returns NIL when BODY/FINAL is not an SGR mouse report."
                                       (every #'digit-char-p part)))
                                parts))))
         (make-key-event :ignore))
-      (decode-sgr-mouse-event body final)
       (let ((arrow-type (lookup-key-event-type final +csi-arrow-specs+)))
         (when arrow-type
           (make-key-event (modified-arrow-type arrow-type (csi-modifier body)))))

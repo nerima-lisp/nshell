@@ -273,8 +273,7 @@ skipped, while history still follows HISTORY-P."
   (nshell.feature.assistant:reset-assistant-settings)
   (progn
     (%reset-repl-state-tables)
-    (setf *osc133-state* :none
-          *mouse-reporting-enabled-p* nil))
+    (setf *osc133-state* :none))
   (nshell.infrastructure.terminal:reset-terminal-color-depth)
   (setf nshell.domain.prompting:*git-status-resolver*
         (function nshell.infrastructure.acl:get-git-status)
@@ -292,10 +291,7 @@ skipped, while history still follows HISTORY-P."
   (progn
     (%load-interactive-config
      :enabled-p (and load-config-p (not nshell.application:*safe-mode-p*))
-     :path config-path)
-    (setf *mouse-reporting-enabled-p*
-          (%vi-mode-flag-enabled-p
-           (nshell.domain.environment:env-get *environment* "NSHELL_MOUSE_REPORTING"))))
+     :path config-path))
   (%apply-east-asian-ambiguous-width)
   (when history-p
     (%seed-history-from-file *history*))

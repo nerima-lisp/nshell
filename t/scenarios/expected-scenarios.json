@@ -555,13 +555,6 @@
       "path": "F09/approx-mouse-report-default-off.json"
     },
     {
-      "id": "F09-mouse-report-opt-in",
-      "uc": [
-        "F09"
-      ],
-      "path": "F09/approx-mouse-report-opt-in.json"
-    },
-    {
       "id": "F10-unicode-grapheme-cursor-edit",
       "uc": [
         "F10"

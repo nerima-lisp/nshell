@@ -3,19 +3,20 @@
 (describe "key-event-value-tests"
   (it "constructs decoded events with defaults and structured payloads"
     (let ((default (nshell.domain.input:make-key-event :char))
+          (character (nshell.domain.input:make-key-event :char #\x))
           (event (nshell.domain.input:make-key-event
-                  :mouse #\x 7 '(:button 1))))
+                  :paste nil 7 '(:text "pasted"))))
       (expect :char :to-be
               (nshell.domain.input:key-event-type default))
       (expect (nshell.domain.input:key-event-data default)
               :to-be-null)
-      (expect :mouse :to-be
+      (expect #\x :to-equal
+              (nshell.domain.input:key-event-char character))
+      (expect :paste :to-be
               (nshell.domain.input:key-event-type event))
-      (expect #\x :to-be
-              (nshell.domain.input:key-event-char event))
-      (expect 7 :to-be
+      (expect 7 :to-equal
               (nshell.domain.input:key-event-number event))
-      (expect '(:button 1) :to-equal
+      (expect '(:text "pasted") :to-equal
               (nshell.domain.input:key-event-data event))))
 
   (it "rejects non-character key payloads"
@@ -50,8 +51,6 @@
                     (:mode . :vi-c)
                     (:vi-count . 3)
                     (:vi-visual-anchor . 1)
-                    (:mouse-selection-anchor . 0)
-                    (:mouse-selection-end . 2)
                     (:abbreviation-expander . :expander)
                     (:kill-ring . ("cut"))
                     (:last-yank-start . 1)
@@ -319,7 +318,7 @@ rebuilt state, so the completion, transient, and session groups each assemble.
                         :search-original-cursor nil
                         :search-index 9))))
 
-  (it "input-state-copy-with-resets-completion-and-clamps-selection"
+  (it "input-state-copy-with-resets-completion-state"
     (let* ((expander (lambda (text) text))
            (state (input-state
                    :buffer "abcdef"
@@ -327,25 +326,17 @@ rebuilt state, so the completion, transient, and session groups each assemble.
                    :completion-index 2
                    :completion-base-buffer "prefix"
                    :completion-base-cursor 3
-                   :mouse-selection-anchor 4
-                   :mouse-selection-end 5
                    :abbreviation-expander expander))
            (copy (nshell.presentation::copy-input-state-with
                   state
                   :buffer "xy"
-                  :completion-index -1
-                  :mouse-selection-anchor 99
-                  :mouse-selection-end -1)))
+                  :completion-index -1)))
       (expect -1 :to-equal
               (nshell.presentation::input-state-completion-index copy))
       (expect nil :to-be
               (nshell.presentation::input-state-completion-base-buffer copy))
       (expect nil :to-be
               (nshell.presentation::input-state-completion-base-cursor copy))
-      (expect 2 :to-equal
-              (nshell.presentation::input-state-mouse-selection-anchor copy))
-      (expect 0 :to-equal
-              (nshell.presentation::input-state-mouse-selection-end copy))
       (expect expander :to-be
               (nshell.presentation::input-state-abbreviation-expander copy))))
 
@@ -358,8 +349,6 @@ rebuilt state, so the completion, transient, and session groups each assemble.
                    :completion-base-cursor 2
                    :mode :vi-c
                    :vi-visual-anchor 2
-                   :mouse-selection-anchor 1
-                   :mouse-selection-end 2
                    :abbreviation-expander expander))
            (copy (nshell.presentation::copy-input-state-with
                   state
@@ -367,18 +356,12 @@ rebuilt state, so the completion, transient, and session groups each assemble.
                   :completion-base-cursor "not-an-integer"
                   :mode nil
                   :vi-visual-anchor nil
-                  :mouse-selection-anchor nil
-                  :mouse-selection-end nil
                   :abbreviation-expander nil)))
       (is-input-state copy
                       :completion-base-buffer "base"
                       :completion-base-cursor 2
                       :mode :vi-c
                       :vi-visual-anchor nil)
-      (expect nil :to-be
-              (nshell.presentation::input-state-mouse-selection-anchor copy))
-      (expect nil :to-be
-              (nshell.presentation::input-state-mouse-selection-end copy))
       (expect expander :to-be
               (nshell.presentation::input-state-abbreviation-expander copy))))
 

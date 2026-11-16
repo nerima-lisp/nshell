@@ -1,11 +1,5 @@
 (in-package #:nshell.presentation)
 
-(defun %active-mouse-selection-range ()
-  (when *input-state*
-    (let ((anchor (input-state-mouse-selection-anchor *input-state*))
-          (end (input-state-mouse-selection-end *input-state*)))
-      (when (and (integerp anchor) (integerp end))
-        (list (min anchor end) (max anchor end))))))
 (defun %active-matching-delimiter-spans (&optional provided-scan-result)
   (when *input-state*
     (let* ((source (input-state-buffer *input-state*))
@@ -326,7 +320,6 @@
                                      '(:ask :ask-waiting)
                                      :test #'eq)
                         "ask>"))
-           (selection-range (%active-mouse-selection-range))
            (matching-spans (%active-matching-delimiter-spans scan-result)))
       (when ask-suffix
         (format t " ")
@@ -338,8 +331,6 @@
           (setf *osc133-state* :input))
         (render-edit-buffer
          text theme
-         :selection-start (first selection-range)
-         :selection-end (second selection-range)
          :matching-spans matching-spans
          :scan-result highlight-scan-result
          :cursor-position cursor-position))

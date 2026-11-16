@@ -55,8 +55,6 @@ above."
           (progn
             (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
             (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
-            (when *mouse-reporting-enabled-p*
-              (nshell.infrastructure.terminal:ansi-enable-sgr-mouse))
             (finish-output))))
     installed-p)))
 

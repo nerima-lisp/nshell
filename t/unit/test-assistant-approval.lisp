@@ -312,6 +312,19 @@ first, as (SOURCE ORIGIN APPROVAL)."
           (expect nil :to-be nshell.presentation::*assistant-command-approval*)
           (expect "" :to-equal (%approval-buffer))))))
 
+  (it "stops-at-the-gate-when-an-alias-in-a-pipeline-turns-confirm"
+    (with-repl-test-state
+      (repl-test-define-alias "ls" "nshell-approval-test-missing-command")
+      (let ((nshell.presentation::*input-state* (%approval-proposal-state "echo hi | ls")))
+        (with-approval-gate-execution ()
+          (%approval-press-enter)
+          (expect 126 :to-equal nshell.presentation::*last-exit-code*)
+          (expect '("echo hi | ls" . :pending) :to-equal
+                  nshell.presentation::*assistant-command-approval*)
+          (%approval-press-enter)
+          (expect 127 :to-equal nshell.presentation::*last-exit-code*)
+          (expect nil :to-be nshell.presentation::*assistant-command-approval*)))))
+
   ;; Passes once the closed-world ls spec allows --color=auto (D-P1-5 2.6).
   (it "does-not-stop-a-safe-proposal-at-the-gate-for-an-ls-color-alias"
     (with-repl-test-state
@@ -411,3 +424,103 @@ first, as (SOURCE ORIGIN APPROVAL)."
             (expect 0 :to-equal code)
             (expect nil :to-be nshell.application:*execution-gate-stopped-p*)))
         (expect 1 :to-equal executed)))))
+
+;;; The interactive REPL runs submissions through the reader executor, so the
+;;; gate has to run there too, after words, aliases and functions are expanded.
+;;; The commands below do not exist: confirm by classification, and running one
+;;; only reports "command not found" (127).
+
+(defparameter +approval-missing-command+ "nshell-approval-test-missing-command")
+
+(defun %approval-reader-run (context source reader-context
+                             &key (origin :proposal) approval)
+  "Evaluate SOURCE on the reader path; return its status and whether the gate stopped."
+  (let ((nshell.application:*execution-origin* origin)
+        (nshell.application:*execution-approval* approval)
+        (nshell.application:*execution-gate-stopped-p* nil)
+        (status nil))
+    (capture-standard-output
+      (let ((*error-output* (make-broadcast-stream)))
+        (dolist (reader-result (nshell.domain.parsing:read-submission
+                                source :reader-context reader-context))
+          (setf status
+                (nth-value 1 (nshell.presentation:call-with-command-failure-restarts
+                              (lambda ()
+                                (nshell.application:evaluate-reader-result-in-context
+                                 context reader-result))))))))
+    (values status nshell.application:*execution-gate-stopped-p*)))
+
+(describe "reader-path-execution-gate"
+  (it "does-not-gate-typed-commands"
+    (multiple-value-bind (status stopped-p)
+        (%approval-reader-run (make-test-shell-context) +approval-missing-command+
+                              :bare-line :origin :typed)
+      (expect 127 :to-equal status)
+      (expect nil :to-be stopped-p)))
+
+  (it "runs-a-confirm-command-only-with-a-confirm-approval"
+    (let ((context (make-test-shell-context)))
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context +approval-missing-command+ :bare-line
+                                :approval :safe)
+        (expect 126 :to-equal status)
+        (expect t :to-be stopped-p))
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context +approval-missing-command+ :bare-line
+                                :approval :confirm)
+        (expect 127 :to-equal status)
+        (expect nil :to-be stopped-p))))
+
+  (it "gates-every-stage-of-a-pipeline"
+    (multiple-value-bind (status stopped-p)
+        (%approval-reader-run (make-test-shell-context)
+                              (format nil "echo hi | ~a" +approval-missing-command+)
+                              :bare-line :approval :safe)
+      (expect 126 :to-equal status)
+      (expect t :to-be stopped-p)))
+
+  (it "gates-forced-external-sexp-commands"
+    (let ((context (make-test-shell-context))
+          (source (format nil "(^~a)" +approval-missing-command+)))
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context source :sexp :approval :safe)
+        (expect 126 :to-equal status)
+        (expect t :to-be stopped-p))
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context source :sexp :approval :confirm)
+        (expect 127 :to-equal status)
+        (expect nil :to-be stopped-p))))
+
+  (it "does-not-let-the-outer-approval-run-a-substituted-command"
+    (multiple-value-bind (status stopped-p)
+        (%approval-reader-run (make-test-shell-context)
+                              (format nil "echo $(~a)" +approval-missing-command+)
+                              :bare-line :approval :confirm)
+      (declare (ignore status))
+      (expect t :to-be stopped-p)))
+
+  (it "does-not-let-the-outer-approval-run-a-function-body"
+    (let ((context (make-test-shell-context))
+          (body-status nil))
+      (nshell.application::register-shell-function
+       (nshell.application:context-shell-function-registry context)
+       "approval-test-function"
+       (nshell.application:make-shell-function-binding
+        (lambda (&rest arguments)
+          (declare (ignore arguments))
+          (setf body-status
+                (nth-value 1 (nshell.application:execute-reader-ast-in-context
+                              context
+                              (nshell.domain.parsing:make-command-node
+                               +approval-missing-command+ nil)
+                              (lambda (stage-context command-node)
+                                (nshell.application::evaluate-command-stage-in-context
+                                 stage-context command-node)))))
+          (values nil 0))
+        nil "approval-test-function" nil nil))
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context "approval-test-function" :bare-line
+                                :approval :confirm)
+        (declare (ignore status))
+        (expect 126 :to-equal body-status)
+        (expect t :to-be stopped-p)))))

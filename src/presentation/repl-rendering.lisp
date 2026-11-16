@@ -289,6 +289,7 @@
     (clear-rendered-prompt)
     (when *prompt-hook-pending-p*
       (setf *prompt-hook-pending-p* nil)
+      (refresh-repl-command-path-stamps)
       (nshell.application:run-shell-hooks
        :prompt (boundary-current-directory) *last-exit-code*))
     (%ensure-rendered-prompt-origin)

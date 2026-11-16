@@ -72,9 +72,8 @@
              (nshell.domain.completion::%path-command-directory-cache-put
               :coverage-boundary
               generation
-              1
-              0d0
-              '(:entry))
+              (nshell.domain.completion::%make-path-command-directory-cache-entry
+               1 0d0 0d0 t '(:entry)))
              (expect 1
                      :to-equal
                      (hash-table-count

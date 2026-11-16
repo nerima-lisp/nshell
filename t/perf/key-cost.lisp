@@ -512,15 +512,27 @@ the terminal, and call THUNK inside it. Global state is restored afterwards."
 (defun %buffer () (%ncall "NSHELL.PRESENTATION" "INPUT-STATE-BUFFER" (%input-state)))
 (defun %mode () (%ncall "NSHELL.PRESENTATION" "INPUT-STATE-MODE" (%input-state)))
 
+(defun %clear-presentation-table (name)
+  "Clear the presentation hash table NAME when the loaded tree defines it."
+  (let ((symbol (find-symbol name "NSHELL.PRESENTATION")))
+    (when (and symbol (boundp symbol) (hash-table-p (symbol-value symbol)))
+      (clrhash (symbol-value symbol)))))
+
 (defun %clear-completion-caches ()
-  ;; These caches expire on wall-clock TTLs (directory listing 5 s, PATH
-  ;; commands 0.25 s, highlight path probes 2 s), so whether a key hits them
-  ;; depends on machine speed. Clearing them before every measured key makes
-  ;; the counts deterministic and measures the cache-miss cost.
+  ;; These caches expire on wall-clock TTLs or per-prompt stamps (directory
+  ;; listing 5 s, PATH directory stamp recheck 1 s or 0.25 s after a recent
+  ;; change, highlight path probes 2 s, highlight command memo), so whether a
+  ;; key hits them depends on machine speed and on the session's history.
+  ;; Clearing them before every measured key makes the counts deterministic and
+  ;; measures the cache-miss cost. The highlight command cache differs between
+  ;; source trees (*REPL-COMMAND-PATH-MEMO*, formerly
+  ;; *REPL-HIGHLIGHT-PATH-CACHE*), so whichever the tree defines is cleared.
   (%ncall "NSHELL.INFRASTRUCTURE.ACL" "CLEAR-DIRECTORY-LISTING-CACHE")
   (%ncall "NSHELL.DOMAIN.COMPLETION" "%INVALIDATE-PATH-COMMAND-CACHE")
   (clrhash (symbol-value (%pres "*HIGHLIGHT-PATH-PROBE-CACHE*")))
-  (setf (symbol-value (%pres "*HIGHLIGHT-PATH-PROBE-CACHE-STAMP*")) nil))
+  (setf (symbol-value (%pres "*HIGHLIGHT-PATH-PROBE-CACHE-STAMP*")) nil)
+  (%clear-presentation-table "*REPL-COMMAND-PATH-MEMO*")
+  (%clear-presentation-table "*REPL-HIGHLIGHT-PATH-CACHE*"))
 
 (defun %set-buffer (text &key (cold-caches t))
   "Put TEXT in the editor with the suggestion a previous key would have left."

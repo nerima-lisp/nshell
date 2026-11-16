@@ -154,8 +154,11 @@ grow it without bound.")
             ((sb-posix:s-isreg mode) :regular-file)
             (t :other)))
       (sb-posix:syscall-error (condition)
+        ;; An unreachable target (EACCES, ELOOP) is listed like a dangling
+        ;; link; signalling here would drop every entry of the directory.
         (if (member (sb-posix:syscall-errno condition)
-                    (list sb-posix:enoent sb-posix:enotdir))
+                    (list sb-posix:enoent sb-posix:enotdir
+                          sb-posix:eacces sb-posix:eloop))
             :missing
             (error condition)))))
 

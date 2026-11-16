@@ -390,6 +390,7 @@
             (reap-scanner))))))
 
   (it "path-command-cache-invalidates-on-stamp-ttl-hook-and-explicit-reset"
+    "A stamp too close to the scan time is rechecked on every lookup and expires."
     (let ((directory-reads 0)
           (stamp 1)
           (now 0d0))
@@ -399,7 +400,10 @@
                 (declare (ignore directory))
                 stamp))
             (nshell.domain.completion::*path-command-cache-clock-fn*
-              (lambda () now)))
+              (lambda () now))
+            ;; The scan starts in the stamp's own second, so no stamp is settled.
+            (nshell.domain.completion::*path-command-cache-wall-clock-fn*
+              (constantly 1)))
         (flet ((directory-files (directory)
                  (declare (ignore directory))
                  (incf directory-reads)
@@ -428,6 +432,134 @@
                    (nshell.domain.completion::%command-candidates-from-path
                     "/mock" "cache-" *completion-test-filesystem*)))
           (expect 5 :to-equal directory-reads)))))
+
+  (it "path-command-cache-trusts-settled-stamps-between-revalidations"
+    "A settled stamp skips the stat inside the revalidation window, is not rescanned
+by the short TTL, and a changed stamp is seen at the first check after the window."
+    (let ((directory-reads 0)
+          (stamp-calls 0)
+          (stamp 1)
+          (now 0d0)
+          (listing (list #p"/mock/cache-tool")))
+      (nshell.domain.completion::%invalidate-path-command-cache)
+      (unwind-protect
+           (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
+                   (lambda (directory)
+                     (declare (ignore directory))
+                     (incf stamp-calls)
+                     stamp))
+                 (nshell.domain.completion::*path-command-cache-clock-fn*
+                   (lambda () now))
+                 (nshell.domain.completion::*path-command-cache-wall-clock-fn*
+                   (constantly 100))
+                 (nshell.domain.completion::*path-command-cache-revalidate-seconds*
+                   1d0))
+             (with-test-path-filesystem
+                 ((lambda (directory)
+                    (declare (ignore directory))
+                    (incf directory-reads)
+                    listing)
+                  (constantly t))
+               (flet ((lookup ()
+                        (completion-texts
+                         (nshell.domain.completion::%command-candidates-from-path
+                          "/mock" "cache-" *completion-test-filesystem*))))
+                 (expect '("cache-tool") :to-equal (lookup))
+                 (expect 1 :to-equal directory-reads)
+                 (expect 2 :to-equal stamp-calls)
+                 ;; Inside the window: no stat, so the new stamp is not seen yet.
+                 (setf stamp 2
+                       listing (list #p"/mock/cache-tool" #p"/mock/cache-new")
+                       now 0.5d0)
+                 (expect '("cache-tool") :to-equal (lookup))
+                 (expect 1 :to-equal directory-reads)
+                 (expect 2 :to-equal stamp-calls)
+                 ;; After the window: one stat finds the change and rescans.
+                 (setf now 1.5d0)
+                 (expect '("cache-new" "cache-tool") :to-equal (lookup))
+                 (expect 2 :to-equal directory-reads)
+                 ;; Unchanged stamp past the window but within the maximum
+                 ;; age: one stat, no rescan.
+                 (let ((calls-before stamp-calls))
+                   (setf now 20d0)
+                   (expect '("cache-new" "cache-tool") :to-equal (lookup))
+                   (expect 2 :to-equal directory-reads)
+                   (expect (1+ calls-before) :to-equal stamp-calls)))))
+        (nshell.domain.completion::%invalidate-path-command-cache))))
+
+  (it "path-command-cache-rescans-a-settled-entry-after-its-maximum-age"
+    "A change that keeps the directory mtime (a symlink target turning from a
+directory into an executable) shows up once the entry passes its maximum age."
+    (let ((directory-reads 0)
+          (now 0d0)
+          (listing nil))
+      (nshell.domain.completion::%invalidate-path-command-cache)
+      (unwind-protect
+           (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
+                   (constantly 1))
+                 (nshell.domain.completion::*path-command-cache-clock-fn*
+                   (lambda () now))
+                 (nshell.domain.completion::*path-command-cache-wall-clock-fn*
+                   (constantly 100))
+                 (nshell.domain.completion::*path-command-cache-max-age-seconds*
+                   30d0))
+             (with-test-path-filesystem
+                 ((lambda (directory)
+                    (declare (ignore directory))
+                    (incf directory-reads)
+                    listing)
+                  (constantly t))
+               (flet ((lookup ()
+                        (completion-texts
+                         (nshell.domain.completion::%command-candidates-from-path
+                          "/aged" "aged-" *completion-test-filesystem*))))
+                 (expect (lookup) :to-be-null)
+                 (setf listing (list #p"/aged/aged-tool")
+                       now 29d0)
+                 (expect (lookup) :to-be-null)
+                 (expect 1 :to-equal directory-reads)
+                 (setf now 31d0)
+                 (expect '("aged-tool") :to-equal (lookup))
+                 (expect 2 :to-equal directory-reads))))
+        (nshell.domain.completion::%invalidate-path-command-cache))))
+
+  (it "path-command-cache-sees-a-missing-directory-appear"
+    "A PATH directory without a stamp stays cached while it lists nothing and is
+rescanned once a stamp appears."
+    (let ((directory-reads 0)
+          (stamp nil)
+          (listing nil)
+          (now 0d0))
+      (nshell.domain.completion::%invalidate-path-command-cache)
+      (unwind-protect
+           (let ((nshell.domain.completion::*path-command-directory-stamp-fn*
+                   (lambda (directory)
+                     (declare (ignore directory))
+                     stamp))
+                 (nshell.domain.completion::*path-command-cache-clock-fn*
+                   (lambda () now))
+                 (nshell.domain.completion::*path-command-cache-wall-clock-fn*
+                   (constantly 100)))
+             (with-test-path-filesystem
+                 ((lambda (directory)
+                    (declare (ignore directory))
+                    (incf directory-reads)
+                    listing)
+                  (constantly t))
+               (flet ((lookup ()
+                        (completion-texts
+                         (nshell.domain.completion::%command-candidates-from-path
+                          "/later" "late-" *completion-test-filesystem*))))
+                 (expect (lookup) :to-be-null)
+                 (setf now 10d0)
+                 (expect (lookup) :to-be-null)
+                 (expect 1 :to-equal directory-reads)
+                 (setf stamp 50
+                       listing (list #p"/later/late-tool")
+                       now 20d0)
+                 (expect '("late-tool") :to-equal (lookup))
+                 (expect 2 :to-equal directory-reads))))
+        (nshell.domain.completion::%invalidate-path-command-cache))))
 
   (it "path-command-cache-isolates-request-local-filesystems"
     (let* ((filesystem-one nil)

@@ -53,6 +53,12 @@ JSON OBJECT; NIL when a member is missing."
   (map 'list (lambda (effect) (list (gethash "kind" effect) (gethash "path" effect)))
        (or (json-at envelope "effects") #())))
 
+(defun json-fixes (envelope)
+  "Return the error fixes of decoded ENVELOPE as (INPUT WHY RULE) lists."
+  (map 'list (lambda (fix)
+               (list (gethash "input" fix) (gethash "why" fix) (gethash "rule" fix)))
+       (or (json-at envelope "error" "fixes") #())))
+
 (defun json-pid-alive-p (pid)
   (handler-case (progn (sb-posix:kill pid 0) t)
     (sb-posix:syscall-error () nil)))
@@ -140,12 +146,21 @@ an orphan needs its new parent to reap it before kill 0 fails."
       (expect (list (json-at envelope "error" "span" "line")
                     (json-at envelope "error" "span" "column")
                     (json-at envelope "error" "span" "end"))
-              :to-equal '(1 1 4)))
+              :to-equal '(1 1 4))
+      ;; diagnose/typo; the names it compares include the host's PATH.
+      (expect (member '("git status" "edit distance 1" "diagnose/typo")
+                      (json-fixes envelope) :test #'equal)
+              :to-be-truthy))
     (let ((envelope (json-command "(gti status)")))
       (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
       (expect (list (json-at envelope "error" "span" "column")
                     (json-at envelope "error" "span" "end"))
-              :to-equal '(2 5))))
+              :to-equal '(2 5))
+      (expect (member '("(git status)" "edit distance 1" "diagnose/typo")
+                      (json-fixes envelope) :test #'equal)
+              :to-be-truthy))
+    ;; A failure other than a missing command carries no fixes.
+    (expect (json-fixes (json-command "sh -c 'exit 127'")) :to-be-null))
 
   (it "reports unreadable input as E_PARSE and a Lisp error as E_LISP_ERROR"
     (let ((envelope (json-command "(echo")))

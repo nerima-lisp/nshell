@@ -341,7 +341,9 @@ WRITES are the output redirect targets the caller read from the AST."
 INPUT is the submitted text, STATUS its exit status, and the command word
 spans [COMMAND-START, COMMAND-END).  KNOWN-COMMANDS are the names the caller
 can run; the rule reads no PATH itself.  Each fix is a plist with :INPUT,
-:WHY, and :RULE, nearest first."
+:WHY, and :RULE.  Of the names within the rule's bound only those at the
+smallest distance found are fixes, in name order: a nearer name makes a
+farther one noise."
   (let ((facts
           (append
            (list (list 'status 'failure status)
@@ -361,13 +363,15 @@ can run; the rule reads no PATH itself.  Each fix is a plist with :INPUT,
                               '(diagnose failure (fix ?new)
                                 ?rule (distance ?distance))))
              :test #'equal :from-end t)))
-      (mapcar (lambda (fix)
-                (destructuring-bind (new distance rule) fix
-                  (list :input new
-                        :why (format nil "edit distance ~D" distance)
-                        :rule rule)))
-              (stable-sort (sort fixes #'string< :key #'first)
-                           #'< :key #'second)))))
+      (when fixes
+        (let ((nearest (reduce #'min fixes :key #'second)))
+          (mapcar (lambda (fix)
+                    (destructuring-bind (new distance rule) fix
+                      (list :input new
+                            :why (format nil "edit distance ~D" distance)
+                            :rule rule)))
+                  (sort (remove nearest fixes :key #'second :test-not #'=)
+                        #'string< :key #'first)))))))
 
 (defun classify-rule-catalog (&optional (rulebase *builtin-classify-rulebase*))
   "Return (RULE LEVEL TEXT) for each classify/4 rule RULEBASE states, in

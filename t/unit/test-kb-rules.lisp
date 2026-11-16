@@ -196,12 +196,26 @@
             :to-equal '((:input "git status" :why "edit distance 1"
                          :rule "diagnose/typo"))))
 
-  (it "orders fixes by distance and ignores far names and other statuses"
-    (expect (mapcar (lambda (fix) (getf fix :input))
-                    (nshell.feature.kb:diagnose-typo
-                     :input "sl -a" :status 127 :command-start 0 :command-end 2
-                     :known-commands '("ls" "sed" "ssh" "make")))
-            :to-equal '("ls -a" "sed -a" "ssh -a"))
+  (it "keeps only the nearest fixes and ignores far names and other statuses"
+    (flet ((inputs (input end known)
+             (mapcar (lambda (fix) (getf fix :input))
+                     (nshell.feature.kb:diagnose-typo
+                      :input input :status 127 :command-start 0 :command-end end
+                      :known-commands known))))
+      ;; sl is one transposition from ls and two edits from sed and ssh.
+      (expect (inputs "sl -a" 2 '("ssh" "ls" "sed" "make")) :to-equal '("ls -a"))
+      ;; The builtin ai is two edits from gti, git one.
+      (expect (inputs "gti status" 3 '("ai" "git" "at"))
+              :to-equal '("git status"))
+      ;; Every fix at the nearest distance is kept, in name order.
+      (expect (inputs "gti status" 3 '("gtx" "ai" "git" "gt"))
+              :to-equal '("git status" "gt status" "gtx status"))
+      ;; With nothing one edit away, the names two edits away are the fixes.
+      (expect (nshell.feature.kb:diagnose-typo
+               :input "sl -a" :status 127 :command-start 0 :command-end 2
+               :known-commands '("ssh" "sed" "make"))
+              :to-equal '((:input "sed -a" :why "edit distance 2" :rule "diagnose/typo")
+                          (:input "ssh -a" :why "edit distance 2" :rule "diagnose/typo"))))
     (expect (nshell.feature.kb:diagnose-typo
              :input "gti status" :status 1 :command-start 0 :command-end 3
              :known-commands '("git"))

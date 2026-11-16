@@ -237,9 +237,9 @@ process's directory, the physical directory otherwise."
   (member char '(#\Space #\Tab #\Newline #\Return #\( #\) #\; #\| #\& #\< #\>
                  #\" #\')))
 
-(defun %word-span (input word)
-  "Return the span of the first occurrence of WORD in INPUT as a whole word:
-1-based line and column, END one past its last column."
+(defun %word-start (input word)
+  "Return the index where the first occurrence of WORD in INPUT as a whole
+word starts, or NIL."
   (let ((length (length word)))
     (when (plusp length)
       (loop for start = (search word input)
@@ -248,15 +248,25 @@ process's directory, the physical directory otherwise."
             for end = (+ start length)
             when (and (or (zerop start) (%word-delimiter-p (char input (1- start))))
                       (or (= end (length input)) (%word-delimiter-p (char input end))))
-              return (let* ((line-start (let ((newline (position #\Newline input
-                                                                 :end start
-                                                                 :from-end t)))
-                                          (if newline (1+ newline) 0)))
-                            (column (1+ (- start line-start))))
-                       (make-envelope-span
-                        :line (1+ (count #\Newline input :end start))
-                        :column column
-                        :end (+ column length)))))))
+              return start))))
+
+(defun %word-span (input word)
+  "Return the span of the first occurrence of WORD in INPUT as a whole word:
+1-based line and column, END one past its last column."
+  (let ((start (%word-start input word)))
+    (and start (source-span input start (+ start (length word))))))
+
+(defun %missing-command-fixes (input status missing)
+  "Return the fixes diagnose/typo gives when MISSING, the command word of
+INPUT, could not be found: INPUT with MISSING replaced by a name the shell can
+run now, builtins, functions, aliases and PATH included."
+  (let ((start (%word-start input missing)))
+    (when start
+      (knowledge-base-fixes
+       (nshell.feature.kb:diagnose-typo
+        :input input :status status
+        :command-start start :command-end (+ start (length missing))
+        :known-commands (nshell.presentation::%repl-known-command-names))))))
 
 (defun %first-line (text)
   (let ((line (string-trim '(#\Space #\Tab #\Return)
@@ -295,8 +305,9 @@ does not list as an error, or NIL when it carries none."
       (string-right-trim "." (string-right-trim "0" (format nil "~,6F" seconds)))))
 
 (defun %failure (run input status stderr-text timeout)
-  "Return the error code, the status to give ERROR-ENVELOPE, the message and
-the span of a run that did not end with status 0, or NIL when it did."
+  "Return the error code, the status to give ERROR-ENVELOPE, the message, the
+span and the fixes of a run that did not end with status 0, or NIL when it
+did."
   (let* ((condition (json-run-condition run))
          (code (%error-code-of condition))
          (missing (json-run-missing-command run))
@@ -321,7 +332,8 @@ the span of a run that did not end with status 0, or NIL when it did."
       ((and (eql status 127) missing)
        (values "E_COMMAND_NOT_FOUND" nil
                (format nil "~A: command not found" missing)
-               (%word-span input missing)))
+               (%word-span input missing)
+               (%missing-command-fixes input status missing)))
       ((eql status 126) (values "E_PERMISSION" nil message))
       ((eql status 130) (values "E_INTERRUPTED" nil message))
       (t
@@ -428,11 +440,12 @@ first failing command, as -e does."
                             :session (and session (output-session-id session))
                             :seq (and session 1)))
                (envelope
-                 (multiple-value-bind (code code-status message span)
+                 (multiple-value-bind (code code-status message span fixes)
                      (%failure run input status (clean-output-text err-text) timeout)
                    (if code
                        (apply #'error-envelope code :status code-status
-                                                    :message message :span span parts)
+                                                    :message message :span span
+                                                    :fixes fixes parts)
                        (apply #'result-envelope :status 0 parts)))))
           (values (envelope-to-json envelope) (envelope-status envelope)
                   envelope))))))

@@ -102,6 +102,13 @@ directory and return the decoded envelope, its stdout text and exit status."
       (with-open-file (out (merge-pathnames name directory) :direction :output)
         (write-line name out)))))
 
+(defun %json-golden-executable (path)
+  "Create PATH as an executable script that exits 0."
+  (ensure-directories-exist path)
+  (with-open-file (out path :direction :output)
+    (format out "#!/bin/sh~%exit 0~%"))
+  (sb-posix:chmod (sb-ext:native-namestring path) #o755))
+
 (defun %json-golden-native (directory)
   (string-right-trim "/" (sb-ext:native-namestring (truename directory))))
 
@@ -130,14 +137,6 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
     (setf (gethash "duration_ms" example) 0
           (gethash "cwd" (gethash "state" example)) "$WORK")
     (%json-golden-with-writer-members example)))
-
-(defun %json-golden-without (object &rest names)
-  (let ((copy (make-hash-table :test #'equal)))
-    (maphash (lambda (key value)
-               (unless (member key names :test #'string=)
-                 (setf (gethash key copy) value)))
-             object)
-    copy))
 
 (describe "machine json golden examples"
   (it "matches proposal/02's --json pipeline example"
@@ -199,27 +198,26 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
     (skip (format nil "the example's writes result/ comes from a build, ~
                        not from cat, whose effect is reads build.log")))
 
-  (it "matches proposal/02's structured error example except fixes"
+  (it "matches proposal/02's structured error example"
+    ;; The fixes come from the names the run can resolve, PATH included, so
+    ;; PATH holds only a git: another name one edit from gti on the host's
+    ;; PATH would be a fix as near as git.
     (host-kit:with-temporary-directory (work)
-      (let* ((example (json-kit:parse
-                       (%json-golden-example "docs/design/proposal/02-machine-interface.md"
-                                             "{" :whole-line-p t)))
-             (expected-error (%json-golden-without (gethash "error" example) "fixes")))
+      (let ((example (json-kit:parse
+                      (%json-golden-example "docs/design/proposal/02-machine-interface.md"
+                                            "{" :whole-line-p t)))
+            (bin (merge-pathnames "bin/" work)))
+        (%json-golden-executable (merge-pathnames "git" bin))
         (multiple-value-bind (envelope stdout status)
-            (%json-golden-run "gti status" work)
+            (%json-golden-run "gti status" work
+                              :extra-environment
+                              (list (format nil "PATH=~A" (%json-golden-native bin))))
           (declare (ignore stdout))
           (expect status :to-equal (gethash "status" example))
           (expect (gethash "status" envelope) :to-equal (gethash "status" example))
           (expect (machine-envelope-failures envelope) :to-be-null)
-          (expect (%json-golden-normalize
-                   (%json-golden-without (gethash "error" envelope) "fixes"))
-                  :to-equal (%json-golden-normalize expected-error))))))
-
-  (it "matches proposal/02's structured error example fixes"
-    (skip (format nil "--json does not attach fixes yet, and diagnose/typo ~
-                       proposes every known name within edit distance 2 ~
-                       (git status, ai status, at status, ...) where the ~
-                       example lists only git status"))))
+          (expect (%json-golden-normalize (gethash "error" envelope))
+                  :to-equal (%json-golden-normalize (gethash "error" example))))))))
 
 (describe "machine json real entry"
   (it "answers exec in a pipeline stage with one envelope"

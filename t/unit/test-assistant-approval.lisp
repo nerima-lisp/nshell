@@ -595,3 +595,20 @@ first, as (SOURCE ORIGIN APPROVAL)."
         (expect 0 :to-equal status)
         (expect nil :to-be stopped-p)
         (expect "UTC" :to-equal (%approval-env context "TZ"))))))
+
+;;; A quoted word, a forced (^...) command, and a quoted word after an
+;;; assignment all run a command: none of them is an assignment-only line.
+(describe "assignment-only-lines-are-decided-by-the-ast"
+  (dolist (source '("\"LANG=C\"" "'LANG=C'" "(^LANG=C)" "(^LANG=C \"TZ=UTC\")"
+                    "LANG=C \"TZ=UTC\""))
+    (let ((source source))
+      (it (format nil "does-not-treat-~a-as-an-assignment" source)
+        (expect nil :to-be
+                (eq :safe (nshell.presentation::%assistant-proposal-level source)))
+        (multiple-value-bind (status stopped-p)
+            (%approval-reader-run (make-test-shell-context) source
+                                  (nshell.presentation::%repl-reader-context-for-source
+                                   source)
+                                  :approval :safe)
+          (expect 126 :to-equal status)
+          (expect t :to-be stopped-p))))))

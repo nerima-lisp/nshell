@@ -140,9 +140,12 @@ so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
                      :test #'string=)
           return (%assistant-classify-argv tail)))
 
-(defun %assistant-classify-argv (words &key assignments nested)
+(defun %assistant-classify-argv (words &key assignments nested writes
+                                           redirect-problems raw-words)
   "Classify the command the argv WORDS run.  ASSIGNMENTS are the environment
-names assigned before it and NESTED the reasons of its substitutions."
+names assigned before it and NESTED the reasons of its substitutions.
+WRITES, REDIRECT-PROBLEMS, and RAW-WORDS describe the redirects and the
+written words of the outermost command."
   (let ((command (first words))
         (args (rest words)))
     (multiple-value-bind (kind inner mismatches names env-options source)
@@ -161,6 +164,9 @@ names assigned before it and NESTED the reasons of its substitutions."
          :wrapper-mismatches mismatches
          :assignments (append assignments names)
          :wrapper-options env-options
+         :writes writes
+         :redirect-problems redirect-problems
+         :words raw-words
          :nested (append (and wrapped (%assistant-result-reasons wrapped)) nested)
          :embedded (and embedded (%assistant-result-reasons embedded)))))))
 
@@ -172,23 +178,136 @@ Any word with `=' counts; the rules judge the name (D-P1-5 2.4)."
         (values (ldiff words command) command)
         (values nil words))))
 
+(defparameter +assistant-output-redirect-kinds+
+  '(:> :>> :&> :&>> :2> :2>>
+    :output-file :append-output-file :force-output-file :error-file
+    :append-error-file :both-output-files :append-both-output-files)
+  "Redirect kinds that write a file: bare-line kinds from ast-redirect-split
+and reader kinds from ast-redirect-entry.")
+
+(defun %assistant-redirects (split-redirects entries)
+  "Describe the redirects of one command (D-P1-5 2.5).  SPLIT-REDIRECTS are
+the (KIND . TARGET) pairs of ast-redirect-split and ENTRIES the reader's
+ast-redirect-entry values.  Return the output targets, a text for each
+redirect outside the safe forms, the texts whose substitutions run
+(targets, here-document bodies, here-strings), and the results of the
+process substitutions."
+  (let ((writes nil)
+        (problems nil)
+        (texts nil)
+        (results nil))
+    (labels ((output (kind target)
+               (push target writes)
+               (unless (string= target "/dev/null")
+                 (push (format nil "~(~a~) ~a" kind target) problems)))
+             (duplicate (source target)
+               ;; 2>&1, 1>&2, and >&2 only; a closed or other descriptor is
+               ;; outside the safe forms.
+               (unless (member (list source target) '((1 2) (2 1)) :test #'equal)
+                 (push (format nil "~a>&~a" source (or target "-")) problems))))
+      (dolist (redirect split-redirects)
+        (destructuring-bind (kind . target) redirect
+          (cond
+            ((member kind +assistant-output-redirect-kinds+) (output kind target))
+            ((member kind '(:2>&1 :< :<< :<<- :<<<)))
+            ((and (eq kind :fd-dup)
+                  (nshell.domain.parsing:redirect-fd-dup-target-p target))
+             (when (eq (nshell.domain.parsing:redirect-fd-dup-target-operator target)
+                       :output)
+               (let ((destination
+                       (nshell.domain.parsing:redirect-fd-dup-target-target target)))
+                 (duplicate (nshell.domain.parsing:redirect-fd-dup-target-source target)
+                            (and (integerp destination) destination)))))
+            (t (push (format nil "~(~a~)" kind) problems)))))
+      (dolist (entry entries)
+        (let ((kind (nshell.domain.parsing:ast-redirect-entry-kind entry))
+              (target (nshell.domain.parsing:ast-redirect-entry-target entry)))
+          (cond
+            ((nshell.domain.parsing:redirect-procsub-target-p target)
+             (push (classify-ast (nshell.domain.parsing:redirect-procsub-target-form
+                                  target))
+                   results)
+             (when (eq (nshell.domain.parsing:redirect-procsub-target-direction target)
+                       :output)
+               (push "process substitution >(...)" problems)))
+            ((nshell.domain.parsing:redirect-heredoc-target-p target)
+             (push (nshell.domain.parsing:redirect-heredoc-target-body target) texts))
+            ((eq kind :duplicate-output-fd)
+             (duplicate (nshell.domain.parsing:ast-redirect-entry-file-descriptor entry)
+                        (and (nshell.domain.parsing:redirect-fd-target-p target)
+                             (nshell.domain.parsing:redirect-fd-target-file-descriptor
+                              target))))
+            ((eq kind :duplicate-input-fd))
+            ((nshell.domain.parsing:command-arg-p target)
+             (let ((value (nshell.domain.parsing:command-arg-value target)))
+               (push value texts)
+               (when (member kind +assistant-output-redirect-kinds+)
+                 (output kind value))))
+            (t (push (format nil "~(~a~)" kind) problems)))))
+      (values (nreverse writes) (nreverse problems) (nreverse texts)
+              (nreverse results)))))
+
+(defun %assistant-command-parts (node)
+  "Split a command NODE for classification.  Return its argv without the
+assignment prefix and the redirects, the assigned names, the words as
+written (redirect targets and here-document bodies included), the output
+targets, the redirect problems, and the results of its process
+substitution redirects."
+  (let* ((split (nshell.domain.parsing:split-command-node-redirects node))
+         (clean (nshell.domain.parsing:command-redirect-split-result-clean-command
+                 split))
+         (argv (cons (nshell.domain.parsing:command-node-command node)
+                     (nshell.domain.parsing:command-node-arg-values clean))))
+    (multiple-value-bind (writes problems texts results)
+        (%assistant-redirects
+         (nshell.domain.parsing:command-redirect-split-result-redirects split)
+         (nshell.domain.parsing:command-node-redirects node))
+      (multiple-value-bind (prefix argv) (%assistant-assignment-prefix argv)
+        (let ((words (append (list (nshell.domain.parsing:command-node-command node))
+                             (nshell.domain.parsing:command-node-arg-values node)
+                             texts)))
+          (values argv
+                  (mapcar #'nshell.feature.kb:assignment-name
+                          (append (mapcar #'nshell.domain.parsing:arg-value
+                                          (nshell.domain.parsing:command-node-environment-assignments
+                                           node))
+                                  prefix))
+                  words
+                  writes
+                  (if (some (lambda (word)
+                              (nshell.domain.parsing:parenthesized-substitution-texts
+                               word ">("))
+                            words)
+                      (append problems (list "process substitution >(...)"))
+                      problems)
+                  results))))))
+
 (defun classify-command (node)
   "Classify a command-node using its effective command and arguments."
   (if (nshell.domain.parsing:command-node-p node)
-      (let ((words (cons (nshell.domain.parsing:command-node-command node)
-                         (nshell.domain.parsing:command-node-arg-values node))))
-        (multiple-value-bind (prefix argv) (%assistant-assignment-prefix words)
-          (%assistant-classify-argv
-           argv
-           :assignments
-           (mapcar #'nshell.feature.kb:assignment-name
-                   (append (mapcar #'nshell.domain.parsing:arg-value
-                                   (nshell.domain.parsing:command-node-environment-assignments
-                                    node))
-                           prefix))
-           :nested (mapcan #'%assistant-result-reasons
-                           (%assistant-substitution-results words)))))
+      (multiple-value-bind (argv assignments words writes problems results)
+          (%assistant-command-parts node)
+        (%assistant-classify-argv
+         argv
+         :assignments assignments
+         :writes writes
+         :redirect-problems problems
+         :raw-words words
+         :nested (mapcan #'%assistant-result-reasons
+                         (append results (%assistant-substitution-results words)))))
       (%assistant-unparsable-result "the value is not a command AST node")))
+
+(defun command-effects (node)
+  "Return the effects of the command NODE runs: (DELETES PATH), (WRITES PATH),
+and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
+  (multiple-value-bind (argv assignments words writes)
+      (%assistant-command-parts node)
+    (declare (ignore assignments words))
+    (nshell.feature.kb:subject-effects
+     :command (%assistant-command-basename (first argv))
+     :invoked-as (first argv)
+     :arguments (rest argv)
+     :writes writes)))
 
 (defun classify-pipeline (node)
   "Classify a pipeline by its most restrictive stage."

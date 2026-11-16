@@ -158,7 +158,7 @@
 
   (it "builds write effects from the AST redirects"
     (with-complete-ast (ast "curl -o page http://x > out")
-      (expect (nshell.feature.assistant::command-effects ast)
+      (expect (nshell.feature.assistant:command-effects ast)
               :to-equal '((nshell.feature.kb::writes "out") :network)))
     (with-complete-ast (ast "grep x f")
-      (expect (nshell.feature.assistant::command-effects ast) :to-equal nil))))
+      (expect (nshell.feature.assistant:command-effects ast) :to-equal nil))))

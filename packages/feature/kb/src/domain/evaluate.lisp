@@ -23,7 +23,7 @@ rules.pl into it; until then only tests set it.")
     (unparsable :none "") (form-redirect :none) (sexp-unforced :none)
     (unclassifiable :none "") (assignment :none "") (wrapper-option :none "")
     (spec-command :none) (spec-match :none) (argument-not-allowed :none "")
-    (opaque-wrapper :none))
+    (opaque-wrapper :none) (redirect-not-allowed :none "") (word :none ""))
   "One clause per input predicate about the atom :NONE, which never names a
 subject.  A rule that asks about an input the evaluator did not supply then
 fails instead of raising existence_error, while a misspelled predicate in
@@ -174,7 +174,8 @@ a bare name; with a path it is opaque."
 
 (defun %subject-facts (&key command invoked-as arguments nested embedded wraps
                          opaque wrapper-mismatches unparsable unclassifiable
-                         form-redirect sexp-unforced assignments wrapper-options)
+                         form-redirect sexp-unforced assignments wrapper-options
+                         writes redirect-problems words)
   (let ((facts (copy-list +subject-fact-schema+)))
     (flet ((add (&rest fact) (push fact facts)))
       (when command
@@ -184,22 +185,13 @@ a bare name; with a path it is opaque."
         (when arguments
           (add 'subcommand 'subject (first arguments)))
         (loop with operands-only = nil
-              for (word next) on arguments
+              for word in arguments
               do (add 'argument 'subject word)
                  (cond
                    (operands-only (add 'operand 'subject word))
                    ((string= word "--") (setf operands-only t))
                    ((option-word-p word) (add 'option 'subject word))
-                   (t (add 'operand 'subject word)))
-                 ;; A bare-line redirect stays in the argument list: `> out',
-                 ;; `>> out', or `>out'.  `>(' starts a process substitution.
-                 (let ((target (and (string-prefix-p ">" word)
-                                    (not (string-prefix-p ">(" word))
-                                    (string-left-trim ">" word))))
-                   (cond
-                     ((null target))
-                     ((plusp (length target)) (add 'redirect 'subject target))
-                     (next (add 'redirect 'subject next)))))
+                   (t (add 'operand 'subject word))))
         (let ((spec (and (not wraps) (find-command-spec (or invoked-as command)))))
           (when spec
             (add 'spec-command 'subject)
@@ -207,6 +199,10 @@ a bare name; with a path it is opaque."
               (if mismatches
                   (add 'argument-not-allowed 'subject (%mismatch-text mismatches))
                   (add 'spec-match 'subject))))))
+      ;; Redirects come from the AST, not from the argument words (2.5).
+      (dolist (target writes) (add 'redirect 'subject target))
+      (dolist (text redirect-problems) (add 'redirect-not-allowed 'subject text))
+      (dolist (word words) (add 'word 'subject word))
       (when wraps (add 'wraps 'subject))
       (when opaque (add 'opaque-wrapper 'subject))
       (when wrapper-mismatches
@@ -274,7 +270,8 @@ a bare name; with a path it is opaque."
 (defun classify-subject (&rest subject &key command invoked-as arguments nested
                                          embedded wraps opaque wrapper-mismatches
                                          unparsable unclassifiable form-redirect
-                                         sexp-unforced assignments wrapper-options)
+                                         sexp-unforced assignments wrapper-options
+                                         writes redirect-problems words)
   "Classify one subject with the built-in and user rules.
 
 COMMAND is the basename and INVOKED-AS the command word as written;
@@ -284,23 +281,28 @@ classifying embedded command text.  WRAPS says the command runs another one,
 OPAQUE that the wrapper is opaque (D-P1-5 2.4), and WRAPPER-MISMATCHES lists
 the wrapper's own words its spec row does not allow.  UNPARSABLE and UNCLASSIFIABLE are lists of reason texts.
 ASSIGNMENTS are the environment names the command is run with and
-WRAPPER-OPTIONS the options given to env.
+WRAPPER-OPTIONS the options given to env.  WRITES are the output redirect
+targets and REDIRECT-PROBLEMS a text per redirect outside the safe forms,
+both taken from the AST; WORDS are the words as written.
 Returns the level and the (RULE . TEXT) reasons at that level."
   (declare (ignore command invoked-as arguments nested embedded wraps opaque
                    wrapper-mismatches unparsable unclassifiable form-redirect
-                   sexp-unforced assignments wrapper-options))
+                   sexp-unforced assignments wrapper-options writes
+                   redirect-problems words))
   (let ((facts (apply #'%subject-facts subject)))
     (%top-level-reasons
      (append (%builtin-solutions facts) (%user-solutions facts)))))
 
-(defun subject-effects (&key command invoked-as arguments)
-  "Return the effects of one command: (DELETES PATH), (WRITES PATH), :NETWORK."
+(defun subject-effects (&key command invoked-as arguments writes)
+  "Return the effects of one command: (DELETES PATH), (WRITES PATH), :NETWORK.
+WRITES are the output redirect targets the caller read from the AST."
   (remove-duplicates
    (copy-tree
     (%query-findall *builtin-classify-rulebase*
                     (%subject-facts :command command
                                     :invoked-as invoked-as
-                                    :arguments arguments)
+                                    :arguments arguments
+                                    :writes writes)
                     '?effect
                     '(effect subject ?effect)))
    :test #'equal :from-end t))

@@ -24,8 +24,11 @@
 (defvar *assistant-request-kind* nil)
 (defvar *assistant-explain-candidates* nil)
 (defvar *assistant-explain-candidate-index* 0)
-(defvar *assistant-command-origin* :typed)
-(defvar *assistant-command-confirmed-p* nil)
+(defvar *assistant-command-approval* nil
+  "One-shot approval record (TEXT . LEVEL) for an AI-originated line, where
+LEVEL is :PENDING, :SAFE or :CONFIRM.")
+(defvar *history-navigation-proposal-origin* nil
+  "Proposal origin of the input line a history walk started from.")
 (defvar *assistant-session-id* nil)
 (defvar *assistant-pending-transcript* nil)
 (defvar *agent-session* nil)

@@ -10,9 +10,12 @@
                                    (let ((status (%run-external-editor (%editor-command-argv) path)))
                                      (if (and (eql status 0) (probe-file path))
                                          (let ((text (%read-editor-buffer path)))
+                                           ;; Editing keeps the proposal origin of the line.
                                            (setf *input-state*
                                                  (make-repl-input-state
-                                                  :buffer text :cursor-pos (length text)))
+                                                  :buffer text :cursor-pos (length text)
+                                                  :proposal-origin
+                                                  (input-state-proposal-origin *input-state*)))
                                            (%request-current-input-state-suggestion))
                                          (format t "nshell: editor exited with status ~a~%" status)))
                                  (error (condition)

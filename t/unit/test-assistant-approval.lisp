@@ -426,7 +426,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
               (nshell.application:*execution-gate-stopped-p* nil))
           (multiple-value-bind (output code)
               (nshell.application:execute-ast-in-context context ast)
-            (expect 126 :to-equal code)
+            (expect 3 :to-equal code)
             (expect (search "requires confirmation" output) :to-be-truthy)
             (expect t :to-be nshell.application:*execution-gate-stopped-p*)))
         (let ((nshell.application:*execution-origin* :proposal)
@@ -477,7 +477,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
       (multiple-value-bind (status stopped-p)
           (%approval-reader-run context +approval-missing-command+ :bare-line
                                 :approval :safe)
-        (expect 126 :to-equal status)
+        (expect 3 :to-equal status)
         (expect t :to-be stopped-p))
       (multiple-value-bind (status stopped-p)
           (%approval-reader-run context +approval-missing-command+ :bare-line
@@ -490,7 +490,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
         (%approval-reader-run (make-test-shell-context)
                               (format nil "echo hi | ~a" +approval-missing-command+)
                               :bare-line :approval :safe)
-      (expect 126 :to-equal status)
+      (expect 3 :to-equal status)
       (expect t :to-be stopped-p)))
 
   (it "gates-forced-external-sexp-commands"
@@ -498,7 +498,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
           (source (format nil "(^~a)" +approval-missing-command+)))
       (multiple-value-bind (status stopped-p)
           (%approval-reader-run context source :sexp :approval :safe)
-        (expect 126 :to-equal status)
+        (expect 3 :to-equal status)
         (expect t :to-be stopped-p))
       (multiple-value-bind (status stopped-p)
           (%approval-reader-run context source :sexp :approval :confirm)
@@ -536,7 +536,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
           (%approval-reader-run context "approval-test-function" :bare-line
                                 :approval :confirm)
         (declare (ignore status))
-        (expect 126 :to-equal body-status)
+        (expect 3 :to-equal body-status)
         (expect t :to-be stopped-p)))))
 
 (describe "reader-path-execution-gate-user-functions"
@@ -614,7 +614,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
                                   (nshell.presentation::%repl-reader-context-for-source
                                    source)
                                   :approval :safe)
-          (expect 126 :to-equal status)
+          (expect 3 :to-equal status)
           (expect t :to-be stopped-p))))))
 
 ;;; An alias that expands to a NAME=value word still runs that word as a
@@ -633,5 +633,5 @@ first, as (SOURCE ORIGIN APPROVAL)."
             (nshell.application:execute-ast-in-context
              context (nshell.domain.parsing:make-command-node "ls" nil))
           (declare (ignore output))
-          (expect 126 :to-equal code)
+          (expect 3 :to-equal code)
           (expect t :to-be nshell.application:*execution-gate-stopped-p*))))))

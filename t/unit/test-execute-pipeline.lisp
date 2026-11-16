@@ -1499,7 +1499,7 @@
           (multiple-value-bind (output code)
               (nshell.application:execute-ast-in-context context ast)
             (expect nil :to-be executed-p)
-            (expect 126 :to-equal code)
+            (expect 3 :to-equal code)
             (expect (search "requires confirmation" output) :to-be-truthy))))
       (let ((nshell.application::*execution-origin* :proposal)
             (nshell.application::*execution-approval* :confirm))
@@ -1536,7 +1536,7 @@
           (multiple-value-bind (output code)
               (nshell.application:execute-ast-in-context context ast)
             (expect nil :to-be executed-p)
-            (expect 126 :to-equal code)
+            (expect 4 :to-equal code)
             (expect (search "blocked" output) :to-be-truthy))))))
   (it "O08-lowercase-pipeline-operators-dispatch-through-reader"
     (cl-weave:expect-assertions 4)
@@ -1575,7 +1575,7 @@
                (values "executed" 0)))
           (multiple-value-bind (output code)
               (nshell.application:execute-ast-in-context context ast)
-            (expect 126 :to-equal code)
+            (expect 4 :to-equal code)
             (expect (search "blocked" output) :to-be-truthy))))))
 
 (describe "prefix-assignment-tests"

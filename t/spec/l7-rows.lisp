@@ -306,9 +306,14 @@
                "language/L7-diff-and-migration.md:42"
                "language/L7-diff-and-migration.md:49"
                "proposal/02-machine-interface.md:138"))
- :v09 (:expect (:exit 0 :stdout () :stdout-final-newline nil)
-       :input nil
+ ;; The marker line makes a binary that prints nothing fail: the value of
+ ;; (last (list 1 2)) itself is not displayed in a script (L4.8).
+ :v09 (:expect (:exit 0 :stdout ("after-last") :stdout-final-newline t)
+       :input "(last (list 1 2))
+(echo after-last)
+"
        :basis ("language/L7-diff-and-migration.md:29"
+               "language/L6-execution-and-errors.md:5"
                "language/L7-diff-and-migration.md:49"
                "language/L2-resolution.md:16"
                "language/L2-resolution.md:50"

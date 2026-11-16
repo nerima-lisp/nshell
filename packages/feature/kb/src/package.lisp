@@ -9,6 +9,7 @@
 Built-in rules are compiled into the image; user rules are injected through
 *USER-CLASSIFY-RULEBASE* and can raise a level no higher than confirm.")
     (:use #:cl)
+    (:export #:classify-rule-catalog)
     (:export
      #:*classify-max-inferences*
      #:*classify-deadline-seconds*

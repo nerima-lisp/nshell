@@ -632,6 +632,7 @@
    (:file "main-test")
    (:file "unit/test-safe-mode")
    (:file "unit/test-crash-recovery")
+   (:file "unit/test-crash-cause-regressions")
    (:file "unit/test-bug-report")
    (:file "unit/test-machine-methods")
    (:file "unit/static-check-allowlist")

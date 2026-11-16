@@ -41,10 +41,11 @@
              (let ((failure
                     (let ((nshell.application:*interactive-top-level-p* nil)
                           (nshell.application:*errexit-p* nil)
-                          (nshell.application:*command-test-position-p* nil)
-                          (nshell.application::*command-pipefail-p* t))
+                          (nshell.application:*command-test-position-p* nil))
                       (handler-case (progn
                                       (nshell.application:call-with-command-failure-policy
+                                       (nshell.application:make-shell-context
+                                        :pipefail-p t)
                                        command
                                        (lambda ()
                                          (values :value 141 pipeline-result)))
@@ -79,6 +80,7 @@
                                          'nshell.application::continue-command-failure))))
                         (multiple-value-list
                          (nshell.application:call-with-command-failure-policy
+                          (nshell.application:make-shell-context)
                           command
                           (lambda ()
                             (values :original-value 17 pipeline-result))))))))
@@ -88,6 +90,7 @@
                   (handler-case
                       (progn
                         (nshell.application:call-with-command-failure-policy
+                         (nshell.application:make-shell-context)
                          command
                          (lambda ()
                            (values :value
@@ -107,6 +110,7 @@
                           (nshell.application:*command-test-position-p* nil))
                       (multiple-value-list
                        (nshell.application:call-with-command-failure-policy
+                        (nshell.application:make-shell-context)
                         command
                         (lambda ()
                           (values :interactive-value 9 pipeline-result))))))
@@ -116,6 +120,7 @@
                           (nshell.application:*command-test-position-p* t))
                       (multiple-value-list
                        (nshell.application:call-with-command-failure-policy
+                        (nshell.application:make-shell-context)
                         command
                         (lambda ()
                           (values :test-value 9 pipeline-result)))))))
@@ -131,6 +136,7 @@
                           (nshell.application:*command-test-position-p* nil))
                       (handler-case (progn
                                       (nshell.application:call-with-command-failure-policy
+                                       (nshell.application:make-shell-context)
                                        command
                                        (lambda ()
                                          (values :value 9 pipeline-result)))
@@ -160,6 +166,7 @@
                                   (nshell.application:*command-test-position-p* nil))
                               (multiple-value-prog1
                                   (nshell.application:call-with-command-failure-policy
+                                   (nshell.application:make-shell-context)
                                    command
                                    (lambda () (values :original-value 7 pipeline-result)))
                                 (setf continued-p t)))))))
@@ -181,6 +188,7 @@
                                   (nshell.application:*command-test-position-p* nil))
                               (multiple-value-prog1
                                   (nshell.application:call-with-command-failure-policy
+                                   (nshell.application:make-shell-context)
                                    command
                                    (lambda () (values :original-value 11 pipeline-result)))
                                 (setf continued-p t)))))))

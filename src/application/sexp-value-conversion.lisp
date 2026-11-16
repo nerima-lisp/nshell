@@ -6,15 +6,10 @@
     ((characterp value) (string value))
     ((numberp value) (princ-to-string value))
     ((and (symbolp value) (not (null value))) (symbol-name value))
-    ((or (null value) (consp value))
+    (t
      (error 'command-argument-type-error
             :value value
-            :source-span source-span))
-    (t
-     (error 'type-error
-            :datum value
-            :expected-type '(or string character number
-                                (and symbol (not (eql nil))))))))
+            :source-span source-span))))
 
 (in-package #:nshell.user)
 

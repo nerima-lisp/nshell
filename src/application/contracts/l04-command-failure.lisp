@@ -16,15 +16,17 @@
 (defvar *command-failure-handler-active-p* nil)
 
 (defvar *errexit-p* nil)
-(defvar *command-pipefail-p* nil)
-(declaim (ftype (function (t function) (values t integer)) call-with-command-failure-policy))
-(defun call-with-command-failure-policy (command-ast thunk)
+(declaim (ftype (function (t t function) (values t integer)) call-with-command-failure-policy))
+(defun call-with-command-failure-policy (context command-ast thunk)
   (multiple-value-bind (value status pipeline-result)
       (funcall thunk)
     (check-type status integer)
     (unless (pipeline-execution-result-p pipeline-result)
       (error "Command evaluation returned no pipeline execution result."))
-    (let* ((stages
+    ;; CONTEXT holds the pipefail option. Read it after THUNK, as the
+    ;; pipeline does when it computes its status: THUNK may have run set.
+    (let* ((pipefail-p (shell-context-pipefail-p context))
+           (stages
              (cond
                ((nshell.domain.parsing:pipeline-node-p command-ast)
                 (nshell.domain.parsing:pipeline-node-commands command-ast))
@@ -51,7 +53,7 @@
         (error "Malformed pipeline execution result for ~d command stages."
                stage-count))
       (let* ((expected-status
-               (if *command-pipefail-p*
+               (if pipefail-p
                    (or (find-if (lambda (stage-status)
                                   (not (zerop stage-status)))
                                 stage-statuses)
@@ -70,7 +72,7 @@
                       for index from 0
                       when (and (not (zerop stage-status))
                                 (or (= index (1- stage-count))
-                                    *command-pipefail-p*)
+                                    pipefail-p)
                                 (not (and (< index (1- stage-count))
                                           (eql stage-signal sb-unix:sigpipe))))
                         return (list stage stage-status stage-signal))))

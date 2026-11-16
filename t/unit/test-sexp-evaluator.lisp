@@ -144,7 +144,8 @@
                               (list (list stage position test-position))))
                 (values result status pipeline))))
            ('nshell.application:call-with-command-failure-policy
-            (lambda (ast evaluator-thunk)
+            (lambda (context ast evaluator-thunk)
+              (declare (ignore context))
               (incf *sexp-evaluator-test-failure-policy-calls*)
               (multiple-value-bind (value status pipeline)
                   (funcall evaluator-thunk)
@@ -1132,14 +1133,14 @@
            (lambda (name)
              (gethash (string-downcase name) builtins)))
           ('nshell.application:call-with-command-failure-policy
-           (lambda (ast thunk)
+           (lambda (context ast thunk)
              (incf policy-count)
              (push (cond
                     ((nshell.domain.parsing:command-node-p ast) :command)
                     ((nshell.domain.parsing:pipeline-node-p ast) :pipeline)
                     (t :other))
                    policy-kinds)
-             (funcall real-policy ast thunk)))
+             (funcall real-policy context ast thunk)))
           ('nshell.application::%reader-execute-foreground-in-context
            (lambda (execution-context ast stage-evaluator)
              (let* ((commands

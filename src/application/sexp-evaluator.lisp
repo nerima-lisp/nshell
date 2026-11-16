@@ -969,8 +969,7 @@ name: an unknown name resolves to an uninterned symbol instead."
               :value
               :stream))
          (*current-user-evaluator-context* context)
-         (*current-user-evaluator-position* position)
-         (*command-pipefail-p* (shell-context-pipefail-p context)))
+         (*current-user-evaluator-position* position))
     (handler-bind
         ((command-failed
           (lambda (condition)
@@ -990,9 +989,9 @@ name: an unknown name resolves to an uninterned symbol instead."
                   stage-context command-node))
                (lambda (command-ast evaluator-thunk)
                  (call-with-command-failure-policy
-                  command-ast evaluator-thunk)))
+                  context command-ast evaluator-thunk)))
               (call-with-command-failure-policy
-               ast
+               context ast
                (lambda ()
                  (execute-reader-ast-in-context
                   context ast

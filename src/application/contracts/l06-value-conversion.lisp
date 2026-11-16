@@ -5,6 +5,13 @@
   ((value :initarg :value :reader command-argument-type-error-value)
    (source-span :initarg :source-span
                 :reader command-argument-type-error-source-span))
+  (:report (lambda (condition stream)
+             ;; The value can be any Lisp object; bound what printing it costs.
+             (let ((*print-length* 10)
+                   (*print-level* 3)
+                   (*print-readably* nil))
+               (format stream "Command argument ~S is not a string, number, character, or non-nil symbol."
+                       (command-argument-type-error-value condition)))))
   (:default-initargs :error-code "E_ARG_TYPE"))
 (define-condition value-conversion-error
     (error nshell.domain.error-codes:nshell-error-code-mixin)

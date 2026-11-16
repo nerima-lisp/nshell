@@ -39,7 +39,7 @@
                    :zzz :root "z" :layers '(:application))))
       (declare (ignore first second))
       (unwind-protect
-           (expect '(:aaa :assistant :command-line :zzz) :to-equal
+           (expect '(:aaa :assistant :command-line :machine :zzz) :to-equal
                    (mapcar #'nshell.architecture:feature-descriptor-name
                            (nshell.architecture:all-features)))
         (remhash :aaa nshell.architecture::*feature-registry*)

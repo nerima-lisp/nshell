@@ -1,0 +1,222 @@
+{
+  "type": "object",
+  "required": [
+    "nshell_api",
+    "ok",
+    "status",
+    "duration_ms",
+    "stdout",
+    "stderr",
+    "effects",
+    "safety",
+    "state"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "nshell_api": { "enum": [1] },
+    "ok": { "type": "boolean" },
+    "status": { "type": "integer" },
+    "duration_ms": { "type": "integer" },
+    "stdout": {
+      "type": "object",
+      "required": ["text", "bytes"],
+      "properties": {
+        "text": { "type": "string" },
+        "bytes": { "type": "integer" },
+        "lines": { "type": "integer" },
+        "truncated": { "type": "boolean" },
+        "path": { "type": "string" }
+      }
+    },
+    "stderr": {
+      "type": "object",
+      "required": ["text", "bytes"],
+      "properties": {
+        "text": { "type": "string" },
+        "bytes": { "type": "integer" },
+        "lines": { "type": "integer" },
+        "truncated": { "type": "boolean" },
+        "path": { "type": "string" }
+      }
+    },
+    "value": true,
+    "error": {
+      "type": "object",
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "enum": [
+            "E_PARSE",
+            "E_UNSUPPORTED_SYNTAX",
+            "E_PROTOCOL",
+            "E_ARG_TYPE",
+            "E_VALUE_POSITION",
+            "E_NO_MATCH",
+            "E_REDIRECT_TARGET",
+            "E_LISP_ERROR",
+            "E_NOT_IMPLEMENTED",
+            "E_COMMAND_FAILED",
+            "E_COMMAND_NOT_FOUND",
+            "E_PERMISSION",
+            "E_TIMEOUT",
+            "E_INTERRUPTED",
+            "E_NEEDS_APPROVAL",
+            "E_BLOCKED_BY_POLICY",
+            "E_WAITING_FOR_INPUT",
+            "E_INTERACTIVE_PROGRAM",
+            "E_INTERNAL"
+          ]
+        },
+        "message": { "type": "string" },
+        "span": {
+          "type": "object",
+          "required": ["line", "column", "end"],
+          "properties": {
+            "line": { "type": "integer" },
+            "column": { "type": "integer" },
+            "end": { "type": "integer" }
+          }
+        },
+        "fixes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["input"],
+            "properties": {
+              "input": { "type": "string" },
+              "why": { "type": "string" },
+              "rule": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "enum": [
+              "W_RESOLUTION_ORDER",
+              "W_VALUE_POSITION",
+              "W_KEYWORD_ARGUMENT",
+              "W_MID_WORD_SPECIAL",
+              "W_BRACE_EXPANSION",
+              "W_LIST_SPLICE",
+              "W_STATUS_AS_VALUE",
+              "W_DEFUN_WORD_ARGS",
+              "W_NO_MATCH",
+              "W_REDEFINITION",
+              "W_BARE_LINE_UNQUOTE",
+              "W_NAME_CONFLICT"
+            ]
+          },
+          "message": { "type": "string" },
+          "span": {
+            "type": "object",
+            "required": ["line", "column", "end"],
+            "properties": {
+              "line": { "type": "integer" },
+              "column": { "type": "integer" },
+              "end": { "type": "integer" }
+            }
+          },
+          "fixes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["input"],
+              "properties": {
+                "input": { "type": "string" },
+                "why": { "type": "string" },
+                "rule": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "forms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "kind", "rule"],
+        "properties": {
+          "text": { "type": "string" },
+          "kind": { "type": "string" },
+          "rule": { "type": ["string", "null"] },
+          "path": { "type": "string" }
+        }
+      }
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "enum": ["reads", "writes", "deletes", "network", "privilege"]
+          },
+          "path": { "type": "string" },
+          "size": { "type": ["integer", "string"] }
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "required": ["level", "reasons"],
+      "properties": {
+        "level": { "enum": ["safe", "confirm", "block"] },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule", "text"],
+            "properties": {
+              "rule": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "required": ["cwd"],
+      "properties": {
+        "cwd": { "type": "string" },
+        "env_changed": { "type": "array", "items": { "type": "string" } },
+        "jobs": { "type": "array", "items": { "type": "object" } },
+        "last_status": { "type": "integer" }
+      }
+    },
+    "session": { "type": "string" },
+    "seq": { "type": "integer" }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "ok": { "enum": [true] },
+        "status": { "enum": [0] },
+        "error": { "type": "null" }
+      }
+    },
+    {
+      "properties": {
+        "ok": { "enum": [false] }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": { "enum": [0] },
+            "error": { "type": "null" }
+          }
+        },
+        {}
+      ]
+    }
+  ]
+}

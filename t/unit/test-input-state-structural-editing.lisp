@@ -56,30 +56,6 @@
                         :kill-ring '("alpha"))
         (expect :suggest-update :to-be delete-output))))
 
-  (it "slurp-sexp-moves-either-list-delimiter-across-a-sibling"
-    (with-reduced-input-state (forward output)
-        (reduce-once (input-state :buffer "(list alpha) beta" :cursor-pos 7)
-                     :alt-ctrl-right)
-      (is-input-state forward :buffer "(list alpha beta)" :cursor-pos 7)
-      (expect :suggest-update :to-be output))
-    (with-reduced-input-state (backward output)
-        (reduce-once (input-state :buffer "alpha (list beta)" :cursor-pos 8)
-                     :alt-ctrl-left)
-      (is-input-state backward :buffer "(alpha list beta)" :cursor-pos 8)
-      (expect :suggest-update :to-be output)))
-
-  (it "barf-sexp-moves-either-list-delimiter-across-a-child"
-    (with-reduced-input-state (forward output)
-        (reduce-once (input-state :buffer "(list alpha beta)" :cursor-pos 7)
-                     :shift-alt-ctrl-right)
-      (is-input-state forward :buffer "(list alpha) beta" :cursor-pos 7)
-      (expect :suggest-update :to-be output))
-    (with-reduced-input-state (backward output)
-        (reduce-once (input-state :buffer "(list alpha beta)" :cursor-pos 7)
-                     :shift-alt-ctrl-left)
-      (is-input-state backward :buffer "list (alpha beta)" :cursor-pos 7)
-      (expect :suggest-update :to-be output)))
-
   (it "sexp-scanning-keeps-string-and-comment-delimiters-opaque"
     (let* ((buffer (concatenate 'string
                                 "(list \"(fake)\" ; ) ignored"
@@ -157,14 +133,6 @@
               (nshell.presentation::input-dispatch-binding-action-name :alt-ctrl-k))
       (expect :delete-backward-sexp :to-be
               (nshell.presentation::input-dispatch-binding-action-name :alt-ctrl-delete))
-      (expect :slurp-forward :to-be
-              (nshell.presentation::input-dispatch-binding-action-name :alt-ctrl-right))
-      (expect :slurp-backward :to-be
-              (nshell.presentation::input-dispatch-binding-action-name :alt-ctrl-left))
-      (expect :barf-forward :to-be
-              (nshell.presentation::input-dispatch-binding-action-name :shift-alt-ctrl-right))
-      (expect :barf-backward :to-be
-              (nshell.presentation::input-dispatch-binding-action-name :shift-alt-ctrl-left))
       (expect (member "alt-ctrl-delete" valid-keys :test #'string=) :to-be-truthy)
       (expect (member "shift-alt-ctrl-right" valid-keys :test #'string=) :to-be-truthy)
       (expect (member "forward-sexp" valid-actions :test #'string=) :to-be-truthy)

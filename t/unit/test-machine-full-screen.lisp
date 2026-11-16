@@ -118,6 +118,21 @@ NAME.ran in the directory, so a test can tell whether it started."
                             :to-equal (list 1 column end))
                     (expect (json-at envelope "error" "fixes" 0 "input") :to-equal fix)))))))
 
+  (it "gives no fix for a program named through an alias, and spans the alias word"
+    (with-noninteractive-test-state ()
+      (%full-screen-call-with-programs
+       '("less")
+       (lambda (directory)
+         (declare (ignore directory))
+         (let* ((input "alias ll 'less extra.txt'; ll file.txt")
+                (envelope (json-command input)))
+           (expect (json-at envelope "error" "code") :to-equal "E_INTERACTIVE_PROGRAM")
+           (expect (list (json-at envelope "error" "span" "line")
+                         (json-at envelope "error" "span" "column")
+                         (json-at envelope "error" "span" "end"))
+                   :to-equal (list 1 (1+ (search "ll file" input)) (+ 3 (search "ll file" input))))
+           (expect (json-at envelope "error" "fixes") :to-be-null))))))
+
   (it "gives no span or fix for a program refused in a sourced file"
     (with-noninteractive-test-state ()
       (%full-screen-call-with-programs

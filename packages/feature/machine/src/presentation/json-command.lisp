@@ -352,7 +352,11 @@ did."
            (values "E_INTERACTIVE_PROGRAM" nil
                    (format nil "~A is a full-screen program; it was not started" command)
                    (and start (%input-span input start (- end start)))
-                   (and start (%full-screen-program-fixes input full-screen start end))))))
+                   ;; An alias word's expansion is not in INPUT, so no
+                   ;; rewrite of INPUT runs the noninteractive form.
+                   (and start
+                        (not (nshell.domain.parsing:text-span-alias-word-p name-span))
+                        (%full-screen-program-fixes input full-screen start end))))))
       ;; The input did not run as given once the AI gate refused part of it,
       ;; whatever the status of the commands after that part.
       (refusal (values refusal nil message))

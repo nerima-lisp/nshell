@@ -8,7 +8,8 @@
    nshell.infrastructure.persistence::*history-file-path-override*
    *execution-origin*
    *execution-approval*
-   *execution-gate-parent-kind*))
+   *execution-gate-parent-kind*
+   *execution-gate-refusal*))
 
 (define-condition byte-stream-execution-error (error)
   ((operation :initarg :operation :reader byte-stream-execution-error-operation)
@@ -238,6 +239,7 @@ execution errors that wrap it on the way out."
         (execution-origin *execution-origin*)
         (execution-approval *execution-approval*)
         (execution-gate-parent-kind *execution-gate-parent-kind*)
+        (execution-gate-refusal *execution-gate-refusal*)
         (positional-args
           (copy-list nshell.domain.expansion:*positional-args*))
         (upstream-stage-p
@@ -260,7 +262,8 @@ execution errors that wrap it on the way out."
                    (*function-call-depth* function-call-depth)
                    (*execution-origin* execution-origin)
                    (*execution-approval* execution-approval)
-                   (*execution-gate-parent-kind* execution-gate-parent-kind))
+                   (*execution-gate-parent-kind* execution-gate-parent-kind)
+                   (*execution-gate-refusal* execution-gate-refusal))
                (unwind-protect
                     (handler-case
                         (let ((*standard-input*

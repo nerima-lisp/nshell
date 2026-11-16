@@ -19,7 +19,7 @@
           (multiple-value-bind (output code)
               (nshell.application:execute-ast-in-context context ast)
             (expect nil :to-be executed-p)
-            (expect 126 :to-equal code)
+            (expect 3 :to-equal code)
             (expect (search "requires approval" output)
                     :to-be-truthy))))))
 

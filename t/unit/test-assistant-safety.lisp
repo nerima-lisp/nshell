@@ -441,7 +441,7 @@ which commands are builtins."
             (nshell.application::*execution-approval* nil))
         (multiple-value-bind (output code)
             (nshell.application:execute-ast-in-context context ast)
-          (expect 126 :to-equal code)
+          (expect 4 :to-equal code)
           (expect (search "blocked" output) :to-be-truthy)))))
 
   (it "does not let outer confirmation approve an inner eval command"
@@ -453,7 +453,7 @@ which commands are builtins."
               (nshell.application::*execution-approval* :confirm))
           (multiple-value-bind (output code)
               (nshell.application:execute-ast-in-context context ast)
-            (expect 126 :to-equal code)
+            (expect 3 :to-equal code)
             (expect (search "confirmation" output) :to-be-truthy))))))
 
   (it "re-gates an agent command after command-name expansion"
@@ -469,7 +469,7 @@ which commands are builtins."
             (nshell.application::*execution-approval* :confirm))
         (multiple-value-bind (output code)
             (nshell.application:execute-ast-in-context context ast)
-          (expect 126 :to-equal code)
+          (expect 4 :to-equal code)
           (expect (search "blocked" output) :to-be-truthy)))))
 
   (it "does not gate commands entered directly by a person"

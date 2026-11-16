@@ -198,7 +198,7 @@
             (nshell.application:execute-ast-in-context
              context (nshell.domain.parsing:make-command-node "ls" nil))
           (declare (ignore output))
-          (expect 126 :to-equal code)
+          (expect 3 :to-equal code)
           (expect t :to-be nshell.application:*execution-gate-stopped-p*))))))
 
 ;;; R-P1-5: a forced (^name) command runs the external program, so specs and

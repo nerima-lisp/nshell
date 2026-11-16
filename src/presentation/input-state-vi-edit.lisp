@@ -245,6 +245,9 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
                    :kill-ring (if (zerop (length text))
                                   (input-state-kill-ring state)
                                   (cons text (input-state-kill-ring state)))
+                   :proposal-kills (if (zerop (length text))
+                                       (input-state-proposal-kills state)
+                                       (proposal-kills-after-kill state text))
                    :vi-session (%vi-session-plist-with state
                                                  :yank-type yank-type))
                   :cursor-pos cursor
@@ -267,6 +270,7 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
                    :vi-count nil
                    :vi-visual-anchor :clear
                    :kill-ring (cons text (input-state-kill-ring state))
+                   :proposal-kills (proposal-kills-after-kill state text)
                    :vi-session (%vi-session-plist-with state
                                                  :operator nil
                                                  :pending nil
@@ -420,7 +424,10 @@ cursor at CURSOR, and switch to END-MODE (:vi-command for d, :insert for c)."
                        (copy-input-state-clearing-completion
                         state
                         :buffer new-buffer
-                        :cursor-pos cursor)
+                        :cursor-pos cursor
+                        :proposal-origin (or (input-state-proposal-origin state)
+                                             (kill-ring-text-proposal-p
+                                              state text)))
                        :cursor-pos cursor)
                       :redraw))))))
 

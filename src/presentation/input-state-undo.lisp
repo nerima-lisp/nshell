@@ -4,7 +4,8 @@
 
 (define-value-struct %input-edit-snapshot
     ((buffer nil)
-     (cursor-pos 0 :type fixnum))
+     (cursor-pos 0 :type fixnum)
+     (proposal-origin nil :type boolean))
   :public-accessors nil
   :constructor %make-input-edit-snapshot)
 
@@ -31,7 +32,8 @@
 
 (defun input-edit-snapshot (state)
   (%make-input-edit-snapshot (input-state-buffer state)
-                             (input-state-cursor-pos state)))
+                             (input-state-cursor-pos state)
+                             (input-state-proposal-origin state)))
 
 (defun restore-input-edit-snapshot (state snapshot &key undo-stack redo-stack)
   (copy-input-state-clearing-completion state
@@ -39,6 +41,9 @@
                                                  snapshot)
                                         :cursor-pos (%input-edit-snapshot-cursor-pos
                                                      snapshot)
+                                        :proposal-origin
+                                        (%input-edit-snapshot-proposal-origin
+                                         snapshot)
                                         :last-yank-start nil
                                         :last-yank-end nil
                                         :last-yank-index nil

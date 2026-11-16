@@ -359,12 +359,7 @@ wrapped line's other rows on screen as stale duplicates."
                                 (nshell.feature.assistant:assistant-safety-result-reason
                                  classification)))))
                 (otherwise
-                 (%install-assistant-proposal candidate)
-                 (setf *assistant-command-origin* :proposal
-                       *assistant-command-confirmed-p*
-                         (eq :safe
-                             (nshell.feature.assistant:assistant-safety-result-classification
-                              classification))))))
+                 (%install-assistant-proposal candidate))))
             (when (eq status :parse-error)
               (render-transient-panel (list reason)))))))))
 
@@ -381,8 +376,10 @@ wrapped line's other rows on screen as stale duplicates."
           (process-output-event output-event)))))
 
 (defun %install-assistant-proposal (text)
+  "Put the AI proposal TEXT in the input line without approving it."
   (let ((state *input-state*))
-    (setf *input-state*
+    (setf *assistant-command-approval* nil
+          *input-state*
           (copy-input-state-clearing-completion
            state
            :buffer text
@@ -392,7 +389,8 @@ wrapped line's other rows on screen as stale duplicates."
            :ask-original-cursor :clear
            :undo-stack (cons (input-edit-snapshot state)
                              (input-state-undo-stack state))
-           :redo-stack nil))))
+           :redo-stack nil
+           :proposal-origin t))))
 
 (defun %assistant-proposal-panel (classification reason)
   (render-transient-panel
@@ -429,8 +427,7 @@ wrapped line's other rows on screen as stale duplicates."
         *assistant-request-kind* nil
         *assistant-explain-candidates* nil
         *assistant-explain-candidate-index* 0
-        *assistant-command-origin* :typed
-        *assistant-command-confirmed-p* nil)
+        *assistant-command-approval* nil)
   (reset-rendered-prompt-state)
   (lambda () (render-prompt-cont)))
 
@@ -489,8 +486,7 @@ wrapped line's other rows on screen as stale duplicates."
                 (if (eq status :parse-error)
                     (progn
                       (setf *input-state* (make-repl-input-state)
-                            *assistant-command-origin* :typed
-                            *assistant-command-confirmed-p* nil)
+                            *assistant-command-approval* nil)
                       (render-transient-panel (list reason))
                       (render-prompt-cont))
                     (case
@@ -498,8 +494,7 @@ wrapped line's other rows on screen as stale duplicates."
                          classification)
                       (:block
                        (setf *input-state* (make-repl-input-state)
-                             *assistant-command-origin* :typed
-                             *assistant-command-confirmed-p* nil)
+                             *assistant-command-approval* nil)
                        (%assistant-proposal-panel
                         :block
                         (nshell.feature.assistant:assistant-safety-result-reason
@@ -507,11 +502,6 @@ wrapped line's other rows on screen as stale duplicates."
                        (render-prompt-cont))
                       (otherwise
                        (%install-assistant-proposal proposal)
-                       (setf *assistant-command-origin* :proposal
-                             *assistant-command-confirmed-p*
-                               (eq :safe
-                                   (nshell.feature.assistant:assistant-safety-result-classification
-                                    classification)))
                        (%assistant-proposal-panel
                         (nshell.feature.assistant:assistant-safety-result-classification
                          classification)
@@ -663,18 +653,62 @@ wrapped line's other rows on screen as stale duplicates."
     (setf *last-command-output* nil
           *failure-explain-available-p* nil)
     (setf *prompt-hook-pending-p* t)
-    (setf *assistant-command-origin* :typed
-          *assistant-command-confirmed-p* nil)
+    (setf *assistant-command-approval* nil)
     (progn
       (setf *osc133-state* :none)
       (setf *input-state* (make-repl-input-state)))))
 
-(defun %assistant-proposal-confirmation-required-p ()
-  (and (eq *assistant-command-origin* :proposal)
-       (not *assistant-command-confirmed-p*)))
+(defun %blank-command-text-p (text)
+  (every (lambda (character)
+           (find character (list #\Space #\Tab #\Newline #\Return)))
+         text))
+
+(defun %assistant-approval-level (text)
+  "Return the level of the approval record for TEXT, or NIL."
+  (let ((approval *assistant-command-approval*))
+    (and approval
+         (string= text (car approval))
+         (cdr approval))))
+
+(defun %assistant-proposal-level (text)
+  (multiple-value-bind (status classification)
+      (%assistant-proposal-assessment text)
+    (if (eq status :classified)
+        (nshell.feature.assistant:assistant-safety-result-classification
+         classification)
+        :block)))
+
+(defun %assistant-enter-approval (text)
+  "Record the Enter on the AI-originated TEXT and return its approval level.
+A pending record turns into :CONFIRM before TEXT is classified, so a line the
+gate stopped (for example after alias expansion) can be approved even though
+TEXT itself still classifies as safe (D-P1-5 3.1)."
+  (let ((level (cond
+                 ((eq :pending (%assistant-approval-level text)) :confirm)
+                 ((eq :safe (%assistant-proposal-level text)) :safe)
+                 (t :pending))))
+    (setf *assistant-command-approval* (cons text level))
+    level))
+
+(defun %assistant-proposal-confirmation-required-p (text)
+  (and *input-state*
+       (input-state-proposal-origin *input-state*)
+       (not (%blank-command-text-p text))
+       (eq :pending (%assistant-enter-approval text))))
+
+(defun %current-execution-origin ()
+  (cond
+    (*agent-session* :agent)
+    ((and *input-state* (input-state-proposal-origin *input-state*)) :proposal)
+    (t :typed)))
+
+(defun %current-execution-approval ()
+  (let ((level (and *input-state*
+                    (%assistant-approval-level
+                     (input-state-buffer *input-state*)))))
+    (and (member level '(:safe :confirm)) level)))
 
 (defun %confirm-assistant-proposal ()
-  (setf *assistant-command-confirmed-p* t)
   (clear-rendered-transient-panel)
   (render-transient-panel
    (list "AI proposal requires confirmation; press Enter again to execute."))
@@ -697,6 +731,9 @@ wrapped line's other rows on screen as stale duplicates."
          (timestamp (get-universal-time))
          (cwd (boundary-current-directory))
          (host (boundary-hostname))
+         (origin (%current-execution-origin))
+         (approval-text (and *input-state* (input-state-buffer *input-state*)))
+         (nshell.application:*execution-gate-stopped-p* nil)
          (exit-code nil))
      (unwind-protect
          (let ((nshell.infrastructure.acl:*command-not-found-hook*
@@ -704,10 +741,9 @@ wrapped line's other rows on screen as stale duplicates."
                   (setf *command-not-found-command* command)
                   (nshell.application:run-shell-hooks
                    :command-not-found command)))
-               (nshell.application:*execution-origin*
-                *assistant-command-origin*)
-               (nshell.application:*execution-confirmed-p*
-                *assistant-command-confirmed-p*))
+               (nshell.application:*execution-origin* origin)
+               (nshell.application:*execution-approval*
+                (%current-execution-approval)))
            (setf *command-not-found-command* nil)
            (setf *last-command-output* nil)
            (nshell.application:run-shell-hooks :preexec text)
@@ -773,7 +809,7 @@ wrapped line's other rows on screen as stale duplicates."
                       :cwd cwd
                       :exit-code recorded-exit-code
                       :duration-ms duration-ms
-                      :origin *assistant-command-origin*
+                      :origin origin
                       :host host)
                    (declare (ignore history))
                    (history-kit:history-reset-navigation *history*)
@@ -789,7 +825,7 @@ wrapped line's other rows on screen as stale duplicates."
                        :text text
                        :exit recorded-exit-code
                        :duration-ms duration-ms
-                       :origin *assistant-command-origin*
+                       :origin origin
                        :output-head *last-command-output*
                        :denylist-paths
                        nshell.feature.assistant:+assistant-default-denylist-paths+
@@ -805,10 +841,15 @@ wrapped line's other rows on screen as stale duplicates."
               :osc133
               (format nil "D;~d" recorded-exit-code))
              (setf *osc133-state* :none)))))
-     (unless *agent-session*
-       (setf *assistant-command-origin* :typed
-             *assistant-command-confirmed-p* nil)
-       (setf *input-state* (make-repl-input-state))))))
+     (cond
+       (nshell.application:*execution-gate-stopped-p*
+        ;; The gate refused the line: keep it, and let the next Enter approve
+        ;; it at the confirm level (D-P1-5 3.1).
+        (setf *assistant-command-approval* (cons approval-text :pending)))
+       (t
+        (setf *assistant-command-approval* nil)
+        (unless *agent-session*
+          (setf *input-state* (make-repl-input-state))))))))
 
 (defun %execute-parse-error (result)
   (with-reset-rendered-prompt-state-and-prompt-cont
@@ -1169,7 +1210,7 @@ wrapped line's other rows on screen as stale duplicates."
                      (%evaluate-repl-reader-submission
                       expanded-text reader-context))))))))))))
   (defun %execute-command-line (text)
-    (if (%assistant-proposal-confirmation-required-p)
+    (if (%assistant-proposal-confirmation-required-p text)
         (%confirm-assistant-proposal)
         (call-with-crash-capture
          (lambda ()
@@ -1245,23 +1286,50 @@ wrapped line's other rows on screen as stale duplicates."
       (setf *input-state*
             (apply-history-search-results-to-input-state *input-state* texts))))
 
+(defun %history-text-proposal-origin-p (text)
+  "True when the history entry for TEXT was run from an AI proposal or agent."
+  (let ((history *history*))
+    (dotimes (index (history-kit:history-count history) nil)
+      (let ((entry (history-kit:history-entry-at history index)))
+        (when (string= text (history-kit:history-entry-text entry))
+          (return
+            (and (member (nshell.infrastructure.persistence:history-record-origin
+                          (nshell.infrastructure.persistence:history-record-for-entry
+                           history entry))
+                         '(:proposal :agent)
+                         :test #'eq)
+                 t)))))))
+
+(defun %install-history-entry (entry proposal-origin)
+  (setf *assistant-command-approval* nil
+        *input-state*
+        (make-repl-input-state :buffer entry
+                               :cursor-pos (length entry)
+                               :proposal-origin proposal-origin))
+  (refresh-current-input-state-suggestion))
+
 (define-output-event-handler %process-history-prev-output-event
     with-cleared-rendered-completions-and-prompt-cont
+    (unless (history-kit:history-navigating-p *history*)
+      (setf *history-navigation-proposal-origin*
+            (input-state-proposal-origin *input-state*)))
     (let ((entry (history-kit:history-previous
                   *history*
                   (input-state-buffer *input-state*))))
       (when entry
-        (setf *input-state*
-              (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-        (refresh-current-input-state-suggestion))))
+        (%install-history-entry entry (%history-text-proposal-origin-p entry)))))
 
 (define-output-event-handler %process-history-next-output-event
     with-cleared-rendered-completions-and-prompt-cont
     (let ((entry (history-kit:history-next *history*)))
       (when entry
-        (setf *input-state*
-              (make-repl-input-state :buffer entry :cursor-pos (length entry)))
-        (refresh-current-input-state-suggestion))))
+        ;; Walking past the newest match returns the line the walk started
+        ;; from, which keeps the origin it had then.
+        (%install-history-entry
+         entry
+         (if (history-kit:history-navigating-p *history*)
+             (%history-text-proposal-origin-p entry)
+             *history-navigation-proposal-origin*)))))
 
   (define-output-event-handler %process-clear-screen-output-event
                                with-reset-rendered-prompt-state-and-prompt-cont

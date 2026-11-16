@@ -11,8 +11,10 @@
     (setf state (nth-value 0 (nshell.presentation:reduce-input-state state event)))))
 
 (defun %approval-proposal-state (buffer &rest initargs)
-  (apply #'input-state :buffer buffer :cursor-pos (length buffer)
-         :proposal-origin t initargs))
+  (apply #'input-state
+         (append initargs
+                 (list :buffer buffer :cursor-pos (length buffer)
+                       :proposal-origin t))))
 
 (defun %approval-send-keys (&rest events)
   (with-temporary-function
@@ -25,21 +27,41 @@
   (nshell.infrastructure.persistence:history-record-add
    nshell.presentation::*history* text :origin origin))
 
-(defmacro with-approval-execution ((dispatched-var &key panel-var) &body body)
-  "Run BODY with external dispatch recorded in DISPATCHED-VAR, newest first."
+(defmacro with-approval-execution ((executed-var &key panel-var) &body body)
+  "Run BODY with each evaluated submission recorded in EXECUTED-VAR, newest
+first, as (SOURCE ORIGIN APPROVAL)."
   (let ((panel (or panel-var (gensym "PANEL"))))
-    `(let ((,dispatched-var nil)
+    `(let ((,executed-var nil)
            (,panel nil)
            (nshell.presentation::*history-persistence-enabled-p* nil)
            (nshell.presentation::*history-loading-enabled-p* nil))
        (declare (ignorable ,panel))
        (with-temporary-functions
-           (('nshell.application::%run-external-command-in-context
-             (lambda (context name args)
+           (('nshell.application:evaluate-reader-result-in-context
+             (lambda (context reader-result)
                (declare (ignore context))
-               (push (cons name args) ,dispatched-var)
-               (values "" 0)))
+               (push (list (nshell.domain.parsing:reader-result-source reader-result)
+                           nshell.application:*execution-origin*
+                           nshell.application:*execution-approval*)
+                     ,executed-var)
+               (values nil 0)))
             ('nshell.presentation::render-transient-panel
+             (lambda (content &rest arguments)
+               (declare (ignore arguments))
+               (setf ,panel content)))
+            ('nshell.presentation::render-prompt-cont
+             (lambda () nil)))
+         ,@body))))
+
+(defmacro with-approval-gate-execution ((&key panel-var) &body body)
+  "Run BODY with the real evaluator, so the execution gate sees the expanded line."
+  (let ((panel (or panel-var (gensym "PANEL"))))
+    `(let ((,panel nil)
+           (nshell.presentation::*history-persistence-enabled-p* nil)
+           (nshell.presentation::*history-loading-enabled-p* nil))
+       (declare (ignorable ,panel))
+       (with-temporary-functions
+           (('nshell.presentation::render-transient-panel
              (lambda (content &rest arguments)
                (declare (ignore arguments))
                (setf ,panel content)))
@@ -145,7 +167,7 @@
                                           (input-key-event :ctrl-c)
                                           (input-key-event :escape)
                                           (input-key-event :char #\P)))))
-        (expect "rm " :to-equal (nshell.presentation:input-state-buffer put))
+        (expect "rm" :to-equal (nshell.presentation:input-state-buffer put))
         (expect t :to-be (%approval-origin put)))))
 
   (it "takes-the-origin-of-the-history-entry-on-history-navigation"
@@ -167,15 +189,15 @@
     (with-repl-test-state
       (let ((nshell.presentation::*history-loading-enabled-p* nil))
         (%approval-add-history "rm typed-file" :typed)
-        (let ((nshell.presentation::*input-state*
-                (%approval-proposal-state "rm -rf target")))
+        ;; History navigation matches entries by the line as a prefix.
+        (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm")))
           (capture-standard-output
             (nshell.presentation::%process-history-prev-output-event))
           (expect "rm typed-file" :to-equal (%approval-buffer))
           (expect nil :to-be (%approval-origin nshell.presentation::*input-state*))
           (capture-standard-output
             (nshell.presentation::%process-history-next-output-event))
-          (expect "rm -rf target" :to-equal (%approval-buffer))
+          (expect "rm" :to-equal (%approval-buffer))
           (expect t :to-be (%approval-origin nshell.presentation::*input-state*))))))
 
   (it "takes-the-origin-of-the-history-entry-chosen-by-history-search"
@@ -218,107 +240,100 @@
   (it "runs-a-safe-proposal-on-one-enter-and-consumes-the-record"
     (with-repl-test-state
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "ls")))
-        (with-approval-execution (dispatched)
+        (with-approval-execution (executed)
           (%approval-press-enter)
-          (expect '(("ls")) :to-equal dispatched)
+          (expect '(("ls" :proposal :safe)) :to-equal executed)
           (expect nil :to-be nshell.presentation::*assistant-command-approval*)
           (expect nil :to-be (%approval-origin nshell.presentation::*input-state*))))))
 
   (it "asks-for-a-second-enter-and-approves-at-the-confirm-level"
     (with-repl-test-state
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm file")))
-        (with-approval-execution (dispatched :panel-var panel)
+        (with-approval-execution (executed :panel-var panel)
           (%approval-press-enter)
-          (expect nil :to-be dispatched)
+          (expect nil :to-be executed)
           (expect '("rm file" . :pending) :to-equal
                   nshell.presentation::*assistant-command-approval*)
           (expect (search "confirmation" (first panel)) :to-be-truthy)
           (%approval-press-enter)
-          (expect '(("rm" "file")) :to-equal dispatched)
+          (expect '(("rm file" :proposal :confirm)) :to-equal executed)
           (expect nil :to-be nshell.presentation::*assistant-command-approval*)))))
 
   (it "does-not-reuse-an-approval-for-the-same-text-proposed-again"
     (with-repl-test-state
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm file")))
-        (with-approval-execution (dispatched)
+        (with-approval-execution (executed)
           (%approval-press-enter)
           (%approval-press-enter)
-          (expect 1 :to-equal (length dispatched))
+          (expect 1 :to-equal (length executed))
           (nshell.presentation::%install-assistant-proposal "rm file")
           (%approval-press-enter)
-          (expect 1 :to-equal (length dispatched))
+          (expect 1 :to-equal (length executed))
           (expect '("rm file" . :pending) :to-equal
                   nshell.presentation::*assistant-command-approval*)))))
 
   (it "drops-a-pending-approval-when-the-text-changes"
     (with-repl-test-state
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm file")))
-        (with-approval-execution (dispatched)
+        (with-approval-execution (executed)
           (%approval-press-enter)
           (%approval-send-keys (input-key-event :char #\2))
           (%approval-press-enter)
-          (expect nil :to-be dispatched)
+          (expect nil :to-be executed)
           (expect '("rm file2" . :pending) :to-equal
                   nshell.presentation::*assistant-command-approval*)))))
 
+  ;; The alias target is a missing command: classified confirm, and running
+  ;; it only reports "command not found" (exit 127).
   (it "stops-at-the-gate-when-an-alias-turns-a-safe-proposal-into-confirm"
     (with-repl-test-state
-      (repl-test-define-alias "ls" "rm -r somedir")
+      (repl-test-define-alias "ls" "nshell-approval-test-missing-command -r somedir")
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "ls")))
-        (with-approval-execution (dispatched)
-          (let ((output (%approval-press-enter)))
-            (expect nil :to-be dispatched)
-            (expect 126 :to-equal nshell.presentation::*last-exit-code*)
-            (expect (search "requires confirmation" output) :to-be-truthy))
+        (with-approval-gate-execution ()
+          (%approval-press-enter)
+          (expect 126 :to-equal nshell.presentation::*last-exit-code*)
           (expect '("ls" . :pending) :to-equal
                   nshell.presentation::*assistant-command-approval*)
           (expect "ls" :to-equal (%approval-buffer))
           (expect t :to-be (%approval-origin nshell.presentation::*input-state*))
           (%approval-press-enter)
-          (expect '(("rm" "-r" "somedir")) :to-equal dispatched)
-          (expect nil :to-be nshell.presentation::*assistant-command-approval*)))))
+          (expect 127 :to-equal nshell.presentation::*last-exit-code*)
+          (expect nil :to-be nshell.presentation::*assistant-command-approval*)
+          (expect "" :to-equal (%approval-buffer))))))
 
   ;; Passes once the closed-world ls spec allows --color=auto (D-P1-5 2.6).
   (it "does-not-stop-a-safe-proposal-at-the-gate-for-an-ls-color-alias"
     (with-repl-test-state
       (repl-test-define-alias "ls" "ls --color=auto")
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "ls")))
-        (with-approval-execution (dispatched)
+        (with-approval-gate-execution ()
           (%approval-press-enter)
-          (expect '(("ls" "--color=auto")) :to-equal dispatched)
-          (expect 0 :to-equal nshell.presentation::*last-exit-code*)))))
+          (expect 0 :to-equal nshell.presentation::*last-exit-code*)
+          (expect nil :to-be nshell.presentation::*assistant-command-approval*)
+          (expect "" :to-equal (%approval-buffer))))))
 
   (it "runs-a-typed-command-on-one-enter-after-ctrl-u-empties-a-proposal"
     (with-repl-test-state
-      (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm -rf target"))
-            (origin nil))
+      (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm -rf target")))
         (%approval-send-keys (input-key-event :ctrl-u)
                              (input-key-event :char #\r)
                              (input-key-event :char #\m)
                              (input-key-event :char #\Space)
                              (input-key-event :char #\x))
-        (with-approval-execution (dispatched)
-          (with-temporary-function
-              ('nshell.application::%run-external-command-in-context
-               (lambda (context name args)
-                 (declare (ignore context))
-                 (setf origin nshell.application:*execution-origin*)
-                 (push (cons name args) dispatched)
-                 (values "" 0)))
-            (%approval-press-enter))
-          (expect '(("rm" "x")) :to-equal dispatched)
-          (expect :typed :to-be origin)))))
+        (with-approval-execution (executed)
+          (%approval-press-enter)
+          (expect '(("rm x" :typed nil)) :to-equal executed)))))
 
   (it "runs-a-typed-history-entry-on-one-enter-after-leaving-a-proposal"
     (with-repl-test-state
       (let ((nshell.presentation::*history-loading-enabled-p* nil)
-            (nshell.presentation::*input-state* (%approval-proposal-state "rm -rf target")))
+            (nshell.presentation::*input-state* (%approval-proposal-state "rm")))
         (%approval-add-history "rm typed-file" :typed)
         (capture-standard-output
           (nshell.presentation::%process-history-prev-output-event))
-        (with-approval-execution (dispatched)
+        (with-approval-execution (executed)
           (%approval-press-enter)
-          (expect '(("rm" "typed-file")) :to-equal dispatched)))))
+          (expect '(("rm typed-file" :typed nil)) :to-equal executed)))))
 
   (it "gates-a-proposal-recalled-from-history"
     (with-repl-test-state
@@ -327,19 +342,19 @@
         (%approval-add-history "rm proposed-file" :proposal)
         (capture-standard-output
           (nshell.presentation::%process-history-prev-output-event))
-        (with-approval-execution (dispatched)
+        (with-approval-execution (executed)
           (%approval-press-enter)
-          (expect nil :to-be dispatched)
+          (expect nil :to-be executed)
           (%approval-press-enter)
-          (expect '(("rm" "proposed-file")) :to-equal dispatched)))))
+          (expect '(("rm proposed-file" :proposal :confirm)) :to-equal executed)))))
 
   (it "gates-a-killed-proposal-yanked-back-after-ctrl-u"
     (with-repl-test-state
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm -rf target")))
         (%approval-send-keys (input-key-event :ctrl-u) (input-key-event :ctrl-y))
-        (with-approval-execution (dispatched)
+        (with-approval-execution (executed)
           (%approval-press-enter)
-          (expect nil :to-be dispatched)
+          (expect nil :to-be executed)
           (expect '("rm -rf target" . :pending) :to-equal
                   nshell.presentation::*assistant-command-approval*)))))
 
@@ -350,8 +365,8 @@
                              (input-key-event :ctrl-c)
                              (input-key-event :ctrl-underscore))
         (expect "rm -rf target" :to-equal (%approval-buffer))
-        (with-approval-execution (dispatched)
+        (with-approval-execution (executed)
           (%approval-press-enter)
-          (expect nil :to-be dispatched)
+          (expect nil :to-be executed)
           (%approval-press-enter)
-          (expect '(("rm" "-rf" "target")) :to-equal dispatched))))))
+          (expect '(("rm -rf target" :proposal :confirm)) :to-equal executed))))))

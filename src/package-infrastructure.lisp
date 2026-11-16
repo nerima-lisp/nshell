@@ -152,5 +152,7 @@ history records and loads and saves configuration values.")
            ;; Crash logs (P0-4)
            #:crash-record #:crash-record-p #:crash-record-condition
            #:crash-record-frame-names #:crash-record-frame-arguments
-           #:capture-crash #:crash-log-directory-path #:write-crash-report))
+           #:capture-crash #:crash-log-directory-path #:write-crash-report
+           ;; nshell bug-report (P0-6)
+           #:bug-report-text))
 )

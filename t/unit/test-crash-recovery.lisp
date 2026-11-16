@@ -244,18 +244,22 @@ binds, so no production command line can reach it."
                   :to-equal path))
         (expect "earlier crash" :to-equal (uiop:read-file-string taken)))))
 
-  (it "home-becomes-tilde-only-as-a-whole-path-prefix"
+  (it "home-becomes-tilde-wherever-it-ends-a-path-component"
     (expect "~/src and ~ and (~)"
             :to-equal (nshell.domain.crash:replace-home-directory
                        "/home/p04/src and /home/p04 and (/home/p04)" "/home/p04/"))
-    (expect "/home/p04user/x /x/home/p04/y"
+    ;; HOME inside a longer value is replaced too (P0-6 review); a longer
+    ;; component name such as p04user is not HOME.
+    (expect "/home/p04user/x /x~/y prefix~/locale"
             :to-equal (nshell.domain.crash:replace-home-directory
-                       "/home/p04user/x /x/home/p04/y" "/home/p04"))
+                       "/home/p04user/x /x/home/p04/y prefix/home/p04/locale"
+                       "/home/p04"))
     (expect "/etc/passwd"
             :to-equal (nshell.domain.crash:replace-home-directory "/etc/passwd" "/"))
-    (expect "relative/p04"
-            :to-equal (nshell.domain.crash:replace-home-directory "relative/p04"
-                                                                  "relative")))
+    (expect "/etc/passwd"
+            :to-equal (nshell.domain.crash:replace-home-directory "/etc/passwd" ""))
+    (expect "/etc/passwd"
+            :to-equal (nshell.domain.crash:replace-home-directory "/etc/passwd" nil)))
 
   (it "the-log-redacts-secrets-and-shows-home-as-tilde"
     (let ((text (nshell.domain.crash:render-crash-log

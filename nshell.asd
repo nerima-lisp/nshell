@@ -78,6 +78,7 @@
     :components ((:file "package")
                  (:file "feature")
                  (:file "domain/options")
+                 (:file "domain/subcommands")
                  (:file "application/contract")
                  (:file "presentation/help")))
    (:module "feature-assistant"
@@ -201,6 +202,8 @@
    (:file "domain/history/expansion")
    (:file "domain/job-control/monitor")
    (:file "domain/crash/crash-report")
+   (:file "domain/diagnostics/sha256")
+   (:file "domain/diagnostics/bug-report")
    (:file "domain/configuration/theme-data"
           :pathname "../data/domain/configuration/theme-data")
    (:file "domain/configuration/theme")
@@ -311,6 +314,7 @@
    (:file "infrastructure/persistence/file-history")
    (:file "infrastructure/persistence/file-config")
    (:file "infrastructure/persistence/crash-log")
+   (:file "infrastructure/persistence/bug-report")
    (:file "infrastructure/terminal/detection")
    #+linux
    (:module "infrastructure/terminal/linux-abi"
@@ -599,6 +603,7 @@
    (:file "main-test")
    (:file "unit/test-safe-mode")
    (:file "unit/test-crash-recovery")
+   (:file "unit/test-bug-report")
    (:file "unit/static-check-allowlist")
    (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is

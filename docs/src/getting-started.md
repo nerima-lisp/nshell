@@ -90,6 +90,27 @@ existing history available in an interactive session without saving that
 session's commands. It also suppresses local assistant transcript, snapshot,
 and audit persistence.
 
+## Report a bug
+
+`nshell bug-report` prints an issue draft to standard output and sends
+nothing. The draft lists the nshell, SBCL, and dependency versions, the OS and
+architecture, the terminal width, and the values of `TERM`, `COLORTERM`,
+`LANG`, and `LC_*`. It names the `NSHELL_*` variables that are set without
+their values. For `init.lisp`, the `conf.d` files, and the files in the
+functions directory (`$XDG_CONFIG_HOME/nshell/functions/` when
+`XDG_CONFIG_HOME` is an absolute path, or `~/.config/nshell/functions/`
+otherwise) it shows only presence, size, and SHA-256. It names the newest
+crash log file without reading or attaching it. Crash logs are in
+`$XDG_STATE_HOME/nshell/crash/`, or `~/.local/state/nshell/crash/` when
+`XDG_STATE_HOME` is not an absolute path. nshell shows your home directory as
+`~` in a crash log and redacts token-shaped text in the error message and the
+backtrace arguments, but other command text can remain, so review the log
+before you attach it. Review the draft, fill in what happened, and paste it
+into a new issue at <https://github.com/nerima-lisp/nshell/issues>.
+
+Put `bug-report` first: after an option, as in `nshell --private bug-report`,
+the name is read as a script.
+
 ## Build from source
 
 The flake supplies SBCL, ASDF, and the project's dependencies. Clone the

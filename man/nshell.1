@@ -23,6 +23,10 @@ nshell \- an interactive shell with an S-expression command language
 .RI [ ARGS .\|.\|.]]
 .RI [ SCRIPT
 .RI [ ARGS .\|.\|.]]
+.br
+.B nshell
+.I SUBCOMMAND
+.RI [ ARGS .\|.\|.]
 .SH DESCRIPTION
 .B nshell
 provides real-time syntax highlighting, history-aware autosuggestions,
@@ -140,6 +144,58 @@ and audit persistence.
 .TP
 .B \-\-mcp
 Run the standard-input/standard-output MCP server.
+.SH SUBCOMMANDS
+A subcommand name given as the first argument takes precedence over a script
+of the same name. To run such a script, give a path, as in
+.BR "nshell ./bug-report" ,
+or put
+.B \-\-
+before it, as in
+.BR "nshell \-\- bug-report" .
+A subcommand name after an option is a script name.
+.TP
+.B bug-report
+Print a draft for a bug report issue to standard output. It takes no
+arguments and sends nothing.
+The draft lists the nshell, SBCL, and dependency versions, the OS and
+architecture, the terminal width, and the values of
+.BR TERM ,
+.BR COLORTERM ,
+.BR LANG ,
+and the
+.B LC_*
+variables. Of the other environment variables it lists only the names of the
+.B NSHELL_*
+variables that are set. Of
+.IR init.lisp ,
+the
+.I conf.d
+files, and the files in the functions directory
+.RI ( $XDG_CONFIG_HOME/nshell/functions/
+when
+.B XDG_CONFIG_HOME
+is absolute, or
+.I ~/.config/nshell/functions/
+otherwise) it shows only presence, size, and SHA-256, and it numbers the
+.I conf.d
+and function files instead of naming them. It names the crash log directory
+and the newest crash log file but does not read or attach any log. Crash logs
+are in
+.I $XDG_STATE_HOME/nshell/crash/
+when
+.B XDG_STATE_HOME
+is absolute, or
+.I ~/.local/state/nshell/crash/
+otherwise. A crash log shows the home directory as
+.I ~
+and has token-shaped text redacted in the error message and the backtrace
+arguments, but other command text can remain; review it before attaching it to
+an issue. Directories are shown
+as
+.I ~/...\&
+or by the variable that selects them, such as
+.IR $XDG_STATE_HOME ,
+never by their real path. Review the draft before posting it.
 .SH KEY BINDINGS
 The default Emacs-style bindings use \fBC\-\fR for Ctrl
 and \fBM\-\fR for Alt (Meta).

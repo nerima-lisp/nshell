@@ -90,7 +90,16 @@ REPL refresh does not read it again."
         (unwind-protect
              (progn
                (nshell.infrastructure.persistence:append-history-entry "kept")
-               (sb-posix:chmod test-path #o4600)
+               ;; Build sandboxes reject setuid with EPERM (Linux seccomp) or
+               ;; accept the chmod and drop the bit (Darwin).
+               (handler-case (sb-posix:chmod test-path #o4600)
+                 (sb-posix:syscall-error (condition)
+                   (unless (= (sb-posix:syscall-errno condition) sb-posix:eperm)
+                     (error condition))
+                   (skip "chmod cannot set the setuid bit here (EPERM)")))
+               (unless (logtest #o4000
+                                (sb-posix:stat-mode (sb-posix:stat test-path)))
+                 (skip "chmod succeeded but the setuid bit was not kept"))
                (expect #o4600 :to-equal
                        (logand #o7777 (sb-posix:stat-mode (sb-posix:stat test-path))))
                (expect '("kept")

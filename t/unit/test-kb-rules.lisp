@@ -150,8 +150,13 @@
       (expect (effects "head -n 5 f") :to-equal '((nshell.feature.kb::reads "f")))
       (expect (effects "tail -n5 -c 10 f g")
               :to-equal '((nshell.feature.kb::reads "f") (nshell.feature.kb::reads "g")))
-      ;; - is standard input, not a path.
+      ;; - is standard input, not a path, for the commands whose spec row
+      ;; says so, after -- too; ls reads a file named -.
       (expect (effects "cat - f") :to-equal '((nshell.feature.kb::reads "f")))
+      (expect (effects "ls -") :to-equal '((nshell.feature.kb::reads "-")))
+      (expect (effects "ls -- -") :to-equal '((nshell.feature.kb::reads "-")))
+      (dolist (line '("cat -- -" "wc -l -- -" "head -n 1 -- -"))
+        (expect (list line (effects line)) :to-equal (list line nil)))
       ;; An option the row does not describe may take a value, so no word
       ;; is known to be an operand: file -F takes a separator.
       (dolist (line '("wc -" "cat -" "file -F : x" "cat -Z f" "ls -Z"))

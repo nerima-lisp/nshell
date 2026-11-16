@@ -24,7 +24,7 @@ rules.pl into it; until then only tests set it.")
     (unclassifiable :none "") (assignment :none "") (wrapper-option :none "")
     (spec-command :none) (spec-match :none) (argument-not-allowed :none "")
     (opaque-wrapper :none) (redirect-not-allowed :none "") (word :none "")
-    (shell-function :none))
+    (shell-function :none) (spec-operand :none ""))
   "One clause per input predicate about the atom :NONE, which never names a
 subject.  A rule that asks about an input the evaluator did not supply then
 fails instead of raising existence_error, while a misspelled predicate in
@@ -219,7 +219,10 @@ For a query, an eighth value gives the row's :QUERY-OPTIONS."
             (let ((mismatches (spec-argument-mismatches spec arguments)))
               (if mismatches
                   (add 'argument-not-allowed 'subject (%mismatch-text mismatches))
-                  (add 'spec-match 'subject))))))
+                  (progn
+                    (add 'spec-match 'subject)
+                    (dolist (operand (spec-operands spec arguments))
+                      (add 'spec-operand 'subject operand))))))))
       ;; Redirects come from the AST, not from the argument words (2.5).
       (dolist (target writes) (add 'redirect 'subject target))
       (dolist (text redirect-problems) (add 'redirect-not-allowed 'subject text))

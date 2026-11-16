@@ -138,7 +138,23 @@
       (expect (effects "ls -la")
               :to-equal '((nshell.feature.kb::reads ".")))
       ;; Without an operand wc and cat read only standard input.
-      (dolist (line '("wc -l" "cat" "git log -n 3" "grep x f" "head -n 5 f"))
+      (dolist (line '("wc -l" "cat" "git log -n 3" "grep x f" "head -n 5"))
+        (expect (list line (effects line)) :to-equal (list line nil)))))
+
+  (it "reads operands as the spec row separates them and - as standard input"
+    (flet ((effects (line)
+             (nshell.feature.assistant:command-effects
+              (nshell.domain.parsing:parse-result-ast
+               (nshell.domain.parsing:parse-command-line line)))))
+      ;; The value of a value flag is no operand.
+      (expect (effects "head -n 5 f") :to-equal '((nshell.feature.kb::reads "f")))
+      (expect (effects "tail -n5 -c 10 f g")
+              :to-equal '((nshell.feature.kb::reads "f") (nshell.feature.kb::reads "g")))
+      ;; - is standard input, not a path.
+      (expect (effects "cat - f") :to-equal '((nshell.feature.kb::reads "f")))
+      ;; An option the row does not describe may take a value, so no word
+      ;; is known to be an operand: file -F takes a separator.
+      (dolist (line '("wc -" "cat -" "file -F : x" "cat -Z f" "ls -Z"))
         (expect (list line (effects line)) :to-equal (list line nil))))))
 
 (describe "knowledge-base user rules"

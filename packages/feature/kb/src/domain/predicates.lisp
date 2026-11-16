@@ -218,6 +218,21 @@ rest are left unread.  Long names match exactly, never by prefix."
               (cons format mismatches)
               mismatches)))))
 
+(defun spec-operands (spec-row arguments)
+  "Return the operands of ARGUMENTS as SPEC-ROW's options read them: option
+values and options are left out.  Only rows read by their options (not by
+a :GRAMMAR) have operands; for a :SUBCOMMANDS row they are the subcommand's.
+Meaningful only when ARGUMENTS match the row: an option it does not describe
+may take the next word as its value."
+  (let ((spec (rest spec-row)))
+    (cond
+      ((getf spec :grammar) nil)
+      ((getf spec :subcommands)
+       (let ((entry (assoc (first arguments) (getf spec :subcommands)
+                           :test #'equal)))
+         (and entry (values (read-spec-options (rest entry) (rest arguments))))))
+      (t (values (read-spec-options spec arguments))))))
+
 (defun spec-argument-mismatches (spec-row arguments)
   "Return the words of ARGUMENTS that SPEC-ROW, a (NAME . SPEC) row of the
 spec table, does not allow.  NIL means the arguments match the spec."

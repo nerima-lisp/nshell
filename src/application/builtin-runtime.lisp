@@ -9,19 +9,6 @@
   "Return the builtin handler registered for NAME, or NIL."
   (and name (gethash name *builtin-registry*)))
 
-(defun %assistant-command-builtin-p (name path)
-  "True when the executor on PATH runs NAME as a builtin: the bare-line path
-(%execute-command-by-name-in-context) looks NAME up in the builtin registry,
-a reader stage (%resolve-command-stage-binding) in the builtin binding
-registry.  The AI safety classifier asks the same question through
-*assistant-builtin-resolver*."
-  (if (eq path :reader)
-      (nth-value 1 (lookup-builtin-binding name))
-      (and (lookup-builtin name) t)))
-
-(setf nshell.feature.assistant:*assistant-builtin-resolver*
-      #'%assistant-command-builtin-p)
-
 (defun %required-argument-error (builtin option requirement)
   (format nil "~a: ~a requires ~a~%" builtin option requirement))
 
@@ -295,30 +282,43 @@ afterwards with any global write the callee made."
          (:return (source-lines context function-body))
          (:stream (source-lines-to-stream context function-body)))))))
 
-(defun %execute-command-by-name-in-context (context command args)
+(defun %resolve-command-by-name (context command)
+  "Return how %execute-command-by-name-in-context runs COMMAND, and the
+binding it runs: :SOURCE-FUNCTION (the function table), :SHELL-FUNCTION (the
+shell function registry), :BUILTIN, or :EXTERNAL.  The AI execution gate and
+the safety classifier resolve a command by this function too."
   (multiple-value-bind (function-body function-present-p)
       (gethash command (shell-context-function-table context))
     (if function-present-p
-        (%execute-function-command-in-context context function-body args)
+        (values :source-function function-body)
         (multiple-value-bind (binding registered-p)
             (lookup-shell-function
              (context-shell-function-registry context) command)
           (let ((handler (lookup-builtin command)))
             (cond
-              (registered-p
-               (when (>= *function-call-depth* 128)
-                 (error "function recursion limit exceeded"))
-               (let ((*function-call-depth* (1+ *function-call-depth*)))
-                 (funcall
-                  (shell-function-binding-callable binding)
-                  context
-                  (mapcar
-                   (lambda (argument)
-                     (nshell.domain.parsing:make-evaluated-command-arg
-                      argument))
-                   args)
-                  :stream)
-                 (values nil 0)))
-              (handler (funcall handler context args))
-              (t
-               (%run-external-command-in-context context command args))))))))
+              (registered-p (values :shell-function binding))
+              (handler (values :builtin handler))
+              (t (values :external nil))))))))
+
+(defun %execute-command-by-name-in-context (context command args)
+  (multiple-value-bind (kind binding) (%resolve-command-by-name context command)
+    (ecase kind
+      (:source-function
+       (%execute-function-command-in-context context binding args))
+      (:shell-function
+       (when (>= *function-call-depth* 128)
+         (error "function recursion limit exceeded"))
+       (let ((*function-call-depth* (1+ *function-call-depth*)))
+         (funcall
+          (shell-function-binding-callable binding)
+          context
+          (mapcar
+           (lambda (argument)
+             (nshell.domain.parsing:make-evaluated-command-arg
+              argument))
+           args)
+          :stream)
+         (values nil 0)))
+      (:builtin (funcall binding context args))
+      (:external
+       (%run-external-command-in-context context command args)))))

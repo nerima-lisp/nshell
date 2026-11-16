@@ -242,7 +242,7 @@ optional decimal fraction, or NIL."
          (cl-cli:option-value invocation :command)
          :timeout (if timeout
                       (%parse-timeout-seconds timeout)
-                      nshell.feature.machine:+default-json-timeout-seconds+)
+                      nshell.feature.machine:+json-default-timeout-seconds+)
          :private (not (null (cl-cli:option-value invocation :private)))
          :environment-agent-p (%env-boolean-p "NSHELL_AGENT")
          :errexit-p errexit-p

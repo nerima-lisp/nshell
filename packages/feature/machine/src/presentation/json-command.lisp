@@ -10,9 +10,6 @@
 ;;; and then releases the worker, which unwinds out of the batch run instead of
 ;;; going on to the next command.
 
-(defconstant +default-json-timeout-seconds+ 120
-  "The whole-run deadline of --json when --timeout is not given.")
-
 (defparameter *json-park-wait-seconds* 0.5
   "How long the deadline waits for the worker to acknowledge being parked.")
 
@@ -366,7 +363,7 @@ its PATH, and return the session, or NIL when nothing could be saved."
   (and (nshell.infrastructure.acl::timeout-seconds-p timeout)
        (plusp timeout)))
 
-(defun run-json-command (input &key (timeout +default-json-timeout-seconds+)
+(defun run-json-command (input &key (timeout +json-default-timeout-seconds+)
                                     private environment-agent-p errexit-p
                                     script-args)
   "Run INPUT once as `nshell --command INPUT` does and return the envelope as

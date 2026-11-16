@@ -74,7 +74,6 @@ of ux/U6, its builders, and its JSON serialization.")
              #:output-session-write
              #:prune-output-sessions
              ;; JSON command
-             #:+default-json-timeout-seconds+
              #:run-json-command)
     (:export #:+json-default-timeout-seconds+
              #:*machine-methods*

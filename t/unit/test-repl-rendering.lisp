@@ -251,6 +251,36 @@
                                                                     :terminal-width 10)))
       (expect 1 :to-equal (nshell.presentation::rendered-position-row position))
       (expect 2 :to-equal (nshell.presentation::rendered-position-column position))))
+  (it "repl-render-plan-preserves-combining-cursor-boundary"
+    "Cursor geometry should advance to a complete combining grapheme."
+    (let* ((text (format nil "e~cX" (code-char #x301)))
+           (inside (nshell.presentation::%rendered-buffer-position text 1 4))
+           (boundary (nshell.presentation::%rendered-buffer-position text 2 4)))
+      (expect 0 :to-equal (nshell.presentation::rendered-position-row inside))
+      (expect 5 :to-equal (nshell.presentation::rendered-position-column inside))
+      (expect 0 :to-equal (nshell.presentation::rendered-position-row boundary))
+      (expect 5 :to-equal (nshell.presentation::rendered-position-column boundary))))
+  (it "repl-render-plan-restores-wrapped-wide-cursor-output"
+    "A full redraw should preserve wrapped wide text and cursor escape bytes."
+    (with-repl-test-state
+      (with-stable-repl-prompt (:width 4 :text "ns> ")
+        (with-fixed-terminal-size (24 10)
+          (with-repl-render-state (:buffer "echo あbc" :cursor-pos 5)
+            (let* ((output
+                     (capture-standard-output
+                       (nshell.presentation::render-prompt-cont)))
+                   (restore
+                     (concatenate 'string
+                                  (esc-sequence "[1A")
+                                  (esc-sequence "[10G"))))
+              (expect 2 :to-equal nshell.presentation::*prompt-rendered-lines*)
+              (expect 0 :to-equal nshell.presentation::*prompt-rendered-cursor-row*)
+              (expect (search "ns> " output) :to-be-truthy)
+              (expect (search "echo" output) :to-be-truthy)
+              (expect (search "あbc" output) :to-be-truthy)
+              (expect restore
+                      :to-equal
+                      (subseq output (- (length output) (length restore))))))))))
 
   (it "repl-complete-renders-a-valid-existing-session"
     "Completion redraw should reuse candidates from a valid existing session."

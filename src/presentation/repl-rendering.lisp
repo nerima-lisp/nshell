@@ -345,24 +345,15 @@
          :cursor-position cursor-position))
       (when (and suggestion (> (length suggestion) 0))
         (%write-styled suggestion :autosuggestion theme))
-      (%move-cursor-to-rendered-position text
-                                         (input-state-cursor-pos *input-state*)
-                                         prompt-width
-                                         suggestion
-                                         nil
-                                         :terminal-width terminal-width)
-      (let ((cursor-position
-              (%rendered-buffer-position text
-                                         (input-state-cursor-pos *input-state*)
-                                         prompt-width
-                                         :terminal-width terminal-width)))
-        (setf *prompt-rendered-lines*
-              (%rendered-buffer-line-count text
-                                           :suggestion suggestion
-                                           :search-suffix nil
-                                           :terminal-width terminal-width
-                                           :prompt-width prompt-width)
-              *prompt-rendered-cursor-row* (rendered-position-row cursor-position)
+      (multiple-value-bind (rendered-lines rendered-cursor)
+          (%move-cursor-to-rendered-position text
+                                             cursor-position
+                                             prompt-width
+                                             suggestion
+                                             nil
+                                             :terminal-width terminal-width)
+        (setf *prompt-rendered-lines* rendered-lines
+              *prompt-rendered-cursor-row* (rendered-position-row rendered-cursor)
               *prompt-rendered-terminal-width* terminal-width
               *prompt-rendered-prompt-width* prompt-width)))
     (when transient-panel-content

@@ -20,7 +20,7 @@
         "PATH=/tmp/x" "TZ=UTC" "LANG=C"
         "(^LANG=C ls)" "\"LANG=C\" ls" "'LANG=C' cat" "LANG=C \"TZ=UTC\" ls"
         "LANG=C ls" "LANG=C TZ=UTC ls > /dev/null" "FOO=1 \"BAR=2\" ls"
-        "ls '>' out" "FOO+=x ls")
+        "ls '>' out" "FOO+=x ls" "(^git branch \"2>&1\")")
   "Inputs R-P1-5 used, read with every reader that accepts them.")
 
 (defun %safety-view-command-nodes (ast)
@@ -143,3 +143,139 @@ expansion of assignment values is stubbed so no substitution runs."
           (destructuring-bind (label path node) case
             (expect (list label (%safety-view-classifier path node))
                     :to-equal (list label (%safety-view-executor context path node)))))))))
+
+;;; The gate classifies the node of a stage the executor is about to run: the
+;;; expanded node on the bare-line path (%assistant-gate-expanded-node) and
+;;; the evaluated reader stage on the reader path (%reader-gate-command-node).
+;;; What the classifier sees there must equal what that stage runs.
+
+(defun %safety-view-reader-stage (context node)
+  "Evaluate the reader stage NODE as the reader executor does, or NIL when
+its evaluation fails (then nothing runs)."
+  (handler-case (nshell.application:evaluate-command-stage-in-context context node)
+    (error () nil)))
+
+(defun %safety-view-normal-redirects (redirects)
+  (mapcar (lambda (redirect)
+            (if (consp redirect)
+                (let ((target (cdr redirect)))
+                  (list (car redirect)
+                        (if (nshell.domain.parsing:redirect-fd-dup-target-p target)
+                            (list (nshell.domain.parsing:redirect-fd-dup-target-source target)
+                                  (nshell.domain.parsing:redirect-fd-dup-target-target target))
+                            target)))
+                (list (nshell.domain.parsing:ast-redirect-entry-kind redirect)
+                      (nshell.domain.parsing:ast-redirect-entry-source-order redirect))))
+          redirects))
+
+(defun %safety-view-gate-classifier (gate)
+  "Run GATE (a thunk calling the real gate) and return the names, command
+words, and redirects of the first command the classifier split."
+  (let ((original (symbol-function 'nshell.feature.assistant::%assistant-command-parts))
+        (seen nil)
+        (depth 0))
+    (with-temporary-function
+        ('nshell.feature.assistant::%assistant-command-parts
+         (lambda (&rest arguments)
+           ;; Keep the outermost call: splitting a node classifies its
+           ;; process substitutions first.
+           (let ((parts (progn
+                          (incf depth)
+                          (unwind-protect (multiple-value-list (apply original arguments))
+                            (decf depth)))))
+             (unless (or seen (plusp depth)) (setf seen parts))
+             (values-list parts))))
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :confirm)
+            (nshell.application::*execution-gate-parent-kind* nil)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (funcall gate)))
+    (and seen
+         (list (second seen) (first seen)
+               (%safety-view-normal-redirects (seventh seen))))))
+
+(defun %safety-view-gate-pair (context path node)
+  "Return (CLASSIFIER EXECUTOR) views of the stage NODE at the gate, or NIL
+when the executor dispatches no stage for it."
+  (unless (nshell.domain.parsing:command-node-assignment-words node)
+    (if (eq path :bare-line)
+        (multiple-value-bind (assignments rest)
+            (nshell.application::%split-prefix-assignments context node)
+          (declare (ignore assignments))
+          ;; %expand-command-node-in-context with the identity expansion.
+          (let* ((expanded (nshell.domain.parsing:make-command-node
+                            (nshell.domain.parsing:command-node-command rest)
+                            (mapcar #'nshell.domain.parsing:make-command-arg
+                                    (nshell.domain.parsing:command-node-arg-values rest))))
+                 (split (nshell.application::%extract-command-redirects expanded))
+                 (clean (nshell.domain.parsing:command-redirect-split-result-clean-command
+                         split)))
+            (list (%safety-view-gate-classifier
+                   (lambda ()
+                     (nshell.application::%assistant-gate-expanded-node context expanded)))
+                  (list nil
+                        (cons (nshell.domain.parsing:command-node-command clean)
+                              (nshell.domain.parsing:command-node-arg-values clean))
+                        (%safety-view-normal-redirects
+                         (nshell.domain.parsing:command-redirect-split-result-redirects
+                          split))))))
+        (let ((stage (%safety-view-reader-stage context node)))
+          (when stage
+            (let ((command (nshell.application:evaluated-command-stage-command-node stage)))
+              (list (%safety-view-gate-classifier
+                     (lambda ()
+                       (nshell.application::%reader-assistant-gate
+                        context
+                        (list (nshell.application::%reader-gate-command-node context stage))
+                        nil)))
+                    (list (mapcar #'car
+                                  (nshell.application:evaluated-command-stage-environment-assignments
+                                   stage))
+                          (cons (nshell.domain.parsing:command-node-command command)
+                                (nshell.application::command-argv-strings
+                                 context
+                                 (nshell.application:evaluated-command-stage-arguments stage)))
+                          (%safety-view-normal-redirects
+                           (nshell.domain.parsing:command-node-redirects command))))))))))
+
+(describe "safety classifier sees a stage at the gate as the executor runs it"
+  (it "agrees on the names, command words, and redirects of every gated stage"
+    (let ((context (make-test-shell-context))
+          (compared 0))
+      (with-temporary-function
+          ('nshell.application::%expand-source-arg-in-context
+           (lambda (context arg &optional environment)
+             (declare (ignore context environment))
+             (list (nshell.domain.parsing:arg-value arg))))
+        (dolist (case (%safety-view-cases))
+          (destructuring-bind (label path node) case
+            (let ((pair (%safety-view-gate-pair context path node)))
+              (when pair
+                (incf compared)
+                (expect (list label (first pair))
+                        :to-equal (list label (second pair))))))))
+      (expect (> compared 250) :to-be-truthy)))
+
+  (it "confirms a reader stage whose argument only looks like a redirect"
+    ;; The reader executor passes "2>&1" to git as a branch name.
+    (let* ((context (make-test-shell-context))
+           (result (first (nshell.domain.parsing:read-submission
+                           "(^git branch \"2>&1\")" :reader-context :auto)))
+           (node (nshell.domain.parsing:command-form->ast
+                  (nshell.domain.parsing:reader-result-source result)
+                  (nshell.domain.parsing:reader-result-form result)
+                  (nshell.domain.parsing:reader-result-form-span-map result)
+                  (lambda (head-source)
+                    (declare (ignore head-source))
+                    :command-island)))
+           (stage (nshell.application:evaluate-command-stage-in-context context node)))
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :safe)
+            (nshell.application::*execution-gate-parent-kind* nil)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (expect (second
+                 (nshell.application::%reader-assistant-gate
+                  context
+                  (list (nshell.application::%reader-gate-command-node context stage))
+                  nil))
+                :to-equal 126)))))

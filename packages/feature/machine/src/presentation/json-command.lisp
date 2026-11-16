@@ -69,12 +69,14 @@ SBCL thread otherwise sees only global values.")
   (wake (sb-thread:make-semaphore))
   (alternate-screen-p nil)
   (user-code-p nil)
+  ;; (COMMAND SPAN) of the last command that was not found, SPAN its source
+  ;; span or NIL.
   (missing-command nil)
   (timed-out-p nil)
   ;; The car is the error code of the AI gate's last refusal, if any.
   (gate-refusal (list nil))
-  ;; The car is (COMMAND . ARGUMENTS) of the first full-screen program the
-  ;; gate refused, if any.
+  ;; The car is (COMMAND ARGUMENTS SPAN) of the first full-screen program the
+  ;; gate refused, SPAN the source span of that command, if any.
   (full-screen-program (list nil))
   ;; The worker outlived the deadline's terminate-thread: its output streams
   ;; may still be written and its locks still held.
@@ -138,10 +140,10 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
 
 (defun %full-screen-program-guard (run)
   (let ((refused (json-run-full-screen-program run)))
-    (lambda (command arguments)
+    (lambda (command arguments span)
       (when (full-screen-program-kind command arguments)
         (unless (car refused)
-          (setf (car refused) (cons command arguments)))
+          (setf (car refused) (list command arguments span)))
         t))))
 
 (defun %alternate-screen-watch (run)
@@ -155,7 +157,8 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
 (defun %observe (run)
   (lambda (kind value &rest details)
     (ecase kind
-      (:missing-command (setf (json-run-missing-command run) value))
+      (:missing-command (setf (json-run-missing-command run)
+                              (list value (first details))))
       (:command-failed (setf (json-run-condition run) value))
       (:crash (setf (json-run-condition run) value
                     (json-run-user-code-p run) (first details))))))
@@ -258,45 +261,60 @@ process's directory, the physical directory otherwise."
   (member char '(#\Space #\Tab #\Newline #\Return #\( #\) #\; #\| #\& #\< #\>
                  #\" #\')))
 
-(defun %word-start (input word)
-  "Return the index of the first occurrence of WORD in INPUT as a whole word,
-or NIL."
+(defun %word-start (input word start end)
+  "Return the index of the first occurrence of WORD in INPUT between START and
+END as a whole word, or NIL."
   (let ((length (length word)))
     (when (plusp length)
-      (loop for start = (search word input)
-              then (search word input :start2 (1+ start))
-            while start
-            for end = (+ start length)
-            when (and (or (zerop start) (%word-delimiter-p (char input (1- start))))
-                      (or (= end (length input)) (%word-delimiter-p (char input end))))
-              return start))))
+      (loop for index = (search word input :start2 start :end2 end)
+              then (search word input :start2 (1+ index) :end2 end)
+            while index
+            for word-end = (+ index length)
+            when (and (or (zerop index) (%word-delimiter-p (char input (1- index))))
+                      (or (= word-end (length input))
+                          (%word-delimiter-p (char input word-end))))
+              return index))))
 
-(defun %word-span (input word)
-  "Return the span of the first occurrence of WORD in INPUT as a whole word:
-1-based line and column, END one past its last column."
-  (let ((start (%word-start input word)))
+(defun %input-span (input start length)
+  "Return the span of the LENGTH characters at START in INPUT: 1-based line and
+column, END one past its last column."
+  (let* ((line-start (let ((newline (position #\Newline input :end start :from-end t)))
+                       (if newline (1+ newline) 0)))
+         (column (1+ (- start line-start))))
+    (make-envelope-span
+     :line (1+ (count #\Newline input :end start))
+     :column column
+     :end (+ column length))))
+
+(defun %command-word-start (input command span)
+  "Return the index in INPUT of the name COMMAND of the command whose source
+span is SPAN, or NIL. The name is the first whole word COMMAND in SPAN: only
+assignment words or an opening parenthesis come before it. A command read from
+other text, such as a command substitution or a sourced file, has a span into
+that text, which need not hold the name in INPUT or lie inside it."
+  (when (and span (<= (second span) (length input)))
+    (%word-start input command (first span) (second span))))
+
+(defun %command-word-span (input command span)
+  "Return the envelope span of the name COMMAND found as by
+%COMMAND-WORD-START, or NIL."
+  (let ((start (%command-word-start input command span)))
     (when start
-      (let* ((line-start (let ((newline (position #\Newline input :end start
-                                                                 :from-end t)))
-                           (if newline (1+ newline) 0)))
-             (column (1+ (- start line-start))))
-        (make-envelope-span
-         :line (1+ (count #\Newline input :end start))
-         :column column
-         :end (+ column (length word)))))))
+      (%input-span input start (length command)))))
 
-(defun %full-screen-program-fixes (input program)
-  "The fixes for the full-screen PROGRAM, (COMMAND . ARGUMENTS), refused in
-INPUT: INPUT with the command word replaced by the noninteractive form."
-  (destructuring-bind (command . arguments) program
-    (let ((start (%word-start input command)))
-      (multiple-value-bind (replacement why)
-          (full-screen-program-replacement command arguments)
-        (when (and start replacement)
-          (list (make-envelope-fix
-                 :input (concatenate 'string (subseq input 0 start) replacement
-                                     (subseq input (+ start (length command))))
-                 :why why)))))))
+(defun %full-screen-program-fixes (input program start)
+  "The fixes for the full-screen PROGRAM, (COMMAND ARGUMENTS SPAN), refused in
+INPUT with its command word at START: INPUT with that word replaced by the
+noninteractive form."
+  (destructuring-bind (command arguments span) program
+    (declare (ignore span))
+    (multiple-value-bind (replacement why)
+        (full-screen-program-replacement command arguments)
+      (when replacement
+        (list (make-envelope-fix
+               :input (concatenate 'string (subseq input 0 start) replacement
+                                   (subseq input (+ start (length command))))
+               :why why))))))
 
 (defun %first-line (text)
   (let ((line (string-trim '(#\Space #\Tab #\Return)
@@ -352,11 +370,13 @@ did."
        (values "E_INTERACTIVE_PROGRAM" nil
                "a program switched the terminal to its alternate screen; the run was stopped"))
       (full-screen
-       (values "E_INTERACTIVE_PROGRAM" nil
-               (format nil "~A is a full-screen program; it was not started"
-                       (car full-screen))
-               (%word-span input (car full-screen))
-               (%full-screen-program-fixes input full-screen)))
+       (destructuring-bind (command arguments span) full-screen
+         (declare (ignore arguments))
+         (let ((start (%command-word-start input command span)))
+           (values "E_INTERACTIVE_PROGRAM" nil
+                   (format nil "~A is a full-screen program; it was not started" command)
+                   (and start (%input-span input start (length command)))
+                   (and start (%full-screen-program-fixes input full-screen start))))))
       ;; The input did not run as given once the AI gate refused part of it,
       ;; whatever the status of the commands after that part.
       (refusal (values refusal nil message))
@@ -370,9 +390,10 @@ did."
                (or (%condition-line condition) message)))
       ((eql status 0) nil)
       ((and (eql status 127) missing)
-       (values "E_COMMAND_NOT_FOUND" nil
-               (format nil "~A: command not found" missing)
-               (%word-span input missing)))
+       (destructuring-bind (command span) missing
+         (values "E_COMMAND_NOT_FOUND" nil
+                 (format nil "~A: command not found" command)
+                 (%command-word-span input command span))))
       ((eql status 126) (values "E_PERMISSION" nil message))
       ((eql status 130) (values "E_INTERRUPTED" nil message))
       (t

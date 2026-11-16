@@ -1,5 +1,6 @@
 
 (in-package #:nshell.application)
+(declaim (special nshell.infrastructure.acl:*external-command-span*))
 
 (defvar *pipeline-stage-environments* nil
   "NIL, or one exported-environment string list per pipeline stage, in source
@@ -29,7 +30,9 @@ spawns, so a stage's assignment reaches that stage's process alone.")
          (args (%line-command-args clean-command))
          (redirect-output-p (nshell.domain.parsing:redirect-output-p redirects))
          (*foreground-terminal-runner* (and (null redirects)
-                                           *foreground-terminal-runner*)))
+                                           *foreground-terminal-runner*))
+         (nshell.infrastructure.acl:*external-command-span*
+           (nshell.domain.parsing:ast-node-span clean-command)))
     (unwind-protect
          (let ((redirect-error
                  (when redirects

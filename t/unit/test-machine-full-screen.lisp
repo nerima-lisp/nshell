@@ -78,6 +78,27 @@ NAME.ran in the directory, so a test can tell whether it started."
          (expect (%full-screen-started-p directory "first") :to-be-falsy)
          (expect (%full-screen-started-p directory "less") :to-be-falsy)))))
 
+  (it "points the span and the fix at the refused command, not an earlier word"
+    (with-noninteractive-test-state ()
+      (%full-screen-call-with-programs
+       '("less")
+       (lambda (directory)
+         (declare (ignore directory))
+         (loop for (input fix line column)
+                 in (list '("echo less; less NOTES.txt" "echo less; cat NOTES.txt" 1 12)
+                          (list (format nil "echo less~%X=less less NOTES.txt")
+                                (format nil "echo less~%X=less cat NOTES.txt")
+                                2 8)
+                          '("(echo \"less\") (less \"NOTES.txt\")"
+                            "(echo \"less\") (cat \"NOTES.txt\")" 1 16))
+               do (let ((envelope (json-command input)))
+                    (expect (json-at envelope "error" "code")
+                            :to-equal "E_INTERACTIVE_PROGRAM")
+                    (expect (json-at envelope "error" "span" "line") :to-equal line)
+                    (expect (json-at envelope "error" "span" "column") :to-equal column)
+                    (expect (json-at envelope "error" "span" "end") :to-equal (+ column 4))
+                    (expect (json-at envelope "error" "fixes" 0 "input") :to-equal fix)))))))
+
   (it "suggests the noninteractive form of man and top"
     (with-noninteractive-test-state ()
       (%full-screen-call-with-programs

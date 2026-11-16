@@ -135,13 +135,15 @@
                  (multiple-value-bind (process input-transferred-p)
                      (progn
                        (%close-unused-next-pipe-writer next-pipe output-pipe-stream)
-                       (%run-pipeline-command
-                        cmd effective-args input output error-output environment effective-cmd
-                        :preserve-fds preserve-fds
-                        :pgid pgid
-                        :input-source-owned-p
-                        (not (null (member input redirect-streams :test #'eq)))
-                        :skip-start-barrier-p skip-start-barrier-p))
+                       (let ((*external-command-span*
+                               (nshell.domain.parsing:ast-node-span cmd-node)))
+                         (%run-pipeline-command
+                          cmd effective-args input output error-output environment effective-cmd
+                          :preserve-fds preserve-fds
+                          :pgid pgid
+                          :input-source-owned-p
+                          (not (null (member input redirect-streams :test #'eq)))
+                          :skip-start-barrier-p skip-start-barrier-p)))
                    (when input-transferred-p
                      (setf redirect-streams
                            (remove input redirect-streams :test #'eq)))

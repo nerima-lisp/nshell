@@ -142,6 +142,16 @@ an orphan needs its new parent to reap it before kill 0 fails."
                     (json-at envelope "error" "span" "end"))
               :to-equal '(2 5))))
 
+  (it "points the span of E_COMMAND_NOT_FOUND at the command, not an earlier word"
+    (loop for (input span) in (list '("echo gti; gti status" (1 11 14))
+                                    (list (format nil "echo gti~%X=gti gti status") '(2 7 10)))
+          do (let ((envelope (json-command input)))
+               (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
+               (expect (list (json-at envelope "error" "span" "line")
+                             (json-at envelope "error" "span" "column")
+                             (json-at envelope "error" "span" "end"))
+                       :to-equal span))))
+
   (it "reports unreadable input as E_PARSE and a Lisp error as E_LISP_ERROR"
     (let ((envelope (json-command "(echo")))
       (expect (json-at envelope "status") :to-equal 2)

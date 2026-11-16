@@ -68,6 +68,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:reap-children #:get-terminal-size
             #:terminal-size-unavailable #:terminal-size-unavailable-fd
             #:*external-command-timeout* #:*command-not-found-hook*
+            #:*external-command-span*
             #:run-shell-command
             #:current-executable-path #:current-process-arguments #:exec-program
             #:run-external #:run-external-capture #:run-external-exec

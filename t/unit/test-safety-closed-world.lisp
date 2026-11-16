@@ -81,7 +81,7 @@
        ("file -C -m magic x" :confirm) ("file -m magic x" :confirm)
        ("file --compile x" :confirm) ("file -i x" :confirm)
        ("find -- . -name a -delete" :confirm) ("find . -fprint0 x" :confirm)
-       ("find . -name a -exec rm {} \\;" :confirm) ("find . stray" :confirm)
+       ("find . -name a -exec rm {} \\;" :confirm) ("find . -name a stray" :confirm)
        ("git log --format=%G?" :confirm) ("git show --pretty=format:%GS" :confirm)
        ("git log --show-signature" :confirm) ("git show --output=x" :confirm)
        ("ls --hyperlink" :confirm) ("ls -G" :confirm) ("cat -u x" :confirm)))

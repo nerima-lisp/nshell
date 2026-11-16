@@ -21,7 +21,8 @@ rules.pl into it; until then only tests set it.")
     (operand :none "") (redirect :none "") (wraps :none)
     (nested :none :safe "" "") (embedded :none :safe "" "")
     (unparsable :none "") (form-redirect :none) (sexp-unforced :none)
-    (unclassifiable :none "") (assignment :none "") (wrapper-option :none ""))
+    (unclassifiable :none "") (assignment :none "") (wrapper-option :none "")
+    (spec-command :none) (spec-match :none) (argument-not-allowed :none ""))
   "One clause per input predicate about the atom :NONE, which never names a
 subject.  A rule that asks about an input the evaluator did not supply then
 fails instead of raising existence_error, while a misspelled predicate in
@@ -52,6 +53,13 @@ collected with findall under the inference and deadline budgets."
       :deadline (cl-prolog-kit:prolog-deadline-after
                  *classify-deadline-seconds*)))))
 
+(defun find-command-spec (word)
+  "Return the +safe-command-specs+ row named exactly WORD, or NIL."
+  (assoc word +safe-command-specs+ :test #'equal))
+
+(defun %mismatch-text (words)
+  (format nil "arguments outside the command's allowed form: ~{~a~^, ~}" words))
+
 (defun %subject-facts (&key command invoked-as arguments nested embedded wraps
                          unparsable unclassifiable form-redirect sexp-unforced
                          assignments wrapper-options)
@@ -79,7 +87,14 @@ collected with findall under the inference and deadline budgets."
                    (cond
                      ((null target))
                      ((plusp (length target)) (add 'redirect 'subject target))
-                     (next (add 'redirect 'subject next))))))
+                     (next (add 'redirect 'subject next)))))
+        (let ((spec (and (not wraps) (find-command-spec (or invoked-as command)))))
+          (when spec
+            (add 'spec-command 'subject)
+            (let ((mismatches (spec-argument-mismatches spec arguments)))
+              (if mismatches
+                  (add 'argument-not-allowed 'subject (%mismatch-text mismatches))
+                  (add 'spec-match 'subject))))))
       (when wraps (add 'wraps 'subject))
       (dolist (name assignments) (add 'assignment 'subject name))
       (dolist (option wrapper-options) (add 'wrapper-option 'subject option))

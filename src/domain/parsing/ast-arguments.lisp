@@ -221,3 +221,29 @@ executors and the AI safety classifier both decide by this function."
                 (shell-assignment-word-p command)
                 (every #'assignment-arg-p args))
            (cons command (mapcar #'arg-value args))))))))
+
+(defun split-command-node-assignments (node)
+  "Return (values WORDS REST): the NAME=value words a parsed line assigns
+before its command, and the command node that remains, or NIL as REST when
+the line runs no command.  An unquoted, unforced command word starts the
+prefix and the unquoted NAME=value words after it continue it; the first
+other word is the command.  A reader node keeps its assignments in their own
+slot, so it splits to no words.  The executors and the AI safety classifier
+both split by this function."
+  (if (or (command-node-command-quote-style node)
+          (command-node-force-external-p node)
+          (not (shell-assignment-word-p (command-node-command node))))
+      (values nil node)
+      (let ((words (list (command-node-command node)))
+            (args (command-node-args node)))
+        (loop while (and args
+                         (null (arg-quote-style (first args)))
+                         (shell-assignment-word-p (arg-value (first args))))
+              do (push (arg-value (pop args)) words))
+        (values (nreverse words)
+                (and args
+                     (make-command-node (arg-value (first args))
+                                        (rest args)
+                                        (ast-node-span node)
+                                        (arg-quote-style (first args))
+                                        (command-arg-fragments (first args))))))))

@@ -292,11 +292,6 @@ spawns, so a stage's assignment reaches that stage's process alone.")
      (%sync-context-exports ,context)
      ,@body))
 
-(defun %prefix-assignment-arg-p (arg)
-  (and (null (nshell.domain.parsing:arg-quote-style arg))
-       (nshell.domain.parsing:shell-assignment-word-p
-        (nshell.domain.parsing:arg-value arg))))
-
 (defun %assignment-word-binding (context word)
   (let* ((equals (position #\= word))
          (name (subseq word 0 equals))
@@ -305,33 +300,14 @@ spawns, so a stage's assignment reaches that stage's process alone.")
                   (nshell.domain.parsing:make-command-arg (subseq word (1+ equals))))))
     (cons name (format nil "~{~a~^ ~}" fields))))
 
-(defun %command-node-from-arg (arg rest-args span)
-  (let ((typed (and (nshell.domain.parsing:command-arg-p arg) arg)))
-    (nshell.domain.parsing:make-command-node
-     (nshell.domain.parsing:arg-value arg)
-     rest-args
-     span
-     (nshell.domain.parsing:arg-quote-style arg)
-     (and typed (nshell.domain.parsing:command-arg-fragments typed)))))
-
 (defun %split-prefix-assignments (context command-node)
   "Return (values ASSIGNMENTS NODE): the leading NAME=VALUE words of
 COMMAND-NODE as (NAME . EXPANDED-VALUE) pairs, and the node that remains, or
 NIL when the line was assignments only."
-  (let ((command (nshell.domain.parsing:command-node-command command-node)))
-    (if (or (nshell.domain.parsing:command-node-command-quote-style command-node)
-            (nshell.domain.parsing:command-node-force-external-p command-node)
-            (not (nshell.domain.parsing:shell-assignment-word-p command)))
-        (values nil command-node)
-        (let ((assignments (list (%assignment-word-binding context command)))
-              (args (nshell.domain.parsing:command-node-args command-node)))
-          (loop while (and args (%prefix-assignment-arg-p (first args)))
-                do (push (%assignment-word-binding context (nshell.domain.parsing:arg-value (pop args)))
-                         assignments))
-          (values (nreverse assignments)
-                  (and args
-                       (%command-node-from-arg (first args) (rest args)
-                                               (nshell.domain.parsing:ast-node-span command-node))))))))
+  (multiple-value-bind (words node)
+      (nshell.domain.parsing:split-command-node-assignments command-node)
+    (values (mapcar (lambda (word) (%assignment-word-binding context word)) words)
+            node)))
 
 (defun %assign-shell-variables (context assignments)
   (dolist (assignment assignments (values nil 0))

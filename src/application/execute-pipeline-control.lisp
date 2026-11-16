@@ -84,13 +84,14 @@ its own."
 (defun %assistant-command-stage-node (node)
   "Return NODE as the gate sees a stage the executor runs as a command.  A
 NAME=value command word left by expansion or an alias names a command there,
-so it is marked quoted and never read as an assignment-only line."
+so it is marked quoted and never read as an assignment or a prefix of one."
   (cond
     ((nshell.domain.parsing:pipeline-node-p node)
      (nshell.domain.parsing:make-pipeline-node
       (mapcar #'%assistant-command-stage-node
               (nshell.domain.parsing:pipeline-node-commands node))))
-    ((nshell.domain.parsing:command-node-assignment-words node)
+    ((or (nshell.domain.parsing:command-node-assignment-words node)
+         (nshell.domain.parsing:split-command-node-assignments node))
      (nshell.domain.parsing:make-command-node
       (nshell.domain.parsing:command-node-command node)
       (nshell.domain.parsing:command-node-args node)
@@ -198,7 +199,8 @@ so it is marked quoted and never read as an assignment-only line."
 (defun %assistant-gated-command-dispatch (context command args thunk)
   (let ((gate (%assistant-execution-gate
                context
-               (nshell.domain.parsing:make-command-node command args))))
+               (%assistant-command-stage-node
+                (nshell.domain.parsing:make-command-node command args)))))
     (if gate
         (values (first gate) (second gate))
         (funcall thunk))))

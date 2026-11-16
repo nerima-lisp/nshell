@@ -72,10 +72,17 @@
                 args (rest inner))
           (return (values (%assistant-command-basename command) args))))))
 
+(defvar *assistant-reader-stage-p* nil
+  "True while classifying a node the reader path runs (a reader result's
+form).  The reader executor keeps redirects and assignments in their own
+slots and passes every argument word as it is; only the bare-line executor
+splits a NAME=value prefix and redirect words off the words.")
+
 (defun %assistant-classify-command-line (text)
   "Classify TEXT as a bare command line: the reader of eval, sh -c, and
 process substitutions."
-  (let ((parsed (nshell.domain.parsing:parse-command-line text)))
+  (let ((parsed (nshell.domain.parsing:parse-command-line text))
+        (*assistant-reader-stage-p* nil))
     (if (nshell.domain.parsing:parse-complete-p parsed)
         (classify-ast (nshell.domain.parsing:parse-result-ast parsed))
         (%assistant-unparsable-result "the wrapped command could not be parsed"))))
@@ -170,14 +177,6 @@ written words of the outermost command."
          :nested (append (and wrapped (%assistant-result-reasons wrapped)) nested)
          :embedded (and embedded (%assistant-result-reasons embedded)))))))
 
-(defun %assistant-assignment-prefix (words)
-  "Split the leading NAME=value words off WORDS when a command follows them.
-Any word with `=' counts; the rules judge the name (D-P1-5 2.4)."
-  (let ((command (member-if-not (lambda (word) (find #\= word)) words)))
-    (if command
-        (values (ldiff words command) command)
-        (values nil words))))
-
 (defparameter +assistant-output-redirect-kinds+
   '(:> :>> :&> :&>> :2> :2>>
     :output-file :append-output-file :force-output-file :error-file
@@ -248,43 +247,57 @@ process substitutions."
               (nreverse results)))))
 
 (defun %assistant-command-parts (node)
-  "Split a command NODE for classification.  Return its argv without the
-assignment prefix and the redirects, the assigned names, the words as
-written (redirect targets and here-document bodies included), the output
-targets, the redirect problems, and the results of its process
-substitution redirects."
-  (let* ((split (nshell.domain.parsing:split-command-node-redirects node))
-         (clean (nshell.domain.parsing:command-redirect-split-result-clean-command
-                 split))
-         (argv (cons (nshell.domain.parsing:command-node-command node)
-                     (nshell.domain.parsing:command-node-arg-values clean))))
-    (multiple-value-bind (writes problems texts results)
-        (%assistant-redirects
-         (nshell.domain.parsing:command-redirect-split-result-redirects split)
-         (nshell.domain.parsing:command-node-redirects node))
-      (multiple-value-bind (prefix argv) (%assistant-assignment-prefix argv)
-        (let ((words (append (list (nshell.domain.parsing:command-node-command node))
-                             (nshell.domain.parsing:command-node-arg-values node)
-                             ;; Reader nodes keep NAME=value words apart.
-                             (mapcar #'nshell.domain.parsing:arg-value
-                                     (nshell.domain.parsing:command-node-environment-assignments
-                                      node))
-                             texts)))
-          (values argv
-                  (mapcar #'nshell.feature.kb:assignment-name
-                          (append (mapcar #'nshell.domain.parsing:arg-value
-                                          (nshell.domain.parsing:command-node-environment-assignments
-                                           node))
-                                  prefix))
-                  words
-                  writes
-                  (if (some (lambda (word)
-                              (nshell.domain.parsing:parenthesized-substitution-texts
-                               word ">("))
-                            words)
-                      (append problems (list "process substitution >(...)"))
-                      problems)
-                  results))))))
+  "Split a command NODE the way the executors split it.  Assignments come
+from command-node-assignment-words (a line that runs no command) or, on the
+bare-line path, split-command-node-assignments (a prefix), plus a reader
+node's own assignment slot.  Redirects come from the reader node's redirect
+entries and, on the bare-line path, from ast-redirect-split of the command
+that remains, as in %execute-plain-command-node-in-context.  Return the argv of
+that command without its redirects (NIL when the line runs no command), the
+assigned names, the words as written (redirect targets, here-document
+bodies, and assignments included), the output targets, the redirect
+problems, and the results of its process substitution redirects."
+  (let* ((reader-assignments
+           (mapcar #'nshell.domain.parsing:arg-value
+                   (nshell.domain.parsing:command-node-environment-assignments node)))
+         (assignment-only (nshell.domain.parsing:command-node-assignment-words node)))
+    (multiple-value-bind (prefix rest)
+        (cond
+          (assignment-only (values assignment-only nil))
+          (*assistant-reader-stage-p* (values nil node))
+          (t (nshell.domain.parsing:split-command-node-assignments node)))
+      (let ((split (and rest
+                        (not *assistant-reader-stage-p*)
+                        (nshell.domain.parsing:split-command-node-redirects rest))))
+        (multiple-value-bind (writes problems texts results)
+            (%assistant-redirects
+             (and split
+                  (nshell.domain.parsing:command-redirect-split-result-redirects split))
+             (nshell.domain.parsing:command-node-redirects node))
+          (let ((words (append (list (nshell.domain.parsing:command-node-command node))
+                               (nshell.domain.parsing:command-node-arg-values node)
+                               reader-assignments
+                               texts)))
+            (values (and rest
+                         (cons (nshell.domain.parsing:command-node-command rest)
+                               (nshell.domain.parsing:command-node-arg-values
+                                (if split
+                                    (nshell.domain.parsing:command-redirect-split-result-clean-command
+                                     split)
+                                    rest))))
+                    (mapcar #'nshell.feature.kb:assignment-name
+                            (if assignment-only
+                                assignment-only
+                                (append reader-assignments prefix)))
+                    words
+                    writes
+                    (if (some (lambda (word)
+                                (nshell.domain.parsing:parenthesized-substitution-texts
+                                 word ">("))
+                              words)
+                        (append problems (list "process substitution >(...)"))
+                        problems)
+                    results)))))))
 
 (defun classify-command (node)
   "Classify a command-node using its effective command and arguments."
@@ -292,26 +305,21 @@ substitution redirects."
       (multiple-value-bind (argv assignments words writes problems results)
           (%assistant-command-parts node)
         (let ((nested (mapcan #'%assistant-result-reasons
-                              (append results (%assistant-substitution-results words))))
-              ;; The parser decides what is an assignment-only line, the same
-              ;; way the executors do; quoted and forced words are commands.
-              (assigned-only
-                (mapcar #'nshell.feature.kb:assignment-name
-                        (nshell.domain.parsing:command-node-assignment-words node))))
-          (if assigned-only
-              (%assistant-subject-result
-               nil
-               :assignments assigned-only
-               :writes writes
-               :redirect-problems problems
-               :words words
-               :nested nested)
+                              (append results (%assistant-substitution-results words)))))
+          (if argv
               (%assistant-classify-argv
                argv
                :assignments assignments
                :writes writes
                :redirect-problems problems
                :raw-words words
+               :nested nested)
+              (%assistant-subject-result
+               nil
+               :assignments assignments
+               :writes writes
+               :redirect-problems problems
+               :words words
                :nested nested))))
       (%assistant-unparsable-result "the value is not a command AST node")))
 
@@ -322,7 +330,7 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
       (%assistant-command-parts node)
     (declare (ignore assignments words))
     (nshell.feature.kb:subject-effects
-     :command (%assistant-command-basename (first argv))
+     :command (and argv (%assistant-command-basename (first argv)))
      :invoked-as (first argv)
      :arguments (rest argv)
      :writes writes)))
@@ -366,7 +374,8 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
       ((or (nshell.domain.parsing:command-node-p form)
            (nshell.domain.parsing:pipeline-node-p form)
            (nshell.domain.parsing:sequence-node-p form))
-       (%assistant-form-result (classify-ast form)
+       (%assistant-form-result (let ((*assistant-reader-stage-p* t))
+                                 (classify-ast form))
                                :form-redirect
                                (%assistant-ast-has-redirect-p form)))
       ((consp form)
@@ -380,7 +389,8 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
                          (declare (ignore head-source))
                          :command-island))))
              (%assistant-form-result
-              (classify-ast ast)
+              (let ((*assistant-reader-stage-p* t))
+                (classify-ast ast))
               :sexp-unforced
               (not (and (nshell.domain.parsing:command-node-p ast)
                         (nshell.domain.parsing:command-node-force-external-p ast)

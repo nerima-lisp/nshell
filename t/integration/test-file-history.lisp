@@ -56,6 +56,54 @@
             (when (probe-file lock-path)
               (delete-file lock-path)))))))
 
+  (it "file-history-read-keeps-stamp-of-private-file"
+    "Loading a file that is already private leaves its stamp unchanged, so the
+REPL refresh does not read it again."
+    (with-temporary-output-file (test-path :prefix "nshell-history-stamp")
+      (let ((nshell.infrastructure.persistence:*history-file-path-override*
+              (pathname test-path)))
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.persistence:append-history-entry "kept")
+               (expect #o600 :to-equal
+                       (logand #o7777 (sb-posix:stat-mode (sb-posix:stat test-path))))
+               (let ((before (nshell.infrastructure.persistence:history-file-stamp)))
+                 (expect before :to-be-truthy)
+                 ;; Wait past a coarse timestamp tick so a chmod would move ctime.
+                 (sleep 0.05)
+                 (expect '("kept")
+                         :to-equal
+                         (mapcar #'nshell.infrastructure.persistence:history-record-text
+                                 (nshell.infrastructure.persistence:load-history-file)))
+                 (expect before :to-equal
+                         (nshell.infrastructure.persistence:history-file-stamp))))
+          (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path
+                            test-path)))
+            (when (probe-file lock-path)
+              (delete-file lock-path)))))))
+
+  (it "file-history-read-clears-special-mode-bits"
+    "Loading a private file that also has the setuid bit leaves mode 0600."
+    (with-temporary-output-file (test-path :prefix "nshell-history-setuid")
+      (let ((nshell.infrastructure.persistence:*history-file-path-override*
+              (pathname test-path)))
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.persistence:append-history-entry "kept")
+               (sb-posix:chmod test-path #o4600)
+               (expect #o4600 :to-equal
+                       (logand #o7777 (sb-posix:stat-mode (sb-posix:stat test-path))))
+               (expect '("kept")
+                       :to-equal
+                       (mapcar #'nshell.infrastructure.persistence:history-record-text
+                               (nshell.infrastructure.persistence:load-history-file)))
+               (expect #o600 :to-equal
+                       (logand #o7777 (sb-posix:stat-mode (sb-posix:stat test-path)))))
+          (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path
+                            test-path)))
+            (when (probe-file lock-path)
+              (delete-file lock-path)))))))
+
   (it "file-history-multiline-round-trip"
     "Multiline command history survives persistence."
     (let* ((test-path (format nil "/tmp/nshell-test-history-multiline-~d.lisp"

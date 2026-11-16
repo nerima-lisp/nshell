@@ -234,3 +234,16 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
                        proposes every known name within edit distance 2 ~
                        (git status, ai status, at status, ...) where the ~
                        example lists only git status"))))
+
+(describe "machine json real entry"
+  (it "answers exec in a pipeline stage with one envelope"
+    ;; exec in a stage thread once reached sb-ext:quit and printed nothing.
+    (host-kit:with-temporary-directory (work)
+      (multiple-value-bind (envelope stdout status)
+          (%json-golden-run "exec sh -c 'exit 7' | cat" work)
+        (expect (count #\Newline stdout) :to-equal 1)
+        (expect (machine-envelope-failures envelope) :to-be-null)
+        (expect status :to-equal 7)
+        (expect (gethash "status" envelope) :to-equal 7)
+        (expect (gethash "code" (gethash "error" envelope))
+                :to-equal "E_COMMAND_FAILED")))))

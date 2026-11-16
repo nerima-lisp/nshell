@@ -70,7 +70,10 @@ SBCL thread otherwise sees only global values.")
   (gate-refusal (list nil))
   ;; The worker outlived the deadline's terminate-thread: its output streams
   ;; may still be written and its locks still held.
-  (worker-alive-p nil))
+  (worker-alive-p nil)
+  (worker nil)
+  ;; The car lists every process group the run created (*PROCESS-GROUP-LOG*).
+  (group-log (list nil)))
 
 (defun %worker-bindings (run tag out err timeout agent-p)
   (let ((symbols (copy-list +json-conveyed-specials+))
@@ -81,11 +84,24 @@ SBCL thread otherwise sees only global values.")
       (bind '*standard-output* out)
       (bind '*error-output* err)
       ;; exec ends the run, with the exec'd program's status, not the process.
+      ;; Pipeline stage threads get this function too; the CATCH for TAG is
+      ;; in the worker, so a stage asks the worker to unwind and ends itself.
       (bind 'nshell.application::*exec-exit-function*
             (lambda (status)
               (setf (json-run-status run) status)
-              (nshell.application::flush-pending-captured-output out err)
-              (throw tag :exec)))
+              (flet ((end-run ()
+                       (nshell.application::flush-pending-captured-output out err)
+                       ;; The worker may already have left the CATCH for TAG.
+                       (ignore-errors (throw tag :exec))))
+                (if (eq sb-thread:*current-thread* (json-run-worker run))
+                    (end-run)
+                    (progn
+                      (ignore-errors
+                        (sb-thread:interrupt-thread (json-run-worker run) #'end-run))
+                      (sb-thread:abort-thread))))))
+      ;; Every process group the run creates, so the deadline can stop a
+      ;; group whose leader was already reaped.
+      (bind 'nshell.infrastructure.acl:*process-group-log* (json-run-group-log run))
       ;; No single external command wait may outlast the whole-run deadline.
       (bind 'nshell.infrastructure.acl:*external-command-timeout* timeout)
       ;; Every gate refusal of the run, nested ones and pipeline stages too.
@@ -114,7 +130,7 @@ true when it has exited."
     (sb-thread:join-thread worker :default nil :timeout *json-unwind-seconds*))
   (not (sb-thread:thread-alive-p worker)))
 
-(defun %park-and-stop (worker tag before out err)
+(defun %park-and-stop (worker tag before log out err)
   "Stop the run in WORKER after its deadline; see the comment at the top.
 Return true when the worker has exited."
   (let ((parked (sb-thread:make-semaphore))
@@ -133,20 +149,28 @@ Return true when the worker has exited."
     (sb-thread:wait-on-semaphore parked :timeout *json-park-wait-seconds*)
     (nshell.infrastructure.acl:stop-process-groups
      (set-difference (nshell.infrastructure.acl:registered-processes) before
-                     :test #'eq))
+                     :test #'eq)
+     :groups (car log))
     (sleep *json-drain-seconds*)
     (sb-thread:signal-semaphore release)
-    (let ((exited-p (%finish-worker worker))
-          ;; A process the worker spawned before the interrupt took effect.
-          (late (set-difference (nshell.infrastructure.acl:registered-processes)
-                                before :test #'eq)))
-      (nshell.infrastructure.acl:stop-process-groups late)
-      ;; Reap what was killed so no zombie outlives the run, unless a live
-      ;; worker may hold the waitpid lock.
-      (when exited-p
-        (dolist (process late)
-          (ignore-errors (nshell.infrastructure.acl:process-alive-p process))))
-      exited-p)))
+    (let ((exited-p (%finish-worker worker)))
+      (flet ((run-processes ()
+               (set-difference (nshell.infrastructure.acl:registered-processes)
+                               before :test #'eq))
+             (reap (processes)
+               ;; Not while a live worker may hold the waitpid lock.
+               (when exited-p
+                 (dolist (process processes)
+                   (ignore-errors
+                     (nshell.infrastructure.acl:process-alive-p process))))))
+        ;; Reap the killed processes first: a group left with only zombies
+        ;; still answers kill 0 and would cost another grace period.
+        (reap (run-processes))
+        ;; What is left: a process spawned before the interrupt took effect.
+        (let ((late (run-processes)))
+          (nshell.infrastructure.acl:stop-process-groups late :groups (car log))
+          (reap late))
+        exited-p))))
 
 (defun %run-batch-with-deadline (input timeout agent-p errexit-p script-args out err)
   (let* ((run (%make-json-run))
@@ -158,6 +182,7 @@ Return true when the worker has exited."
               (sb-thread:make-thread
                (lambda ()
                  (progv symbols values
+                   (setf (json-run-worker run) sb-thread:*current-thread*)
                    (catch tag
                      (setf (json-run-status run)
                            (nshell.presentation:run-repl-batch-observed
@@ -168,7 +193,8 @@ Return true when the worker has exited."
         (when (sb-thread:thread-alive-p worker)
           (setf (json-run-timed-out-p run) t
                 (json-run-worker-alive-p run)
-                (not (%park-and-stop worker tag before out err))))))
+                (not (%park-and-stop worker tag before (json-run-group-log run)
+                                     out err))))))
     run))
 
 ;;; Envelope

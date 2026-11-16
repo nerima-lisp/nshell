@@ -10,9 +10,13 @@ nshell の起動方法と、ユーザーが設定できるものすべて。
 
 3
 
+削除
+
+1
+
 削除候補
 
-5
+4
 
 追加
 
@@ -54,7 +58,7 @@ nshell の起動方法と、ユーザーが設定できるものすべて。
 | NSHELL_HISTORY_PRIVATE — --private 相当 | [残す] | そのまま。 |
 | NSHELL_EAST_ASIAN_AMBIGUOUS_WIDTH — auto / narrow / wide | [残す] | 日本語環境に必須。 |
 | NSHELL_VI_MODE — vi モード | [残す] | そのまま。初期モードの設定も追加 (07)。 |
-| NSHELL_MOUSE_REPORTING — マウス報告 | [削除候補] | マウス操作の削除に合わせて削除。 |
+| NSHELL_MOUSE_REPORTING — SGR マウス報告 | [削除] | F4 で設定と SGR マウス入力報告の有効化経路を削除する。ESC の後に `[` が遅れて届くと、SGR マウス入力シーケンスの残りが入力欄に文字として入るため。 |
 | NSHELL_COMPLETION_HELP_ALLOWLIST — --help 解析の許可リスト | [簡素化] | 補完の作り直しで init.lisp 設定に統合。 |
 | NSHELL_GIT_STATUS_DIAGNOSTICS — git 状態のデバッグ出力 | [削除候補] | 開発用。ログ出力レベル 1 つに統合。 |
 | NSHELL_NFR06_CANDIDATE_COMPUTE_SIDECAR — 計測用 | [削除候補] | NFR 計測の削除に合わせて削除。 |

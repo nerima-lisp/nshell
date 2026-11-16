@@ -115,9 +115,10 @@ does not supply that runtime coverage.
 
   Confirm nonempty test discovery and no skipped PTY or external-process cases
   in the test report; an exit status of zero alone does not establish coverage.
-- The integrated suite covers OSC 52 clipboard output, tab-stripping `<<-` heredocs,
-  process substitution, ordered descriptor duplication, path-like argument
-  completion, hierarchical command completion, and SGR mouse selection.
+- The integrated suite covers the `copy-to-clipboard` OSC 52 fallback,
+  tab-stripping `<<-` heredocs, process substitution, ordered descriptor
+  duplication, path-like argument completion, and hierarchical command
+  completion.
 - The dependency runner executes the pinned libraries' own suites; the history
   script checks private persistence. A successful library load is not a test
   result.
@@ -133,10 +134,9 @@ does not supply that runtime coverage.
   requests with one provider; other providers and failure modes remain unverified.
 - Broader help-text-driven command discovery remains future work, especially for
   subcommand coverage and non-curated external tools.
-- Mouse selection and clipboard behavior depend on the terminal. No exhaustive
-  terminal matrix is claimed; the editor maps SGR coordinates through captured
-  prompt geometry and falls back to OSC 52 when host clipboard integration is
-  unavailable.
+- Clipboard behavior depends on the terminal. No exhaustive terminal matrix is
+  claimed. `copy-to-clipboard` falls back to OSC 52 when host clipboard
+  integration is unavailable.
 - The extracted executable's PTY scenarios are a separate bounded gate, not
   the entire source-loaded integration suite. Passing them does not establish
   every integration case against the portable executable.

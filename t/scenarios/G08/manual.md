@@ -1,4 +1,4 @@
-# G08: Structural editing
+# G08: S-expression navigation and deletion
 
 Start nshell and wait for its interactive prompt. Here `C-` means Ctrl and
 `M-` means Meta (Alt). In `bind` names, `C-M-f` is `alt-ctrl-f`;
@@ -22,20 +22,8 @@ Do not press Enter on the forms. Inspect each edit in the input line, then use
 3. Type `(+ G08_BW_LEFT G08_BW_KILL G08_BW_RIGHT)`. Use `C-a`, `C-M-d`,
    `C-M-f` three times, then `C-M-Delete` to delete backward over
    `G08_BW_KILL`. Press `C-y` immediately to restore it, then `C-e`, `C-b`,
-   type ` G08_BW_NEW`, and press `C-e`. The line should be
-   `(+ G08_BW_LEFT G08_BW_KILL G08_BW_RIGHT G08_BW_NEW)`.
-4. Type `(+ G08_SF_LEFT) G08_SF_RIGHT`. Use `C-a`, `C-M-d`, `C-M-f` twice,
-   then `C-M-Right`. The line should be `(+ G08_SF_LEFT G08_SF_RIGHT)`.
-5. Type `(+ G08_BF_LEFT G08_BF_RIGHT)`. Use `C-a`, `C-M-d`, `C-M-f` twice,
-   then `C-M-Shift-Right`. The line should be `(+ G08_BF_LEFT) G08_BF_RIGHT`.
-6. Type `(list list (+ G08_SB_RIGHT))`. Use `C-a`, `C-M-d`, `C-M-f` twice,
-   `C-f` twice, then `C-M-Left`. The line should be
-   `(list (list + G08_SB_RIGHT))`.
-7. Type `(list (list + G08_BB_LEFT G08_BB_RIGHT))`. Use `C-a`, `C-M-d`,
-   `C-M-f`, `C-M-d`, then `C-M-Shift-Left`. The line should be
-   `(list list (+ G08_BB_LEFT G08_BB_RIGHT))`.
 
 Pass when each intermediate and final line matches the shown form, the
-parentheses remain balanced after every slurp/barf, and the killed expressions
+parentheses remain balanced, and the killed expressions
 can be restored with `C-y`. Finish by clearing the line with `C-c` and entering
 `exit`.

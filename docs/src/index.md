@@ -28,8 +28,8 @@ resolves to a Lisp form; otherwise, the form names a shell command.
 - **History-based editing**: suggestions use command history, `Ctrl-R` opens
   reverse search, and history expansion is available on bare interactive
   command lines.
-- **Structural editing**: move through S-expressions, delete expressions, and
-  slurp or barf list elements with editor key bindings.
+- **Structural editing**: move through S-expressions and delete expressions
+  with editor key bindings.
 - **Interactive controls**: themes, left and right prompts, key bindings,
   Emacs-style editing, and optional Vi mode.
 - **Pipelines and control**: bare commands support byte pipelines, redirects,

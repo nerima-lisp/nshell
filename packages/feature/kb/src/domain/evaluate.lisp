@@ -54,16 +54,25 @@ collected with findall under the inference and deadline budgets."
       :deadline (cl-prolog-kit:prolog-deadline-after
                  *classify-deadline-seconds*)))))
 
-(defun find-command-spec (word)
-  "Return the +safe-command-specs+ row named exactly WORD, or NIL.
-Wrapper rows describe how a command runs another one, not a safe command."
+(defun %row-resolution-p (row resolution)
+  (eq (getf (rest row) :resolution :external) (or resolution :external)))
+
+(defun find-command-spec (word &optional resolution)
+  "Return the +safe-command-specs+ row named exactly WORD for a command the
+executor resolves as RESOLUTION (:BUILTIN or :EXTERNAL, the default), or
+NIL.  Wrapper rows describe how a command runs another one, not a safe
+command."
   (find-if (lambda (row)
-             (and (equal (first row) word) (not (getf (rest row) :wrapper))))
+             (and (equal (first row) word)
+                  (not (getf (rest row) :wrapper))
+                  (%row-resolution-p row resolution)))
            +safe-command-specs+))
 
-(defun %find-wrapper-row (name)
+(defun %find-wrapper-row (name resolution)
   (find-if (lambda (row)
-             (and (equal (first row) name) (getf (rest row) :wrapper)))
+             (and (equal (first row) name)
+                  (getf (rest row) :wrapper)
+                  (%row-resolution-p row resolution)))
            +safe-command-specs+))
 
 (defun %word-basename (word)
@@ -124,17 +133,21 @@ option words."
     (when (equal (first words) "--") (pop words))
     (and dash-c (first words))))
 
-(defun command-wrapper (word arguments)
+(defun command-wrapper (word arguments &optional resolution)
   "Describe how the command WORD with ARGUMENTS runs another command
 (D-P1-5 2.4), or return NIL when it does not.  The values are KIND
 (:TRANSPARENT or :OPAQUE), the argv of the command it runs, the wrapper
 words its spec row does not allow, the environment names it assigns, the
 options given to env, and source text that runs as a command line (sh -c
 SCRIPT, eval with one argument).  A transparent wrapper must be written as
-a bare name; with a path it is opaque."
+a bare name; with a path it is opaque.  RESOLUTION is how the executor
+resolves WORD (:BUILTIN or :EXTERNAL, the default); a row written for a
+builtin applies only to the builtin.  A seventh value says how the wrapped
+command is resolved: :BY-NAME like a typed command, else :EXTERNAL."
   (let* ((name (%word-basename word))
-         (row (%find-wrapper-row name))
-         (spec (rest row)))
+         (row (%find-wrapper-row name resolution))
+         (spec (rest row))
+         (runs (getf spec :runs :external)))
     (when (and row
                (not (member (first arguments) (getf spec :query-options)
                             :test #'equal)))
@@ -142,7 +155,7 @@ a bare name; with a path it is opaque."
         (:eval
          (if (= (length arguments) 1)
              (values :opaque nil nil nil nil (first arguments))
-             (values :opaque arguments)))
+             (values :opaque arguments nil nil nil nil :by-name)))
         (:dash-c
          (let ((script (%dash-c-script arguments)))
            (when script
@@ -155,7 +168,7 @@ a bare name; with a path it is opaque."
                ((or (string/= word name)
                     (eq (getf spec :wrapper) :opaque)
                     env-options)
-                (values :opaque command nil names env-options))
+                (values :opaque command nil names env-options nil runs))
                (command
                 (let ((own-words (remove-if (if (getf spec :assignments)
                                                 #'%assignment-word-p
@@ -167,12 +180,15 @@ a bare name; with a path it is opaque."
                            (list* :positionals (getf spec :operands 0) spec)
                            own-words)
                           names
-                          nil)))))))))))
+                          nil
+                          nil
+                          runs)))))))))))
 
 (defun %mismatch-text (words)
   (format nil "arguments outside the command's allowed form: ~{~a~^, ~}" words))
 
-(defun %subject-facts (&key command invoked-as arguments nested embedded wraps
+(defun %subject-facts (&key command invoked-as resolution arguments nested
+                         embedded wraps
                          opaque wrapper-mismatches unparsable unclassifiable
                          form-redirect sexp-unforced assignments wrapper-options
                          writes redirect-problems words)
@@ -192,7 +208,8 @@ a bare name; with a path it is opaque."
                    ((string= word "--") (setf operands-only t))
                    ((option-word-p word) (add 'option 'subject word))
                    (t (add 'operand 'subject word))))
-        (let ((spec (and (not wraps) (find-command-spec (or invoked-as command)))))
+        (let ((spec (and (not wraps)
+                         (find-command-spec (or invoked-as command) resolution))))
           (when spec
             (add 'spec-command 'subject)
             (let ((mismatches (spec-argument-mismatches spec arguments)))
@@ -267,7 +284,8 @@ a bare name; with a path it is opaque."
                 (list (cons "kb/no-rule"
                             "no safety rule applied to the command"))))))
 
-(defun classify-subject (&rest subject &key command invoked-as arguments nested
+(defun classify-subject (&rest subject &key command invoked-as resolution
+                                         arguments nested
                                          embedded wraps opaque wrapper-mismatches
                                          unparsable unclassifiable form-redirect
                                          sexp-unforced assignments wrapper-options
@@ -275,6 +293,8 @@ a bare name; with a path it is opaque."
   "Classify one subject with the built-in and user rules.
 
 COMMAND is the basename and INVOKED-AS the command word as written;
+RESOLUTION is :BUILTIN when the executor runs it as the nshell builtin and
+:EXTERNAL (the default) otherwise, which selects the spec row;
 ARGUMENTS are the argument words; a command that is not a wrapper is matched
 against its spec row.  NESTED and EMBEDDED are (LEVEL RULE TEXT) results of
 classifying embedded command text.  WRAPS says the command runs another one,
@@ -285,7 +305,8 @@ WRAPPER-OPTIONS the options given to env.  WRITES are the output redirect
 targets and REDIRECT-PROBLEMS a text per redirect outside the safe forms,
 both taken from the AST; WORDS are the words as written.
 Returns the level and the (RULE . TEXT) reasons at that level."
-  (declare (ignore command invoked-as arguments nested embedded wraps opaque
+  (declare (ignore command invoked-as resolution arguments nested embedded
+                   wraps opaque
                    wrapper-mismatches unparsable unclassifiable form-redirect
                    sexp-unforced assignments wrapper-options writes
                    redirect-problems words))

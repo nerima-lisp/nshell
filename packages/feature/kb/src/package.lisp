@@ -15,5 +15,7 @@ Built-in rules are compiled into the image; user rules are injected through
      #:*user-classify-rulebase*
      #:make-user-classify-rulebase
      #:classify-subject
+     #:command-wrapper
+     #:assignment-name
      #:subject-effects
      #:diagnose-typo)))

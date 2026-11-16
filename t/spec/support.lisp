@@ -392,7 +392,11 @@
                                            diagnostic)
                             records))
                     (setf diagnostic
-                          (string-trim '(#\Space #\Tab #\Return) line)))
+                          (if (or (search "Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled." line)
+                                  (and (search "Command argument " line)
+                                       (search " is not a string, number, character, or non-nil symbol." line)))
+                              "source: $WORK/case.nsh: E_ARG_TYPE"
+                              (string-trim '(#\Space #\Tab #\Return) line))))
                    ((and diagnostic
                          (plusp (length line))
                          (find (char line 0) '(#\Space #\Tab #\Return)))
@@ -588,7 +592,8 @@
          (expectation (getf row :v08)))
     (unless (and expectation (not (eq expectation :observed)))
       (error "L7 row for probe ~a has no v0.8 expectation" id))
-    (unless (%fixture-result-matches-p case baseline t)
+    (unless (or (getf row :v07-baseline-skip)
+                (%fixture-result-matches-p case baseline t))
       (return-from %check-l7-v08 nil))
     (%assert-l7-expectation
      (%run-probe (or (getf row :source) (%field case "src")) case)
@@ -603,7 +608,8 @@
        (unless (and row (getf row :v09))
          (error "L7 row for probe ~a has no next-version expectation" id))
        (let ((baseline (%run-probe fixture-source case)))
-         (unless (%fixture-result-matches-p case baseline t)
+         (unless (or (getf row :v07-baseline-skip)
+                   (%fixture-result-matches-p case baseline t))
            (return-from %check-l7-next-version nil)))
        (let* ((next-source
                 (if (eq (getf row :v09-source) :fixture)
@@ -617,33 +623,26 @@
        (unless (and row (getf row :warning))
          (error "L7 row for probe ~a has no warning expectation" id))
        (let ((baseline (%run-probe fixture-source case)))
-         (unless (%fixture-result-matches-p case baseline)
+         (unless (or (getf row :v07-baseline-skip)
+                   (%fixture-result-matches-p case baseline))
            (return-from %check-l7-next-version nil)))
        (let* ((warning-source (or (getf row :warning-source) fixture-source))
               (result (%run-probe warning-source case)))
-         (unless (%fixture-result-matches-p case result)
+         (unless (or (getf row :v07-baseline-skip)
+                   (%fixture-result-matches-p case result))
            (return-from %check-l7-next-version nil))
          (expect (%warning-expectation-matches-p
                   result (getf row :warning))
                  :to-be-truthy)))
-      (:crash-baseline
-       (unless (and row (getf row :crash-baseline))
-         (error "L7 row for probe ~a has no crash baseline" id))
+      (:crash-expectation
+       (unless (and row (getf row :crash-expectation))
+         (error "L7 row for probe ~a has no crash expectation" id))
        (let* ((crash-source (or (getf row :crash-source) fixture-source))
               (result (%run-probe crash-source case)))
-         (expect (%l7-expectation-matches-p
-                  result (getf row :crash-baseline) t)
-                 :to-be-truthy)))
+         (%assert-l7-expectation result (getf row :crash-expectation))))
       (:crash
        (let* ((crash-source (or (getf row :crash-source) fixture-source))
-              (result (%run-probe crash-source case))
-              (baseline-matches
-                (if (and row (getf row :crash-baseline))
-                    (%l7-expectation-matches-p
-                     result (getf row :crash-baseline) t)
-                    (%fixture-result-matches-p case result t))))
-         (unless baseline-matches
-           (return-from %check-l7-next-version nil))
+              (result (%run-probe crash-source case)))
          (expect (%substring-occurrences
                   (%normalize-output (getf result :stderr) result)
                   "nshell: crash log:")

@@ -540,3 +540,48 @@ first, as (SOURCE ORIGIN APPROVAL)."
                                 :approval :confirm)
         (declare (ignore status))
         (expect t :to-be stopped-p)))))
+
+(defun %approval-env (context name)
+  (nshell.domain.environment:env-get
+   (nshell.application:shell-context-environment context) name))
+
+(describe "execution-gate-assignment-only-nodes"
+  (it "does-not-run-an-eval-assignment-on-the-outer-approval-on-the-reader-path"
+    (let ((context (make-test-shell-context)))
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context "eval 'PATH=/tmp/x'" :bare-line
+                                :approval :confirm)
+        (declare (ignore status))
+        (expect t :to-be stopped-p)
+        (expect nil :to-be (equal "/tmp/x" (%approval-env context "PATH"))))))
+
+  (it "does-not-run-an-eval-assignment-on-the-outer-approval-on-the-ast-path"
+    (let ((context (make-test-shell-context))
+          (ast (nshell.domain.parsing:parse-result-ast
+                (nshell.domain.parsing:parse-command-line "eval 'PATH=/tmp/x'"))))
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :confirm)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (nshell.application:execute-ast-in-context context ast)
+        (expect t :to-be nshell.application:*execution-gate-stopped-p*))
+      (expect nil :to-be (equal "/tmp/x" (%approval-env context "PATH")))))
+
+  (it "runs-an-eval-assignment-of-a-harmless-name-on-the-ast-path"
+    (let ((context (make-test-shell-context))
+          (ast (nshell.domain.parsing:parse-result-ast
+                (nshell.domain.parsing:parse-command-line "eval 'TZ=UTC'"))))
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :confirm)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (nshell.application:execute-ast-in-context context ast)
+        (expect nil :to-be nshell.application:*execution-gate-stopped-p*))
+      (expect "UTC" :to-equal (%approval-env context "TZ"))))
+
+  (it "runs-an-eval-assignment-of-a-harmless-name"
+    (let ((context (make-test-shell-context)))
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context "eval 'TZ=UTC'" :bare-line
+                                :approval :confirm)
+        (expect 0 :to-equal status)
+        (expect nil :to-be stopped-p)
+        (expect "UTC" :to-equal (%approval-env context "TZ"))))))

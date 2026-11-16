@@ -45,6 +45,8 @@
 
 いまの静的解析 (safety.lisp 約500行) を規則に置き換える。証明に使った規則がそのまま「理由」になり、explain・--json・MCP の承認画面に出せる。利用者は rules.pl で自分の規則を足せる。
 
+以下は規則の概略。safe 用の許可仕様は `packages/feature/kb/src/domain/classify-rules.lisp` の `+safe-command-specs+` に置く。照合は `packages/feature/kb/src/domain/predicates.lisp` で行い、結果を `spec_match` の事実として規則に渡す。
+
 ```
 classify(C, block, 'ルートの再帰削除') :-
     command(C, rm), flag(C, recursive),
@@ -58,14 +60,18 @@ classify(C, confirm, 'プロジェクト外への書き込み') :-
     effect(C, writes(P)), \+ inside_project(P).
 classify(C, confirm, '未知のコマンド') :-
     \+ known_command(C).
-classify(C, safe, '読むだけの既知のコマンド') :-
-    read_only_command(C).
+classify(C, confirm, '許可仕様に合わない引数') :-
+    known_command(C), \+ spec_match(C).
+classify(C, safe, '許可仕様に一致するコマンド') :-
+    spec_match(C).
 ```
 
 - 規則は findall ですべて評価し、最も高いレベルを採る。同じレベルの規則は、すべて reasons[] に入れる。
-- 判定の基本は、読むだけの既知のコマンド (git status・git log・git diff・ls・cat など) が safe、未知のコマンドが confirm、ルート以外への rm -r が confirm、ルートの再帰削除が block。
+- safe にするのは、コマンド名・すべての引数・リダイレクト・代入の前置きが許可仕様 (spec) に一致するものだけ。未知のコマンドや spec に一致しないものは confirm、ルート以外への rm -r は confirm、ルートの再帰削除は block。
+- S式では、コマンドを `^` で明示しない形とリダイレクトに confirm の規則を適用する。
+- 変わる既存の期待値は、理由ごとに移行テストの表へ書く。
 - 規則名は classify/<kebab> (classify/delete-dir など) とし、組み込みの規則は 1 つのデータファイルにまとめる。
-- 判定は Enter のときと explain のときに行う。入力中の危険表示 (U1) は、同じ規則の結果を入力の区間をキーにしてキャッシュして使う。
+- 安全判定の効力を持つのは、Enter のときの判定と、実行のゲートの判定。AI の提案を受け取ったときと explain のときにも判定するが、これは表示 (`[safe]` などの印) と、block の提案を入力欄に入れないことにだけ使う。入力中の表示は P3-7 で行う。
 
 使うエンジン機能: findall・否定・foreign predicate
 

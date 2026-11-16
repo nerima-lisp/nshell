@@ -143,6 +143,26 @@ seconds the run took, and whether the sh process is gone afterwards."
           (expect seconds :to-be-less-than 5)
           (expect stopped-p :to-be-truthy)))))
 
+  (it "stops a program that switches on its standard error"
+    (with-noninteractive-test-state ()
+      (dolist (wrap '("~A" "~A | cat"))
+        (multiple-value-bind (envelope seconds stopped-p)
+            (%full-screen-alternate-screen-run
+             "printf \"\\033[?1049h\" >&2; sleep 30" :wrap wrap)
+          (expect (json-at envelope "error" "code") :to-equal "E_INTERACTIVE_PROGRAM")
+          (expect seconds :to-be-less-than 5)
+          (expect stopped-p :to-be-truthy)))))
+
+  (it "stops a program run with an environment assignment, on either output"
+    (with-noninteractive-test-state ()
+      (dolist (script '("printf \"\\033[?1049h\"; sleep 30"
+                        "printf \"\\033[?1049h\" >&2; sleep 30"))
+        (multiple-value-bind (envelope seconds stopped-p)
+            (%full-screen-alternate-screen-run script :wrap "X=1 ~A")
+          (expect (json-at envelope "error" "code") :to-equal "E_INTERACTIVE_PROGRAM")
+          (expect seconds :to-be-less-than 5)
+          (expect stopped-p :to-be-truthy)))))
+
   (it "finds the sequence when it arrives in two writes"
     (with-noninteractive-test-state ()
       (multiple-value-bind (envelope seconds stopped-p)

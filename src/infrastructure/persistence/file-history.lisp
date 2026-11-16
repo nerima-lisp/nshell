@@ -86,6 +86,18 @@
   "Return the path used to persist command history."
   (or *history-file-path-override* (%default-history-file-path)))
 
+(defun history-file-stamp ()
+  "Return (DEV INO SIZE MTIME CTIME) of the history file, or NIL when it cannot
+be stat'ed. An append changes SIZE; a replacement changes INO or the times."
+  (handler-case
+      (let ((stat (sb-posix:stat (namestring (history-file-path)))))
+        (list (sb-posix:stat-dev stat)
+              (sb-posix:stat-ino stat)
+              (sb-posix:stat-size stat)
+              (sb-posix:stat-mtime stat)
+              (sb-posix:stat-ctime stat)))
+    (error () nil)))
+
 (defun %history-record-length-for-prefix (header prefix)
   (let ((prefix-length (length prefix)))
     (when (and (>= (length header) prefix-length)

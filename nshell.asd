@@ -516,6 +516,7 @@
    (:file "unit/test-repl-background")
    (:file "unit/test-repl-state")
    (:file "unit/test-repl-execution")
+   (:file "unit/test-repl-history-refresh")
    (:file "unit/test-repl-submission")
    (:file "unit/test-agent-mode")
    (:file "unit/test-repl-rendering")

@@ -125,10 +125,12 @@ set it."
   "Add unseen persisted records to HISTORY in oldest-first order."
   (let ((new-records nil)
         (new-texts (make-hash-table :test #'equal)))
-    (dolist (entry (history-kit:history-entries history))
-      (setf (gethash (history-kit:history-entry-text entry)
-                     *history-seen-command-texts*)
-            t))
+    (history-kit:map-history
+     (lambda (entry)
+       (setf (gethash (history-kit:history-entry-text entry)
+                      *history-seen-command-texts*)
+             t))
+     history)
     (dolist (record records)
       (let ((text (nshell.infrastructure.persistence:history-record-text record)))
         (unless (or (gethash text *history-seen-command-texts*)
@@ -149,16 +151,32 @@ set it."
               t))
       (history-kit:history-reset-navigation history)
       t)))
+
+(defvar *history-file-stamp* nil
+  "History file stamp at the last merge; a refresh with the same stamp skips
+reading the file.")
+
+(defun %merge-history-file-into (history)
+  ;; The stamp is taken before reading, so a write that lands during the read
+  ;; leaves a stamp that differs from the file's next one.
+  (let ((stamp (nshell.infrastructure.persistence:history-file-stamp)))
+    (unless (and stamp (equal stamp *history-file-stamp*))
+      (prog1 (%merge-history-records
+              history
+              (nshell.infrastructure.persistence:load-history-file))
+        (setf *history-file-stamp* stamp)))))
+
 (defun %seed-history-from-file (history)
   "Load persisted entries oldest first so the newest record is most recent in HISTORY."
-  (%merge-history-records
-   history
-   (nshell.infrastructure.persistence:load-history-file)))
+  (setf *history-file-stamp* nil)
+  (%merge-history-file-into history))
+
 (defun %refresh-history-from-file ()
+  "Merge records other sessions appended. Called before a command runs and when
+a new prompt is drawn, never from key handling, so navigation and Ctrl-R see
+external appends from the next prompt on."
   (when (and *history-loading-enabled-p* *history*)
-    (%merge-history-records
-     *history*
-     (nshell.infrastructure.persistence:load-history-file))))
+    (%merge-history-file-into *history*)))
 
 (defun %vi-mode-flag-enabled-p (flag)
   (and flag
@@ -208,6 +226,7 @@ skipped, while history still follows HISTORY-P."
         *failure-explain-available-p* nil
         *history-persistence-enabled-p* (and history-p (not private-p))
         *history-seen-command-texts* (make-hash-table :test #'equal)
+        *history-file-stamp* nil
         *history* (history-kit:make-history)
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-empty-knowledge-base)

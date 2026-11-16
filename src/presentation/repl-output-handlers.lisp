@@ -1238,7 +1238,6 @@ wrapped line's other rows on screen as stale duplicates."
 
 (define-output-event-handler %process-history-search-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (%refresh-history-from-file)
     (let* ((query (input-state-search-query *input-state*))
            (entries (nshell.application:interactive-history-search-use-case
                      *history* query))
@@ -1248,7 +1247,6 @@ wrapped line's other rows on screen as stale duplicates."
 
 (define-output-event-handler %process-history-prev-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (%refresh-history-from-file)
     (let ((entry (history-kit:history-previous
                   *history*
                   (input-state-buffer *input-state*))))
@@ -1259,7 +1257,6 @@ wrapped line's other rows on screen as stale duplicates."
 
 (define-output-event-handler %process-history-next-output-event
     with-cleared-rendered-completions-and-prompt-cont
-    (%refresh-history-from-file)
     (let ((entry (history-kit:history-next *history*)))
       (when entry
         (setf *input-state*

@@ -139,7 +139,7 @@ history records and loads and saves configuration values.")
            #:load-history-file #:append-history-entry
            #:delete-history-entry #:clear-history-file
            #:*history-file-mutations-enabled-p*
-           #:history-file-path
+           #:history-file-path #:history-file-stamp
            #:history-record #:history-record-p
            #:history-record-text #:history-record-timestamp
            #:history-record-cwd #:history-record-exit-code

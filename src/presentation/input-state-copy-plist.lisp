@@ -209,3 +209,19 @@ current value). Same NAME/STATE contract as %INPUT-STATE-COPY-ARGS."
                            ask-original-cursor)
                           (input-state-ask-original-cursor state)))
    (%input-state-copy-supplied-args state search-index undo-stack redo-stack)))
+
+(defun %copy-input-state-origin-initargs (state
+                                          proposal-origin-supplied-p
+                                          proposal-origin
+                                          proposal-kills-supplied-p
+                                          proposal-kills)
+  ;; Typed input leaves both fields NIL, the constructor default, so omit them
+  ;; there and keep the per-key allocation of the common path unchanged.
+  (let ((origin (if proposal-origin-supplied-p
+                    proposal-origin
+                    (input-state-proposal-origin state)))
+        (kills (if proposal-kills-supplied-p
+                   proposal-kills
+                   (input-state-proposal-kills state))))
+    (when (or origin kills)
+      (list :proposal-origin (and origin t) :proposal-kills kills))))

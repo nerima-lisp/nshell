@@ -54,7 +54,9 @@ operator-pending states after pressing d or c in normal mode."
                                             (ask-original-cursor nil)
                                             (undo-stack nil)
                                             (redo-stack nil)
-                                            (vi-session nil))))
+                                            (vi-session nil)
+                                            (proposal-origin nil)
+                                            (proposal-kills nil))))
   "Pure line editor state.
 
 BUFFER is the current editable text. CURSOR-POS is an index between 0 and
@@ -72,7 +74,9 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
   arguments. SEARCH-QUERY, SEARCH-ORIGINAL-BUFFER, SEARCH-ORIGINAL-CURSOR, and
   SEARCH-INDEX model an effect-free reverse history search; the outer REPL
   supplies matching history rows. UNDO-STACK and REDO-STACK store editable line
-  snapshots for fish/readline-style local editing undo."
+  snapshots for fish/readline-style local editing undo. PROPOSAL-ORIGIN is true
+  while the buffer holds text that came from an AI proposal; PROPOSAL-KILLS
+  lists the KILL-RING strings (compared with EQ) killed from such a buffer."
   (buffer "" :type string)
   (cursor-pos 0 :type integer)
   (preferred-visual-column nil :type (or null integer))
@@ -103,4 +107,6 @@ COMPLETION-BASE-CURSOR keeps the cursor position that produced that list.
   (ask-original-cursor nil :type (or null integer))
   (undo-stack nil :type list)
   (redo-stack nil :type list)
-  (vi-session nil :type list))
+  (vi-session nil :type list)
+  (proposal-origin nil :type boolean)
+  (proposal-kills nil :type list))

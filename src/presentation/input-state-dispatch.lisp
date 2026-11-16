@@ -79,10 +79,17 @@
 
 (defun %kill-to-bol (state)
   (with-normalized-cleared-completion-state (state state)
-    (%kill-range state
-                 0
-                 (input-state-cursor-pos state)
-                 0)))
+    (multiple-value-bind (killed output)
+        (%kill-range state
+                     0
+                     (input-state-cursor-pos state)
+                     0)
+      ;; Emptying the line drops the proposal origin (D-P1-5 3.1); the killed
+      ;; text keeps it through PROPOSAL-KILLS, so a yank restores it.
+      (values (if (zerop (length (input-state-buffer killed)))
+                  (copy-input-state-with killed :proposal-origin nil)
+                  killed)
+              output))))
 
 (defun %input-dispatch-name-string (keyword)
   (string-downcase (symbol-name keyword)))

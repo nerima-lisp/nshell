@@ -46,4 +46,6 @@
    (ask-original-cursor nil)
    (undo-stack nil)
    (redo-stack nil)
-   (vi-session nil)))
+   (vi-session nil)
+   (proposal-origin nil)
+   (proposal-kills nil)))

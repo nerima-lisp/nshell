@@ -141,7 +141,10 @@
                                 :cursor-pos (vi-visual-yank-edit-cursor edit))
              :kill-ring (if (zerop (length selected))
                             (input-state-kill-ring state)
-                            (cons selected (input-state-kill-ring state))))
+                            (cons selected (input-state-kill-ring state)))
+             :proposal-kills (if (zerop (length selected))
+                                 (input-state-proposal-kills state)
+                                 (proposal-kills-after-kill state selected)))
             :redraw)))
 
 (defun commit-vi-visual-yank-selection (state selection)

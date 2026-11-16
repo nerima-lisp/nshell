@@ -89,7 +89,8 @@
                (nshell.domain.abbreviation:abbreviation-order entry))))
           entry)))
 
-  (defun make-repl-input-state (&key (buffer "") cursor-pos)
+  (defun make-repl-input-state (&key (buffer "") cursor-pos proposal-origin)
     (make-input-state :buffer buffer
                       :cursor-pos (or cursor-pos (length buffer))
-                      :abbreviation-expander #'%resolve-repl-abbreviation)))
+                      :abbreviation-expander #'%resolve-repl-abbreviation
+                      :proposal-origin proposal-origin)))

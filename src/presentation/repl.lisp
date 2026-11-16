@@ -2,14 +2,7 @@
 ;;; fish-inspired UX with trampoline-driven continuations
 (in-package #:nshell.presentation)
 
-(defun %render-prompt-after-terminal-resize ()
-  (when *rerun-confirmation-pending-p*
-    (setf *rerun-confirmation-pending-p* nil
-          *rerun-command-assessment* nil)
-    (clear-rendered-transient-panel))
-  (clear-rendered-completions)
-  (let ((*preserve-transient-panel-on-next-prompt-p* t))
-    (render-prompt-cont)))
+(defun %render-prompt-after-terminal-resize () (clear-rendered-completions) (let ((*preserve-transient-panel-on-next-prompt-p* t)) (render-prompt-cont)))
 
 (defun %read-key-event-for-current-mode (interrupt-predicate
                                          &optional idle-predicate)
@@ -111,10 +104,6 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
   (let ((input-state-before *input-state*))
     (call-with-crash-capture
      (lambda ()
-          (when (and *rerun-confirmation-pending-p*
-                     (nshell.infrastructure.acl:consume-terminal-resize-p))
-            (return-from %process-input-event
-              (%render-prompt-after-terminal-resize)))
           (when (%suggestion-acceptance-key-event-p event)
             (%await-current-suggestion-before-acceptance))
           (multiple-value-bind (new-state output-event)
@@ -143,12 +132,6 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
                          (not (string= (car approval)
                                        (input-state-buffer new-state))))
                 (setf *assistant-command-approval* nil)))
-            (when (and (not (eq output-event :rerun-last-command))
-                       (or *rerun-confirmation-pending-p*
-                           *rerun-command-assessment*))
-              (setf *rerun-confirmation-pending-p* nil
-                    *rerun-command-assessment* nil)
-              (clear-rendered-transient-panel))
             (progn
               (when (eq :ctrl-c
                         (nshell.domain.input:key-event-type event))
@@ -224,9 +207,6 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
        (cond
          ((not *running*)
           +repl-exit+)
-         ((and *rerun-confirmation-pending-p*
-               (nshell.infrastructure.acl:consume-terminal-resize-p))
-          (lambda () (%render-prompt-after-terminal-resize)))
          ((nshell.feature.assistant:assistant-model-event-p raw-event)
           (lambda ()
             (when (eql *assistant-turn-generation*
@@ -255,8 +235,6 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
                      (render-prompt-cont))
                    (read-key-cont))))
             (t (lambda () (read-key-cont)))))
-         ((and event *rerun-confirmation-pending-p*)
-          (lambda () (%process-input-event event)))
          ((and event *command-not-found-fallback-text*)
           (lambda () (%process-command-not-found-fallback-event event)))
          ((and event (%transient-panel-expand-event-p event))

@@ -8,6 +8,8 @@
 
 1 コマンドを実行し、結果を 1 つの JSON で返す。CI・スクリプト・ツール呼び出し向け。
 
+以下は応答の仕様例。この S式は `^` で外部コマンドを明示していないので、`classify/sexp-not-forced` により confirm になる。
+
 ```
 $ nshell --json --command '(| (git status --short) (wc -l))'
 {"nshell_api": 1, "ok": true, "status": 0, "duration_ms": 41,
@@ -15,7 +17,9 @@ $ nshell --json --command '(| (git status --short) (wc -l))'
             "truncated": false},
  "stderr": {"text": "", "bytes": 0},
  "effects": [{"kind": "reads", "path": "."}],
- "safety": {"level": "safe", "reasons": []},
+ "safety": {"level": "confirm", "reasons": [
+   {"rule": "classify/sexp-not-forced",
+    "text": "S-expression command requires explicit force and has no redirects"}]},
  "state": {"cwd": "/home/me/src/nshell"}}
 ```
 
@@ -80,8 +84,8 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 
 | 入力 | 危険度 |
 |---|---|
-| 読むだけの既知のコマンド (git status・git log・git diff・ls・cat など) | safe |
-| 未知のコマンド | confirm |
+| コマンド名・すべての引数・リダイレクト・代入の前置きが許可仕様 (spec) に一致するもの | safe |
+| 未知のコマンドや spec に一致しないもの | confirm |
 | ルート以外への rm -r (rm -rf build など) | confirm |
 | ルートの再帰削除 | block |
 

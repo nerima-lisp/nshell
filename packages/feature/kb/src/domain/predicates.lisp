@@ -22,8 +22,46 @@
                 (find-if (lambda (character) (find character "rR"))
                          (subseq word 1))))))
 
+(defun %split-path (word)
+  (loop for start = 0 then (1+ end)
+        for end = (position #\/ word :start start)
+        collect (subseq word start end)
+        while end))
+
+(defun %normalize-path-components (components)
+  "Fold empty, `.', and `..' components.  Return the remaining components and
+whether a `..' tried to climb above the first one."
+  (let ((stack nil)
+        (escaped nil))
+    (dolist (component components)
+      (cond
+        ((member component '("" ".") :test #'string=))
+        ((string= component "..")
+         (if stack (pop stack) (setf escaped t)))
+        (t (push component stack))))
+    (values (nreverse stack) escaped)))
+
 (defun root-path-p (word)
-  (and (member word '("/" "/*" "~" "$HOME" ".") :test #'equal) t))
+  "True when WORD names the filesystem root, the home directory, or the
+current directory after lexical normalization.  `//', `/./', `/..', and
+`/x/..' are the root; a `..' above the root stays at the root.  The
+filesystem is not consulted."
+  (and (stringp word)
+       (plusp (length word))
+       (let ((parts (%split-path word)))
+         (if (char= (char word 0) #\/)
+             (let ((rest (%normalize-path-components (rest parts))))
+               (or (null rest) (equal rest '("*"))))
+             (and (member (first parts) '("~" "$HOME" ".") :test #'string=)
+                  (multiple-value-bind (rest escaped)
+                      (%normalize-path-components (rest parts))
+                    (and (null rest) (not escaped))))))))
+
+(defun harmless-environment-name-p (name)
+  "True for environment names that only change locale, time zone, or
+terminal presentation, so assigning them cannot change what a command runs."
+  (or (member name '("LANG" "TZ" "NO_COLOR" "TERM" "COLUMNS") :test #'equal)
+      (string-prefix-p "LC_" name)))
 
 (defun contains-p (needle word)
   (and (stringp word) (search needle word) t))

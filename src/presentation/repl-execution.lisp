@@ -1,15 +1,7 @@
 (in-package #:nshell.presentation)
 (progn
   (defun %repl-reader-context-for-source (source)
-    (let ((first-nonwhite
-            (position-if-not
-             (lambda (character)
-               (find character (list #\Space #\Tab #\Newline #\Return)))
-             source)))
-      (if (and first-nonwhite
-               (char= (char source first-nonwhite) (code-char 40)))
-          :sexp
-          :bare-line)))
+    (nshell.domain.parsing:submission-reader-context source))
   (defun %repl-input-scan-result (source cursor reader-context
                                      &key head-classifier)
     (let* ((context

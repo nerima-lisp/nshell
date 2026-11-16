@@ -2181,3 +2181,19 @@
                 (node (make-sequence-node commands separators span)))
            (values node span))))))
 )
+
+(defun submission-reader-context (source)
+  "Return the reader context a submitted line is read in: :SEXP when its first
+character after spaces, tabs, and line ends is an open parenthesis, else
+:BARE-LINE.  Enter and explain both choose it here, so they read a line the
+same way; any other leading character, a form feed included, starts a bare
+line."
+  (let ((first-nonwhite
+          (position-if-not
+           (lambda (character)
+             (find character (list #\Space #\Tab #\Newline #\Return)))
+           source)))
+    (if (and first-nonwhite
+             (char= (char source first-nonwhite) (code-char 40)))
+        :sexp
+        :bare-line)))

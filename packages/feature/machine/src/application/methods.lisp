@@ -91,7 +91,11 @@ be read, or that holds no form, is E_PARSE."
   (let ((started (get-internal-real-time))
         (cwd (or cwd (nshell.application:context-current-directory context))))
     (handler-case
-        (let ((reader-results (nshell.domain.parsing:read-submission text)))
+        (let ((reader-results
+                (nshell.domain.parsing:read-submission
+                 text
+                 :reader-context
+                 (nshell.domain.parsing:submission-reader-context text))))
           (if (null reader-results)
               (%explain-parse-error text 0 (length text) "nothing to explain"
                                     started cwd)

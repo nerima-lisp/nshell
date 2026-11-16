@@ -54,14 +54,6 @@
                (old-release (sb-thread:make-semaphore :count 0))
                (new-started (sb-thread:make-semaphore :count 0))
                (new-release (sb-thread:make-semaphore :count 0))
-               (watchdog
-                 (sb-thread:make-thread
-                  (lambda ()
-                    (sleep 0.2)
-                    (sb-thread:signal-semaphore old-started)
-                    (sb-thread:signal-semaphore old-release)
-                    (sb-thread:signal-semaphore new-started)
-                    (sb-thread:signal-semaphore new-release))))
                (caller-thread sb-thread:*current-thread*)
                (inline-p nil))
           (unwind-protect
@@ -87,14 +79,18 @@
                         :buffer "old" :cursor-pos 3))
                  (nshell.presentation::%schedule-current-input-state-suggestion)
                  (expect nil :to-equal inline-p)
-                 (sb-thread:wait-on-semaphore old-started)
+                 ;; Only the worker signals the start semaphores, so a timed
+                 ;; out wait means the computation never ran.
+                 (expect (sb-thread:wait-on-semaphore old-started :timeout 5)
+                         :to-be-truthy)
                  (setf nshell.presentation::*input-state*
                        (nshell.presentation:make-input-state
                         :buffer "new" :cursor-pos 3))
                  (let ((generation
                          (nshell.presentation::%schedule-current-input-state-suggestion)))
                    (sb-thread:signal-semaphore old-release)
-                   (sb-thread:wait-on-semaphore new-started)
+                   (expect (sb-thread:wait-on-semaphore new-started :timeout 5)
+                           :to-be-truthy)
                    (expect nil :to-equal
                            (nshell.presentation::%take-suggestion-worker-result))
                    (sb-thread:signal-semaphore new-release)
@@ -112,8 +108,7 @@
                                 result))))))
             (sb-thread:signal-semaphore old-release)
             (sb-thread:signal-semaphore new-release)
-            (nshell.presentation::%stop-suggestion-worker)
-            (sb-thread:join-thread watchdog))))))
+            (nshell.presentation::%stop-suggestion-worker))))))
 
   (it "keeps history suggestion text and right-key acceptance"
     (with-repl-test-state
@@ -157,11 +152,13 @@
         (let* ((started (sb-thread:make-semaphore :count 0))
                (release (sb-thread:make-semaphore :count 0))
                (event (nshell.domain.input:make-key-event :right))
+               (nshell.presentation::*suggestion-acceptance-wait-seconds* 5)
+               ;; Releases the computation while the acceptance waits. It
+               ;; never signals STARTED, which only the worker may do.
                (watchdog
                  (sb-thread:make-thread
                   (lambda ()
                     (sleep 0.2)
-                    (sb-thread:signal-semaphore started)
                     (sb-thread:signal-semaphore release)))))
           (unwind-protect
                (with-temporary-function
@@ -175,7 +172,8 @@
                        (nshell.presentation:make-input-state
                         :buffer "docker" :cursor-pos 6))
                  (nshell.presentation::%schedule-current-input-state-suggestion)
-                 (sb-thread:wait-on-semaphore started)
+                 (expect (sb-thread:wait-on-semaphore started :timeout 5)
+                         :to-be-truthy)
                  (expect
                   (nshell.presentation::%suggestion-acceptance-key-event-p event)
                   :to-be-truthy)
@@ -395,4 +393,62 @@
             (expect "ls -la" :to-equal
                     (gethash "ll"
                              (nshell.presentation::%snapshot-suggestion-table aliases)))
-            (expect "ls -l" :to-equal (gethash "ll" second-table))))))))
+            (expect "ls -l" :to-equal (gethash "ll" second-table)))))))
+
+  (it "stops a worker blocked in a read within a deadline"
+    ;; Opening a FIFO without a writer blocks in open(2), as a GNUmakefile FIFO
+    ;; or a hung NFS mount does under make-target completion. The stop runs in
+    ;; its own thread with a bounded join, so a regression fails, not hangs.
+    (with-repl-test-state
+      (with-isolated-suggestion-worker
+        (let* ((directory
+                 (sb-posix:mkdtemp
+                  (namestring
+                   (merge-pathnames "nshell-suggest-XXXXXX"
+                                    (uiop:temporary-directory)))))
+               (fifo (format nil "~a/blocked" directory))
+               (started (sb-thread:make-semaphore :count 0))
+               (stopper nil))
+          (sb-posix:mkfifo fifo #o600)
+          (unwind-protect
+               (with-temporary-function
+                   ((quote nshell.presentation:compute-suggestion)
+                    (lambda (history input &rest arguments)
+                      (declare (ignore history input arguments))
+                      (sb-thread:signal-semaphore started)
+                      (with-open-file (stream fifo :element-type '(unsigned-byte 8))
+                        (read-byte stream nil nil))
+                      " late"))
+                 (setf nshell.presentation::*input-state*
+                       (nshell.presentation:make-input-state
+                        :buffer "make " :cursor-pos 5))
+                 (nshell.presentation::%schedule-current-input-state-suggestion)
+                 (expect (sb-thread:wait-on-semaphore started :timeout 5)
+                         :to-be-truthy)
+                 (let ((state nshell.presentation::*suggestion-worker-state*))
+                   (setf stopper
+                         (sb-thread:make-thread
+                          (lambda ()
+                            (with-isolated-suggestion-worker
+                              (setf nshell.presentation::*suggestion-worker-state*
+                                    state)
+                              (nshell.presentation::%stop-suggestion-worker)
+                              :stopped))
+                          :name "suggestion worker stop test"))
+                   (expect :stopped :to-equal
+                           (sb-thread:join-thread stopper :default :timeout
+                                                          :timeout 3))
+                   (expect (sb-thread:thread-alive-p
+                            (nshell.presentation::%suggestion-worker-state-thread
+                             state))
+                           :to-be-falsy)))
+            ;; Release a reader the stop left blocked so no thread outlives
+            ;; the test. O_RDWR opens a FIFO without blocking and pairs with
+            ;; a reader still inside open(2).
+            (ignore-errors
+              (sb-posix:close
+               (sb-posix:open fifo (logior sb-posix:o-rdwr sb-posix:o-nonblock))))
+            (when stopper
+              (ignore-errors (sb-thread:join-thread stopper :default nil :timeout 5)))
+            (ignore-errors (delete-file fifo))
+            (ignore-errors (sb-posix:rmdir directory))))))))

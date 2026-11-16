@@ -28,7 +28,7 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 
 ```
 {"nshell_api": 1, "ok": true, "status": 0, "duration_ms": 2140,
- "stdout": {"text": "Compiling nshell…\n…\nok 812 tests\n",
+ "stdout": {"text": "Compiling nshell…\n… 9,100 lines omitted …\nok 812 tests\n",
             "bytes": 418233, "lines": 9120, "truncated": true,
             "path": "/home/me/.cache/nshell/out/s_4b1/12.txt"},
  "stderr": {"text": "", "bytes": 0},
@@ -44,6 +44,11 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 
 - ANSI の色と制御文字は除去。\r で上書きされる進行表示は最後の 1 行だけ残す。
 - 上限を超えたら先頭と末尾を残し、間を「… 9,100 lines omitted …」に (切り詰めの印は英語で固定)。全文は `$XDG_CACHE_HOME/nshell/out/<session>/` に保存し、read_output に不透明な id と offset を渡して続きを読める。保存先の外は read_output で読めない。
+- 上限の既定は max_output_bytes 32768 バイト。超えたら先頭 10 行と末尾 10 行を残す。片側が 16384 バイトを超えるときはバイト数で切る。行を省かずにバイト数だけ切ったときの印は「… N bytes omitted …」。
+- bytes と lines は ANSI を除去し \r で上書きされた部分を除いたあとの全文の大きさ。保存するファイルの大きさと同じ。
+- 全文を保存するのは切り詰めたときだけ。path・session・seq もそのときだけ出す。--json の単発実行では seq は 1 で、stdout は `<seq>.txt`、stderr は `<seq>.stderr.txt` に保存する。session は保存先のディレクトリ名 (`s_` と 6 文字)。
+- 保存先を安全に作れないとき (シンボリックリンク、他人の所有、group か other に権限がある) は保存せず、path も出さない。
+- --timeout は --json と一緒のときだけ受け付ける。
 - 全文の保存は直近 50 セッション分だけ残す。--private では保存しない。
 - 同じ行が続くときは 1 行と回数にまとめる。
 - バイナリは中身を返さず、種類とサイズだけ。

@@ -16,12 +16,12 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 
 ## P1-2 --json と --timeout
 
-- [ ] `nshell --json --command INPUT` が 1 つの応答を出して終了
-- [ ] `--timeout SEC` は実行全体の期限。超えたらプロセスグループごと停止 (既存の SIGTERM → SIGKILL を流用)、E_TIMEOUT
+- [x] `nshell --json --command INPUT` が 1 つの応答を出して終了
+- [x] `--timeout SEC` は実行全体の期限。超えたらプロセスグループごと停止 (既存の SIGTERM → SIGKILL を流用)、E_TIMEOUT
 - [ ] `--json` の既定の期限は 120 秒。既定値は initialize の応答で知らせる。通常のバッチは今のまま (外部コマンドごとに 3600 秒)
-- [ ] 出力の節約 (U6): ANSI 除去・\r の圧縮・先頭と末尾・全文の保存先 path。切り詰めの印は英語で固定
-- [ ] 全出力は、mkdtemp で作った 0700 のディレクトリ `$XDG_CACHE_HOME/nshell/out/<session>/` に 0600 で保存する。直近 50 セッション分だけ残し、`--private` では保存しない
-- [ ] `--json` は危険度を報告するだけにする。承認を求めるのは `NSHELL_AGENT=1`・MCP・`--serve` のときで、既存の origin 判定 (`src/application/execute-pipeline-control.lisp`) を通す
+- [x] 出力の節約 (U6): ANSI 除去・\r の圧縮・先頭と末尾・全文の保存先 path。切り詰めの印は英語で固定
+- [x] 全出力は、mkdtemp で作った 0700 のディレクトリ `$XDG_CACHE_HOME/nshell/out/<session>/` に 0600 で保存する。直近 50 セッション分だけ残し、`--private` では保存しない
+- [x] `--json` は危険度を報告するだけにする。承認を求めるのは `NSHELL_AGENT=1`・MCP・`--serve` のときで、既存の origin 判定 (`src/application/execute-pipeline-control.lisp`) を通す
 - [ ] AI ゲートがいま返している終了コード 126 を、E_NEEDS_APPROVAL の 3 と E_BLOCKED_BY_POLICY の 4 に変える (P0-3 の表)。リリースノートに書く
 
 受け入れ条件: proposal/02 と ux/U6 の例がそのまま golden test として通る。

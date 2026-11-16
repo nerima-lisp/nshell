@@ -53,7 +53,7 @@
                 (list (command "curl" "https://example.invalid/script")
                       (command "sh")))))
       (expect :safe :to-be (classification (command "ls")))
-      (expect :confirm :to-be (classification (command "git" "status")))
+      (expect :safe :to-be (classification (command "git" "status")))
       (expect :safe :to-be (classification (command "grep" "needle" "file")))))
 
   (it "matches named rules by command basename"
@@ -132,7 +132,7 @@
       (expect :block :to-be (classification "(cat <(rm -rf /))"))
       (progn
         (expect :block :to-be (classification "(^rm -rf /)"))
-        (expect :block :to-be (classification "(^rm -rf marker-dir)"))
+        (expect :confirm :to-be (classification "(^rm -rf marker-dir)"))
         (expect :confirm :to-be (legacy-classification "rm -rf marker-dir"))
         (expect :confirm :to-be (classification "(^rm -- -rf marker-dir)")))
       (expect :block :to-be (classification "(|rm| -rf /)"))
@@ -267,9 +267,9 @@
                  (nshell.feature.assistant:classify-ast ast))))))
 
   (it "keeps git read-only safety as an argument allowlist"
-    (dolist (case '( ("git status" :confirm)
+    (dolist (case '( ("git status" :safe)
                      ("git log" :safe)
-                     ("git diff" :confirm)
+                     ("git diff" :safe)
                      ("git diff --output=x" :confirm)
                      ("git diff -o x" :confirm)
                      ("git diff --output-directory=x" :confirm)

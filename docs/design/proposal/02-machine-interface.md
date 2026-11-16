@@ -34,9 +34,9 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 < {"id":2,"result":{"ok":true,"status":0,"value":[]}}
 > {"id":3,"method":"explain","params":{"input":"rm -rf build"}}
 < {"id":3,"result":{"ok":true,
-    "effects":[{"kind":"deletes","path":"build/"}],
+    "effects":[{"kind":"deletes","path":"build"}],
     "safety":{"level":"confirm","reasons":[
-      {"rule":"classify/delete-dir","text":"recursive delete"}]}}}
+      {"rule":"classify/delete-dir","text":"deletes a directory"}]}}}
 ```
 
 - 要求は届いた順に 1 つずつ処理する。
@@ -74,7 +74,7 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 - safe: そのまま実行。MCP でも承認なしで実行する
 - confirm: 人の承認が必要。承認 ID がなければ E_NEEDS_APPROVAL を返し、実行しない。承認できる人がいないときは、承認 ID を付けずに E_NEEDS_APPROVAL を返す
 - block: 常に拒否 (E_BLOCKED_BY_POLICY)
-- 既存の safety 分類と redaction (秘匿化) をそのまま流用
+- 危険度は 06-A の規則で判定する。redaction (秘匿化) は既存のものをそのまま流用
 
 危険度の基本は次のとおり (規則は 06-A)。
 

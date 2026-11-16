@@ -10,20 +10,13 @@ The domain values and infrastructure boundaries live here so later layers can
 depend on one stable feature package.")
     (:use #:cl)
     (:export
-     #:assistant-safety-rule
-     #:assistant-safety-rule-p
-     #:assistant-safety-rule-name
-     #:assistant-safety-rule-classification
-     #:assistant-safety-rule-command
-     #:assistant-safety-rule-condition
-     #:assistant-safety-rule-reason
-     #:+assistant-safety-rules+
      #:assistant-safety-result
      #:assistant-safety-result-p
      #:assistant-safety-result-classification
      #:assistant-safety-result-reason
      #:assistant-safety-result-command
      #:assistant-safety-result-rule-name
+     #:assistant-safety-result-reasons
      #:classify-command
      #:classify-pipeline
      #:classify-ast

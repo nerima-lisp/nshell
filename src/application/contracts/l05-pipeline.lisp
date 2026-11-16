@@ -68,11 +68,11 @@
     failures
     stream-caches)
 
-  (defun %close-pipeline-stage-stream-cache (cache)
+  (defun %close-pipeline-stage-stream-cache (cache &optional abort)
     (let ((failure nil))
       (dolist (entry cache)
         (handler-case
-            (close (cdr entry))
+            (close (cdr entry) :abort abort)
           (error (condition)
             (unless failure
               (setf failure condition)))))
@@ -210,6 +210,17 @@
         (ignore-errors (nshell.infrastructure.acl:process-close process))))
     state)
 
+  (defun %broken-pipe-failure-p (condition)
+    "True when CONDITION is EPIPE or wraps one through CAUSE slots.
+A nested pipeline's EPIPE reaches the enclosing stage inside the
+execution errors that wrap it on the way out."
+    (loop for current = condition
+            then (and (slot-exists-p current 'cause)
+                      (slot-boundp current 'cause)
+                      (slot-value current 'cause))
+          while (typep current 'condition)
+          thereis (typep current 'sb-int:broken-pipe)))
+
   (defun %byte-stream-launch-thread (state index thunk)
   (let ((stage-io (nth index (%byte-stream-execution-state-stage-ios state)))
         (cache (aref (%byte-stream-execution-state-stream-caches state) index))
@@ -221,7 +232,10 @@
           nshell.infrastructure.persistence::*history-file-path-override*)
         (function-call-depth *function-call-depth*)
         (positional-args
-          (copy-list nshell.domain.expansion:*positional-args*)))
+          (copy-list nshell.domain.expansion:*positional-args*))
+        (upstream-stage-p
+          (< index (1- (length (%byte-stream-execution-state-stages state)))))
+        (broken-pipe-p nil))
     (setf (aref (%byte-stream-execution-state-threads state) index)
           (sb-thread:make-thread
            (lambda ()
@@ -249,12 +263,26 @@
                                 (%byte-stream-standard-stream
                                  2 stage-io *error-output*)))
                           (funcall thunk))
+                      ;; A forked shell stage dies of SIGPIPE when its reader
+                      ;; exits first. SBCL ignores SIGPIPE, so an in-process
+                      ;; upstream stage sees EPIPE instead and gets the same
+                      ;; 128+SIGPIPE status; the last stage keeps failing.
                       (error (condition)
-                        (setf (aref (%byte-stream-execution-state-failures state)
-                                    index)
-                              condition)))
+                        (if (and upstream-stage-p
+                                 (%broken-pipe-failure-p condition))
+                            (setf broken-pipe-p t
+                                  (aref (%byte-stream-execution-state-statuses state)
+                                        index)
+                                  (+ 128 sb-unix:sigpipe)
+                                  (aref (%byte-stream-execution-state-signals state)
+                                        index)
+                                  sb-unix:sigpipe)
+                            (setf (aref (%byte-stream-execution-state-failures state)
+                                        index)
+                                  condition))))
                  (handler-case
-                     (%close-pipeline-stage-stream-cache cache)
+                     ;; Output left unwritten by EPIPE would fail again on flush.
+                     (%close-pipeline-stage-stream-cache cache broken-pipe-p)
                    (error (condition)
                      (unless (aref (%byte-stream-execution-state-failures state)
                                    index)

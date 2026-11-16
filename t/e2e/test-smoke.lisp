@@ -77,7 +77,10 @@
                                  &key expected-error input)
   (multiple-value-bind (stdout stderr exit-code)
       (%run-nshell-main arguments :input input)
-    (expect expected-code :to-equal exit-code)
+    (unless (eql exit-code expected-code)
+      (format *error-output* "~&nshell ~S exited ~A (expected ~A); stderr:~%~A~%"
+              arguments exit-code expected-code stderr))
+    (expect exit-code :to-equal expected-code)
     (when expected-output
       (dolist (expected-substring (%expected-substrings expected-output))
         (expect (search expected-substring stdout) :to-be-truthy)))
@@ -85,7 +88,7 @@
       (dolist (expected-substring (%expected-substrings expected-error))
         (expect (search expected-substring stderr) :to-be-truthy)))
     (unless expected-error
-      (expect "" :to-equal stderr))
+      (expect stderr :to-equal ""))
     (values stdout stderr exit-code)))
 
 (defun %existing-program-path (program)

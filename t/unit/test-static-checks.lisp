@@ -554,16 +554,46 @@
             (lambda (pathname)
               (static-check-suite-source-p pathname root))
             (static-check-lisp-files-under (merge-pathnames "t/" root)))))
-      (sort
-       (loop for pathname in files
-             for relative = (static-check-relative-path pathname root)
-             append (mapcan
-                     (lambda (form)
-                       (static-check-nested-test-sites-in-form form relative))
-                     (static-check-read-forms pathname :allow-unknown-package t)))
-       #'string<
-       :key
-       #'prin1-to-string)))
+      (labels ((read-leading-package-definition (pathname)
+                 (with-open-file (stream pathname :direction :input :external-format :utf-8)
+                   (let ((*read-eval* nil)
+                         (*readtable* (copy-readtable nil))
+                         (*package* (find-package "CL-USER")))
+                     (set-dispatch-macro-character #\# #\. (function static-check-skip-reader-eval))
+                     (let ((form (read stream nil :eof)))
+                       (when (string= (or (static-check-form-operator-name form) "")
+                                      "DEFPACKAGE")
+                         form)))))
+               (package-dependencies-available-p (form)
+                 (loop for option in (cddr form)
+                       always
+                       (case (first option)
+                         (:use
+                          (every (function find-package) (rest option)))
+                         ((:import-from :shadowing-import-from)
+                          (find-package (second option)))
+                         (:local-nicknames
+                          (every (lambda (entry)
+                                   (find-package (second entry)))
+                                 (rest option)))
+                         (otherwise t)))))
+        (dolist (pathname files)
+          (let ((form (read-leading-package-definition pathname)))
+            (when (and form
+                       (not (find-package (second form)))
+                       (package-dependencies-available-p form))
+              ;; A package declaration is enough for reading external prefixes; loading the file would run test code.
+              (eval form))))
+        (sort
+         (loop for pathname in files
+               for relative = (static-check-relative-path pathname root)
+               append (mapcan
+                       (lambda (form)
+                         (static-check-nested-test-sites-in-form form relative))
+                       (static-check-read-forms pathname :allow-unknown-package t)))
+         (function string<)
+         :key
+         (function prin1-to-string)))))
   (defun static-check-reasoned-layer-allowlist-keys ()
     (sort
      (mapcar

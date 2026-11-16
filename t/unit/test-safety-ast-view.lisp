@@ -21,7 +21,10 @@
         "(^LANG=C ls)" "\"LANG=C\" ls" "'LANG=C' cat" "LANG=C \"TZ=UTC\" ls"
         "LANG=C ls" "LANG=C TZ=UTC ls > /dev/null" "FOO=1 \"BAR=2\" ls"
         "ls '>' out" "FOO+=x ls" "(^git branch \"2>&1\")"
-        "(^and ls)" "(^or ls)" "(^not ls)")
+        "(^and ls)" "(^or ls)" "(^not ls)"
+        "head -n 2 a" "tail -c 2 a" "wc -lwcm a" "stat -L a"
+        "du -shkacx -d 2 a" "df -hkliP a" "pwd" "which ls" "type ls"
+        "command -v ls")
   "Inputs R-P1-5 used, read with every reader that accepts them.")
 
 (defun %safety-view-command-nodes (ast)
@@ -365,7 +368,19 @@ whether the gate stopped it."
     (:bare "command echo x") (:bare "ls | cat")
     (:auto "echo hi") (:auto "ls -la") (:auto "git status") (:auto "not ls")
     (:auto "(echo hi)") (:auto "(ls)") (:auto "(^ls)") (:auto "(git status)")
-    (:auto "ls | cat"))
+    (:auto "ls | cat")
+    (:bare "head -n 2 a") (:auto "head -n 2 a")
+    (:bare "tail -c 2 a") (:auto "tail -c 2 a")
+    (:bare "wc -lwcm a") (:auto "wc -lwcm a")
+    (:bare "stat -L a") (:auto "stat -L a")
+    (:bare "du -shkacx -d 2 a") (:auto "du -shkacx -d 2 a")
+    (:bare "df -hkliP a") (:auto "df -hkliP a")
+    (:bare "pwd") (:auto "pwd")
+    (:bare "which ls") (:auto "which ls")
+    (:bare "type ls") (:auto "type ls")
+    (:bare "command -v ls") (:auto "command -v ls")
+    (:auto "(^pwd)") (:auto "(^which ls)")
+    (:auto "(^type ls)") (:auto "(^command -v ls)"))
   "Inputs whose command names a shell function or an alias in some context.")
 
 (defun %safety-view-write-function-file (directory name marker)
@@ -396,7 +411,8 @@ function file defines its function there for the whole image."
             do (cond
                  ((null symbol) (when current (unintern current "NSHELL.USER")))
                  (function (setf (symbol-function symbol) function))
-                 (t (fmakunbound symbol)))))))
+                 ((eq (symbol-package symbol) (find-package "NSHELL.USER"))
+                  (fmakunbound symbol)))))))
 
 (defun %safety-view-autoload-context (directory)
   "A context whose function directory is DIRECTORY/nshell/functions/."
@@ -414,19 +430,31 @@ function file defines its function there for the whole image."
 
 (defun %safety-view-resolution-contexts (&optional directory)
   "Return (LABEL CONTEXT) pairs: nothing defined, shell functions named
-echo, ls, and git, aliases of those names to other commands, and, with
-DIRECTORY, autoloadable function files named echo and ls."
+the read-only names, aliases of those names to other commands, and, with
+DIRECTORY, autoloadable function files named echo, ls, pwd, which, type, and command."
   (list* (list :plain (make-test-shell-context))
         (list :functions
               (let ((context (make-test-shell-context)))
-                (dolist (name '("echo" "ls" "git") context)
+                (dolist (name '("echo" "ls" "git"
+                                 "head" "tail" "wc" "stat" "du" "df"
+                                 "pwd" "which" "type" "command") context)
                   (%safety-view-register-function context name (list nil)))))
         (list :aliases
               (let ((context (make-test-shell-context)))
                 ;; Each alias runs a command of another resolution.
                 (loop for (name . text) in '(("echo" . "ls -la")
                                              ("ls" . "echo aliased")
-                                             ("git" . "not ls"))
+                                             ("git" . "not ls")
+                                             ("head" . "echo aliased")
+                                             ("tail" . "echo aliased")
+                                             ("wc" . "echo aliased")
+                                             ("stat" . "echo aliased")
+                                             ("du" . "echo aliased")
+                                             ("df" . "echo aliased")
+                                             ("pwd" . "echo aliased")
+                                             ("which" . "echo aliased")
+                                             ("type" . "echo aliased")
+                                             ("command" . "echo aliased"))
                       do (setf (gethash name (nshell.application:shell-context-alias-table
                                               context))
                                text))
@@ -434,7 +462,7 @@ DIRECTORY, autoloadable function files named echo and ls."
         (and directory
              (list (list :autoload
                          (progn
-                           (dolist (name '("echo" "ls"))
+                           (dolist (name '("echo" "ls" "pwd" "which" "type" "command"))
                              (%safety-view-write-function-file
                               directory name (merge-pathnames "loaded" directory)))
                            (%safety-view-autoload-context directory)))))))
@@ -523,7 +551,7 @@ the gate, and the executor see them."
     ;; without loading it; the executor loads it and runs the function.
     (host-kit:with-temporary-directory (directory)
      (%safety-view-call-restoring-user-functions
-      '("echo" "ls")
+      '("echo" "ls" "pwd" "which" "type" "command")
       (lambda ()
      (let ((compared 0))
       (dolist (entry (%safety-view-resolution-contexts directory))
@@ -535,7 +563,7 @@ the gate, and the executor see them."
                 (incf compared)
                 (expect (list label reader source enter gate)
                         :to-equal (list label reader source executor executor)))))))
-      (expect compared :to-equal 60)))))))
+      (expect compared :to-equal 156)))))))
 
 (describe "safety classification loads no function file"
   (it "leaves function files unread at Enter, at the gate, and for the rerun check"

@@ -1,7 +1,10 @@
 (in-package #:nshell.presentation)
 
-;;; Autosuggestion runs on one worker thread so a key redraw never waits for
-;;; history search, KB proofs, PATH scans or git listings. The main thread owns
+;;; The history part of an autosuggestion is an in-memory search, so the key
+;;; handler computes it and draws it with the key, as before; typed-ahead keys
+;;; would otherwise be drawn without it. Only when history has no match does
+;;; one worker thread compute the completion part, so a key redraw never waits
+;;; for KB proofs, PATH scans or git listings. The main thread owns
 ;;; *INPUT-STATE*; it hands the worker a request holding private snapshots of
 ;;; every mutable table the computation reads, and applies a result only while
 ;;; its generation and text still match the current buffer.
@@ -167,7 +170,8 @@ rebuilt on demand."
   (or *suggestion-history-snapshot*
       (history-kit:make-history)))
 
-(defun %make-current-suggestion-request (text)
+(defun %make-current-suggestion-request
+    (text &optional (environment-arguments (repl-completion-environment-arguments)))
   (let* ((environment (ensure-environment))
          (path (nshell.domain.environment:env-get environment "PATH")))
     (%make-suggestion-worker-request
@@ -178,7 +182,7 @@ rebuilt on demand."
      :filesystem *repl-filesystem*
      :alias-table (%snapshot-suggestion-table *aliases*)
      :function-table (%snapshot-suggestion-table *functions*)
-     :environment-arguments (repl-completion-environment-arguments))))
+     :environment-arguments environment-arguments)))
 
 (defun %compute-suggestion-worker-request (request)
   ;; SERIOUS-CONDITION, not ERROR: a STORAGE-CONDITION here must become a
@@ -294,30 +298,45 @@ suggestion keeps it on screen until the worker answers; otherwise NIL."
          (subseq full (length text)))))
 
 (defun %schedule-current-input-state-suggestion (&optional text)
+  "Show TEXT's history suggestion at once; without one, hand the completion
+part to the worker and return the request's generation."
   (when (and *input-state*
              (stringp (or text (input-state-buffer *input-state*))))
     (let* ((text (or text (input-state-buffer *input-state*)))
-           (state (%ensure-suggestion-worker))
-           (request (%make-current-suggestion-request text))
-           (signal-p nil)
-           (generation nil))
-      (setf (input-state-suggestion *input-state*) (%retained-suggestion text))
-      (unless (input-state-suggestion *input-state*)
-        (setf *suggestion-shown-full-text* nil))
-      (sb-thread:with-mutex
-          ((%suggestion-worker-state-mutex state))
-        (setf generation
-              (incf (%suggestion-worker-state-generation state))
-              (%suggestion-worker-request-generation request) generation
-              (%suggestion-worker-state-pending-request state) request
-              (%suggestion-worker-state-result state) nil)
-        (when (eq :idle (%suggestion-worker-state-status state))
-          (setf (%suggestion-worker-state-status state) :scheduled
-                signal-p t)))
-      (when signal-p
-        (sb-thread:signal-semaphore
-         (%suggestion-worker-state-semaphore state)))
-      generation)))
+           (environment-arguments (repl-completion-environment-arguments))
+           (history-suggestion
+             (compute-history-suggestion
+              *history* text
+              :directory (getf environment-arguments :directory))))
+      (if history-suggestion
+          (progn
+            (%invalidate-current-input-suggestion)
+            (%show-suggestion history-suggestion)
+            nil)
+          (%schedule-worker-suggestion text environment-arguments)))))
+
+(defun %schedule-worker-suggestion (text environment-arguments)
+  (let* ((state (%ensure-suggestion-worker))
+         (request (%make-current-suggestion-request text environment-arguments))
+         (signal-p nil)
+         (generation nil))
+    (setf (input-state-suggestion *input-state*) (%retained-suggestion text))
+    (unless (input-state-suggestion *input-state*)
+      (setf *suggestion-shown-full-text* nil))
+    (sb-thread:with-mutex
+        ((%suggestion-worker-state-mutex state))
+      (setf generation
+            (incf (%suggestion-worker-state-generation state))
+            (%suggestion-worker-request-generation request) generation
+            (%suggestion-worker-state-pending-request state) request
+            (%suggestion-worker-state-result state) nil)
+      (when (eq :idle (%suggestion-worker-state-status state))
+        (setf (%suggestion-worker-state-status state) :scheduled
+              signal-p t)))
+    (when signal-p
+      (sb-thread:signal-semaphore
+       (%suggestion-worker-state-semaphore state)))
+    generation))
 
 (defun %invalidate-current-input-suggestion ()
   (setf *suggestion-shown-full-text* nil)

@@ -111,11 +111,8 @@
                 (subseq escaped-text (length escaped-prefix))))))))))
 
 
-(defun compute-suggestion
-    (history input &key knowledge-base path
-                              (filesystem (nshell.infrastructure.acl:make-host-filesystem))
-                              alias-table function-table
-                              variable-names directory home-directory process-ids)
+(defun %suggestion-scan-result (input)
+  "Return INPUT's scan result when a suggestion may follow its cursor, or NIL."
   (unless (nshell.domain.parsing:shell-input-blank-p input)
     (let ((scan-result
             (handler-case
@@ -137,18 +134,32 @@
                   (nshell.domain.parsing:scan-result-cursor-role scan-result)
                   '(:command-head :argument :redirect-target)
                   :test #'eq))
-        (or (nshell.application:history-suggestion history input :cwd directory)
-            (completion-suggestion knowledge-base
-                                   input
-                                   scan-result
-                                   :path path
-                                   :filesystem filesystem
-                                   :alias-table alias-table
-                                   :function-table function-table
-                                   :variable-names variable-names
-                                   :directory directory
-                                   :home-directory home-directory
-                                   :process-ids process-ids))))))
+        scan-result))))
+
+(defun compute-history-suggestion (history input &key directory)
+  "The history part of COMPUTE-SUGGESTION: an in-memory search with no I/O."
+  (when (%suggestion-scan-result input)
+    (nshell.application:history-suggestion history input :cwd directory)))
+
+(defun compute-suggestion
+    (history input &key knowledge-base path
+                              (filesystem (nshell.infrastructure.acl:make-host-filesystem))
+                              alias-table function-table
+                              variable-names directory home-directory process-ids)
+  (let ((scan-result (%suggestion-scan-result input)))
+    (when scan-result
+      (or (nshell.application:history-suggestion history input :cwd directory)
+          (completion-suggestion knowledge-base
+                                 input
+                                 scan-result
+                                 :path path
+                                 :filesystem filesystem
+                                 :alias-table alias-table
+                                 :function-table function-table
+                                 :variable-names variable-names
+                                 :directory directory
+                                 :home-directory home-directory
+                                 :process-ids process-ids)))))
 
 
 (defun accept-suggestion (input suggestion)

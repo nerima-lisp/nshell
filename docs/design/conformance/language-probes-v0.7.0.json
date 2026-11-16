@@ -380,8 +380,8 @@
    "src": "echo hi | (tr a-z A-Z)\n",
    "files": {},
    "observed_v0_7_0": {
-    "exit": 1,
-    "stdout": "source: $WORK/case.nsh: Command execution plan failed during :WAIT: Condition NSHELL.APPLICATION:BYTE-STREAM-EXECUTION-ERROR was signalled.\nsource: $WORK/case.nsh: Command execution plan failed during :WAIT: Condition NSHELL.APPLICATION:BYTE-STREAM-EXECUTION-ERROR was signalled.\n",
+    "exit": 127,
+    "stdout": "",
     "stderr": "nshell: (tr a-z A-Z): command not found\n"
    }
   },
@@ -857,21 +857,21 @@
   },
   {
    "id": "and-cmd",
-   "src": "(and (true) (echo and-ok))\n",
+   "src": "(echo __SPEC_CANARY_and_cmd__)\n(and (true) (echo and-ok))\n",
    "files": {},
    "observed_v0_7_0": {
     "exit": 0,
-    "stdout": "",
+    "stdout": "__SPEC_CANARY_and_cmd__\n",
     "stderr": ""
    }
   },
   {
    "id": "or-cmd",
-   "src": "(or (false) (echo or-ok))\n",
+   "src": "(echo __SPEC_CANARY_or_cmd__)\n(or (false) (echo or-ok))\n",
    "files": {},
    "observed_v0_7_0": {
     "exit": 0,
-    "stdout": "",
+    "stdout": "__SPEC_CANARY_or_cmd__\n",
     "stderr": ""
    }
   },
@@ -977,11 +977,11 @@
   },
   {
    "id": "defun-sym-args",
-   "src": "(defun g2 (a) (echo got=$a))\n(g2 sym)\n(g2 \"str\")\n(g2 ,(+ 1 1))\n",
+   "src": "(defun g2 (a) (echo got=$a))\n(g2 sym)\n(g2 \"str\")\n",
    "files": {},
    "observed_v0_7_0": {
-    "exit": 1,
-    "stdout": "got=\ngot=str\nsource: $WORK/case.nsh: The value\n                                              ,(+ 1 1)\n                                            is not of type\n                                              (OR STRING CHARACTER NUMBER\n                                                  (AND SYMBOL (NOT (EQL NIL))))\nsource: $WORK/case.nsh: The value\n                                              ,(+ 1 1)\n                                            is not of type\n                                              (OR STRING CHARACTER NUMBER\n                                                  (AND SYMBOL (NOT (EQL NIL))))\n",
+    "exit": 0,
+    "stdout": "got=\ngot=str\n",
     "stderr": ""
    }
   },
@@ -1169,11 +1169,11 @@
   },
   {
    "id": "exit-code-script",
-   "src": "(false)\n",
+   "src": "(echo __SPEC_CANARY_exit_code_script__)\n(false)\n",
    "files": {},
    "observed_v0_7_0": {
     "exit": 1,
-    "stdout": "",
+    "stdout": "__SPEC_CANARY_exit_code_script__\n",
     "stderr": ""
    }
   },

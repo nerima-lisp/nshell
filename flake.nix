@@ -978,10 +978,9 @@
               postCheck =
                 (ctx.pkgs.lib.optionalString ((previous.postCheck or null) != null) "${previous.postCheck}\n")
                 + ''
-                  export NSHELL_SPEC_BIN_DIR="${specBinEnv}/bin"
-                  export PATH="$NSHELL_SPEC_BIN_DIR"
-                  printf 'NSHELL_CHECK_PATH=%s\n' "$PATH"
-                  ${ctx.pkgs.sbcl}/bin/sbcl --noinform --non-interactive \
+                  printf 'NSHELL_CHECK_PATH=%s\n' "${specBinEnv}/bin"
+                  env NSHELL_SPEC_BIN_DIR="${specBinEnv}/bin" PATH="${specBinEnv}/bin" \
+                    ${ctx.pkgs.sbcl}/bin/sbcl --noinform --non-interactive \
                     --eval '(require :asdf)' \
                     --eval '(load "scripts/asdf-runtime.lisp")' \
                     --eval '(nshell-configure-writable-asdf-output)' \

@@ -321,3 +321,49 @@
                (format *error-output* "nshell: ~a: ~a~%" cmd err)
                nil))
         (dolist (stream redirect-streams) (ignore-errors (close stream)))))))
+
+(defun registered-processes ()
+  "Return the processes nshell spawned and has not reaped yet.
+
+A caller that suspends a thread inside a process wait may find that thread
+holding the registry lock, so this gives up waiting for the lock after half a
+second and reads the table without it."
+  (let ((lock *native-process-registry-lock*)
+        (locked-p nil))
+    (unwind-protect
+         (progn
+           (setf locked-p (sb-thread:grab-mutex lock :timeout 0.5))
+           (loop for process being the hash-values of *native-process-registry*
+                 collect process))
+      (when locked-p
+        (sb-thread:release-mutex lock)))))
+
+(defun stop-process-groups (processes &key (grace-seconds 0.5))
+  "Send SIGTERM, wait GRACE-SECONDS, then send SIGKILL to each of PROCESSES:
+to its whole process group when it was spawned into a group of its own, and
+to the process alone when it shares this shell's group.
+
+It neither waits for nor reaps the processes, so it cannot block on a thread
+that is suspended in their wait. The registry holds every process until it is
+reaped, so a pid or process group id taken from it cannot have been reused."
+  (let* ((own-pgid (sb-posix:getpgrp))
+         (targets
+           (remove-duplicates
+            (loop for process in processes
+                  for pid = (native-process-pid process)
+                  for pgid = (native-process-pgid process)
+                  collect (if (and (integerp pgid) (plusp pgid) (/= pgid own-pgid))
+                              (cons :group pgid)
+                              (cons :process pid)))
+            :test #'equal)))
+    (flet ((send (signal)
+             (loop for (kind . id) in targets
+                   do (ignore-errors
+                        (if (eq kind :group)
+                            (%send-process-group-signal id signal)
+                            (kill-process id signal))))))
+      (when targets
+        (send sb-unix:sigterm)
+        (sleep grace-seconds)
+        (send sb-unix:sigkill)))
+    targets))

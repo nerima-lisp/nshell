@@ -814,14 +814,14 @@
                   (status nil)
                   (stage-statuses nil))
               (setf output
-                    (with-output-to-string (stream)
-                      (let ((*standard-output* stream))
-                        (multiple-value-setq (status stage-statuses)
-                          (nshell.infrastructure.acl:spawn-pipeline
-                           commands
-                           :redirects redirects
-                           :pipefail-p (shell-context-pipefail-p context)
-                           :skip-start-barrier-p (and (= 1 (length commands)) (not (nshell.infrastructure.terminal:controlling-terminal-p))))))))
+                    (%call-capturing-standard-output
+                     (lambda ()
+                       (multiple-value-setq (status stage-statuses)
+                         (nshell.infrastructure.acl:spawn-pipeline
+                          commands
+                          :redirects redirects
+                          :pipefail-p (shell-context-pipefail-p context)
+                          :skip-start-barrier-p (and (= 1 (length commands)) (not (nshell.infrastructure.terminal:controlling-terminal-p))))))))
               (let* ((statuses (or stage-statuses (list status)))
                      (signals (make-list (length statuses) :initial-element nil)))
                 (values

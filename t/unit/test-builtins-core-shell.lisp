@@ -421,6 +421,31 @@
           (call-builtin context "abbr" '("-a" "--regex" "[" "invalid" "echo"))
         (expect 2 :to-equal code)
         (expect (search "invalid regular expression" output) :to-be-truthy))))
+  (it "abbr-redefinition-uses-replacement-regex"
+    "Redefining an abbreviation replaces the regex used for matching."
+    (with-builtins-context (context)
+      (expect 0 :to-equal
+              (nth-value 1
+                         (call-builtin context "abbr"
+                                       '("--add" "--regex" "^old$" "gco" "echo old"))))
+      (let* ((table (nshell.application:shell-context-abbreviation-table context))
+             (old-value (gethash "gco" table)))
+        (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+                 old-value "gco" "old")
+                :to-be-truthy)
+        (expect 0 :to-equal
+                (nth-value 1
+                           (call-builtin context "abbr"
+                                         '("--add" "--regex" "^new$" "gco" "echo new"))))
+        (let ((new-value (gethash "gco" table)))
+          (expect "^new$" :to-equal
+                  (nshell.domain.abbreviation:abbreviation-regex new-value))
+          (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+                   new-value "gco" "new")
+                  :to-be-truthy)
+          (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+                   new-value "gco" "old")
+                  :to-be-falsy)))))
 
   (it "abbr-rejects-invalid-position-option"
     "abbr rejects missing or unknown --position values."

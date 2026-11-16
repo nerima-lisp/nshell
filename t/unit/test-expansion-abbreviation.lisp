@@ -192,4 +192,38 @@
                abbr)))
         (expect expanded-p :to-be-truthy)
         (expect "echo tail" :to-equal buffer)
-        (expect 5 :to-equal cursor)))))
+        (expect 5 :to-equal cursor))))
+  (it "abbreviation-domain-regex-full-match-checks-all-alternatives"
+    (let ((abbr (nshell.domain.abbreviation:make-abbreviation
+                 :expansion "echo"
+                 :regex "a|ab")))
+      (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+               abbr "label" "ab")
+              :to-be-truthy)
+      (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+               abbr "label" "a")
+              :to-be-truthy)
+      (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+               abbr "label" "abc")
+              :to-be-falsy)))
+  (it "abbreviation-domain-regex-compiles-once-for-repeated-matches"
+    (let* ((compile-symbol 'cl-regex-kit:compile-regex)
+           (original (symbol-function compile-symbol))
+           (compile-count 0))
+      (unwind-protect
+          (progn
+            (setf (symbol-function compile-symbol)
+                  (lambda (&rest arguments)
+                    (incf compile-count)
+                    (apply original arguments)))
+            (let ((abbr (nshell.domain.abbreviation:make-abbreviation
+                         :expansion "echo"
+                         :regex "^foo$")))
+              (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+                       abbr "label" "foo")
+                      :to-be-truthy)
+              (expect (nshell.domain.abbreviation:abbreviation-matches-token-p
+                       abbr "label" "foo")
+                      :to-be-truthy)
+              (expect 1 :to-equal compile-count)))
+        (setf (symbol-function compile-symbol) original)))))

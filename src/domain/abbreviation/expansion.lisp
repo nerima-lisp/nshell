@@ -5,6 +5,7 @@
     ((expansion "" :type string)
      (position :command :type (member :anywhere :command))
      (regex nil :type (or null string))
+     (compiled-regex nil :type t)
      (function-name nil :type (or null string))
      (set-cursor-marker nil :type (or null string))
      (order 0 :type integer))
@@ -30,15 +31,15 @@
     (error "Function abbreviations cannot also have a literal expansion."))
   (when (and set-cursor-marker (string= set-cursor-marker ""))
     (error "Abbreviation cursor marker cannot be empty."))
-  (when regex
-    (cl-regex-kit:compile-regex regex))
-  (%allocate-abbreviation
-   (copy-seq expansion)
-   position
-   (and regex (copy-seq regex))
-   (and function-name (copy-seq function-name))
-   (and set-cursor-marker (copy-seq set-cursor-marker))
-   order))
+  (let ((compiled-regex (and regex (cl-regex-kit:compile-regex regex))))
+    (%allocate-abbreviation
+     (copy-seq expansion)
+     position
+     (and regex (copy-seq regex))
+     compiled-regex
+     (and function-name (copy-seq function-name))
+     (and set-cursor-marker (copy-seq set-cursor-marker))
+     order)))
 
 (define-value-struct abbreviation-token-range
     ((start 0 :type fixnum)
@@ -99,13 +100,9 @@
   (defun abbreviation-matches-token-p (abbreviation name token)
     (if (and (abbreviation-p abbreviation)
              (abbreviation-regex abbreviation))
-        (let* ((regex
-                 (cl-regex-kit:compile-regex
-                  (abbreviation-regex abbreviation)))
-               (match (cl-regex-kit:scan regex token)))
-          (and match
-               (zerop (cl-regex-kit:match-start match))
-               (= (length token) (cl-regex-kit:match-end match))))
+        (cl-regex-kit:full-match-p
+         (abbreviation-compiled-regex abbreviation)
+         token)
         (string= name token)))
 
   (defun abbreviation-command-position-p

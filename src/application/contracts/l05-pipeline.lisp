@@ -19,14 +19,6 @@
 
 (defvar *pipeline-stage-io* nil)
 
-(defvar *pipeline-stage-exit-function* nil
-  "In a pipeline stage thread, a function of a status that ends the stage
-with that status, as when the stage's exec'd program has exited. The stage
-unwinds to its own boundary, so the commands after exec in its body do not
-run, and the pipeline then joins and closes every stage as usual. Once the
-pipeline has ended, the thread that waited for it calls *EXEC-EXIT-FUNCTION*
-with the pipeline's status. NIL outside a stage thread.")
-
 (define-value-struct pipeline-execution-result
     ((status 0 :type integer)
      (stage-statuses nil :type list :copy :list)
@@ -80,9 +72,7 @@ with the pipeline's status. NIL outside a stage thread.")
     statuses
     signals
     failures
-    stream-caches
-    ;; A stage ended through *PIPELINE-STAGE-EXIT-FUNCTION*.
-    (exec-p nil))
+    stream-caches)
 
   (defun %close-pipeline-stage-stream-cache (cache &optional abort)
     (let ((failure nil))
@@ -252,8 +242,9 @@ execution errors that wrap it on the way out."
         (execution-approval *execution-approval*)
         (execution-gate-parent-kind *execution-gate-parent-kind*)
         (execution-gate-refusal *execution-gate-refusal*)
-        ;; exec in a stage ends the run the way the caller decided, and the
-        ;; stage's processes join the caller's record of process groups.
+        ;; exec in a stage does what the caller's exec function decides
+        ;; (see CALL-WITH-SUBSHELL-EXIT), and the stage's processes join the
+        ;; caller's record of process groups.
         (exec-exit-function *exec-exit-function*)
         (process-group-log nshell.infrastructure.acl:*process-group-log*)
         (positional-args
@@ -292,21 +283,16 @@ execution errors that wrap it on the way out."
                                  1 stage-io *standard-output*))
                               (*error-output*
                                 (%byte-stream-standard-stream
-                                 2 stage-io *error-output*))
-                              (stage-exit (list :pipeline-stage-exit)))
-                          (catch stage-exit
-                            (let ((*pipeline-stage-exit-function*
-                                    (lambda (status)
-                                      (setf (aref (%byte-stream-execution-state-statuses state)
-                                                  index)
-                                            status
-                                            (aref (%byte-stream-execution-state-signals state)
-                                                  index)
-                                            nil
-                                            (%byte-stream-execution-state-exec-p state)
-                                            t)
-                                      (throw stage-exit nil))))
-                              (funcall thunk))))
+                                 2 stage-io *error-output*)))
+                          (call-with-subshell-exit
+                           thunk
+                           (lambda (status)
+                             (setf (aref (%byte-stream-execution-state-statuses state)
+                                         index)
+                                   status
+                                   (aref (%byte-stream-execution-state-signals state)
+                                         index)
+                                   nil))))
                       ;; A forked shell stage dies of SIGPIPE when its reader
                       ;; exits first. SBCL ignores SIGPIPE, so an in-process
                       ;; upstream stage sees EPIPE instead and gets the same
@@ -474,62 +460,53 @@ execution errors that wrap it on the way out."
       (nshell.infrastructure.acl::native-process-exit-code process)))
 
   (defun wait-byte-stream-execution (handle)
-    "Wait for every stage of HANDLE's pipeline, close it, and return its
-result. When a stage ended by exec, call *EXEC-EXIT-FUNCTION* with the
-pipeline's status once the pipeline has ended."
-    (let* ((state (pipeline-execution-handle-token handle))
-           (result (%wait-byte-stream-execution-state state)))
-      (when (%byte-stream-execution-state-exec-p state)
-        (funcall *exec-exit-function* (pipeline-execution-result-status result)))
-      result))
-
-  (defun %wait-byte-stream-execution-state (state)
-    (handler-case
-        (progn
-          (loop for process across (%byte-stream-execution-state-processes state)
-                for index from 0
-                when process
-                  do (nshell.infrastructure.acl:process-wait process)
-                     (setf (aref (%byte-stream-execution-state-statuses state)
-                                 index)
-                           (nshell.infrastructure.acl:process-exit-status-code
-                            process)
-                           (aref (%byte-stream-execution-state-signals state)
-                                 index)
-                           (%byte-stream-process-signal process)))
-          (loop for thread across (%byte-stream-execution-state-threads state)
-                when thread
-                  do (sb-thread:join-thread thread))
-          (let ((failure
-                  (find-if #'identity
-                           (coerce (%byte-stream-execution-state-failures state)
-                                   'list))))
-            (when failure
-              (error failure)))
-          (let ((stage-statuses
-                  (coerce (%byte-stream-execution-state-statuses state) 'list))
-                (stage-signals
-                  (coerce (%byte-stream-execution-state-signals state) 'list)))
-            (unless (every #'integerp stage-statuses)
-              (error "Pipeline stages completed without integer statuses: ~s"
-                     stage-statuses))
+    (let ((state (pipeline-execution-handle-token handle)))
+      (handler-case
+          (progn
             (loop for process across (%byte-stream-execution-state-processes state)
+                  for index from 0
                   when process
-                    do (nshell.infrastructure.acl:process-close process))
-            (loop for cache across (%byte-stream-execution-state-stream-caches state)
-                  when cache
-                    do (%close-pipeline-stage-stream-cache cache))
-            (make-pipeline-execution-result
-             (if (shell-context-pipefail-p
-                  (%byte-stream-execution-state-context state))
-                 (or (find-if (lambda (status) (not (zerop status)))
-                              stage-statuses)
-                     0)
-                 (or (car (last stage-statuses)) 0))
-             stage-statuses
-             stage-signals)))
-      (error (condition)
-        (%cleanup-byte-stream-execution state)
-        (error 'byte-stream-execution-error
-               :operation :wait
-               :cause condition))))))
+                    do (nshell.infrastructure.acl:process-wait process)
+                       (setf (aref (%byte-stream-execution-state-statuses state)
+                                   index)
+                             (nshell.infrastructure.acl:process-exit-status-code
+                              process)
+                             (aref (%byte-stream-execution-state-signals state)
+                                   index)
+                             (%byte-stream-process-signal process)))
+            (loop for thread across (%byte-stream-execution-state-threads state)
+                  when thread
+                    do (sb-thread:join-thread thread))
+            (let ((failure
+                    (find-if #'identity
+                             (coerce (%byte-stream-execution-state-failures state)
+                                     'list))))
+              (when failure
+                (error failure)))
+            (let ((stage-statuses
+                    (coerce (%byte-stream-execution-state-statuses state) 'list))
+                  (stage-signals
+                    (coerce (%byte-stream-execution-state-signals state) 'list)))
+              (unless (every #'integerp stage-statuses)
+                (error "Pipeline stages completed without integer statuses: ~s"
+                       stage-statuses))
+              (loop for process across (%byte-stream-execution-state-processes state)
+                    when process
+                      do (nshell.infrastructure.acl:process-close process))
+              (loop for cache across (%byte-stream-execution-state-stream-caches state)
+                    when cache
+                      do (%close-pipeline-stage-stream-cache cache))
+              (make-pipeline-execution-result
+               (if (shell-context-pipefail-p
+                    (%byte-stream-execution-state-context state))
+                   (or (find-if (lambda (status) (not (zerop status)))
+                                stage-statuses)
+                       0)
+                   (or (car (last stage-statuses)) 0))
+               stage-statuses
+               stage-signals)))
+        (error (condition)
+          (%cleanup-byte-stream-execution state)
+          (error 'byte-stream-execution-error
+                 :operation :wait
+                 :cause condition)))))))

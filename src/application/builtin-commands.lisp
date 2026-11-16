@@ -203,6 +203,26 @@
 runner binds it so exec ends the run, not the process, before the envelope is
 printed.")
 
+(defvar *subshell-exit-function* nil
+  "Inside a subshell-like context (a pipeline stage, a process substitution's
+stage, or a command substitution), a function of a status that ends only that
+context: see CALL-WITH-SUBSHELL-EXIT. NIL outside every such context.")
+
+(defun call-with-subshell-exit (thunk on-exit)
+  "Call THUNK as a subshell-like context and return its values. While THUNK
+runs, *SUBSHELL-EXIT-FUNCTION* unwinds THUNK, running its cleanup, and then
+returns the values of ON-EXIT called with the status it was given. The
+innermost context wins, so a context nested in another one ends alone.
+*EXEC-EXIT-FUNCTION* decides whether exec uses it; the default quits the
+process instead."
+  (let* ((tag (list :subshell-exit))
+         (status (catch tag
+                   (return-from call-with-subshell-exit
+                     (let ((*subshell-exit-function*
+                             (lambda (status) (throw tag status))))
+                       (funcall thunk))))))
+    (funcall on-exit status)))
+
 (defun %exec-and-exit (command args)
   (funcall *exec-exit-function*
            (nshell.infrastructure.acl:run-external-exec command args)))

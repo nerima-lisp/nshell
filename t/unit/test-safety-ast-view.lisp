@@ -368,10 +368,55 @@ whether the gate stopped it."
     (:auto "ls | cat"))
   "Inputs whose command names a shell function or an alias in some context.")
 
-(defun %safety-view-resolution-contexts ()
+(defun %safety-view-write-function-file (directory name marker)
+  "Write the autoloadable function file NAME.nsh under DIRECTORY's
+nshell/functions/.  Evaluating it writes MARKER and defines NAME."
+  (let ((path (merge-pathnames (format nil "nshell/functions/~a.nsh" name) directory)))
+    (ensure-directories-exist path)
+    (with-open-file (stream path :direction :output :if-exists :supersede)
+      (format stream "(CL:WITH-OPEN-FILE (S ~S :DIRECTION :OUTPUT :IF-EXISTS :APPEND :IF-DOES-NOT-EXIST :CREATE) (CL:WRITE-LINE ~S S))~%(defun ~a () \"autoload-body\")~%"
+              (namestring marker) name name))
+    path))
+
+(defun %safety-view-call-restoring-user-functions (names thunk)
+  "Call THUNK, then restore the NSHELL.USER definitions of NAMES: a loaded
+function file defines its function there for the whole image."
+  (let ((saved (mapcar (lambda (name)
+                         (let ((symbol (find-symbol name "NSHELL.USER")))
+                           (list name
+                                 symbol
+                                 (and symbol (fboundp symbol) (symbol-function symbol)))))
+                       ;; The reader keeps the case of the name.
+                       (remove-duplicates
+                        (append names (mapcar #'string-upcase names))
+                        :test #'string=))))
+    (unwind-protect (funcall thunk)
+      (loop for (name symbol function) in saved
+            for current = (find-symbol name "NSHELL.USER")
+            do (cond
+                 ((null symbol) (when current (unintern current "NSHELL.USER")))
+                 (function (setf (symbol-function symbol) function))
+                 (t (fmakunbound symbol)))))))
+
+(defun %safety-view-autoload-context (directory)
+  "A context whose function directory is DIRECTORY/nshell/functions/."
+  (let ((context (make-test-shell-context)))
+    (setf (nshell.application:shell-context-environment context)
+          (nshell.domain.environment:env-set
+           (nshell.application:shell-context-environment context)
+           "XDG_CONFIG_HOME" (namestring directory) t))
+    context))
+
+(defun %safety-view-registered-count (context)
+  (hash-table-count
+   (nshell.application::shell-function-registry-global-table
+    (nshell.application:context-shell-function-registry context))))
+
+(defun %safety-view-resolution-contexts (&optional directory)
   "Return (LABEL CONTEXT) pairs: nothing defined, shell functions named
-echo, ls, and git, and aliases of those names to other commands."
-  (list (list :plain (make-test-shell-context))
+echo, ls, and git, aliases of those names to other commands, and, with
+DIRECTORY, autoloadable function files named echo and ls."
+  (list* (list :plain (make-test-shell-context))
         (list :functions
               (let ((context (make-test-shell-context)))
                 (dolist (name '("echo" "ls" "git") context)
@@ -385,7 +430,14 @@ echo, ls, and git, and aliases of those names to other commands."
                       do (setf (gethash name (nshell.application:shell-context-alias-table
                                               context))
                                text))
-                context))))
+                context))
+        (and directory
+             (list (list :autoload
+                         (progn
+                           (dolist (name '("echo" "ls"))
+                             (%safety-view-write-function-file
+                              directory name (merge-pathnames "loaded" directory)))
+                           (%safety-view-autoload-context directory)))))))
 
 (defun %safety-view-kind (kind)
   (case kind
@@ -466,9 +518,15 @@ the gate, and the executor see them."
                         stages))))))
 
 (describe "safety classifier, gate, and executor resolve a command alike"
-  (it "agrees with shell functions and aliases defined"
-    (let ((compared 0))
-      (dolist (entry (%safety-view-resolution-contexts))
+  (it "agrees with shell functions, aliases, and function files defined"
+    ;; The classifier and the gate see a function file as a shell function
+    ;; without loading it; the executor loads it and runs the function.
+    (host-kit:with-temporary-directory (directory)
+     (%safety-view-call-restoring-user-functions
+      '("echo" "ls")
+      (lambda ()
+     (let ((compared 0))
+      (dolist (entry (%safety-view-resolution-contexts directory))
         (destructuring-bind (label context) entry
           (dolist (input +safety-view-resolution-sources+)
             (destructuring-bind (reader source) input
@@ -477,4 +535,65 @@ the gate, and the executor see them."
                 (incf compared)
                 (expect (list label reader source enter gate)
                         :to-equal (list label reader source executor executor)))))))
-      (expect compared :to-equal 45))))
+      (expect compared :to-equal 60)))))))
+
+(describe "safety classification loads no function file"
+  (it "leaves function files unread at Enter, at the gate, and for the rerun check"
+    (host-kit:with-temporary-directory (directory)
+      (let ((marker (merge-pathnames "loaded" directory)))
+        (%safety-view-write-function-file directory "echo" marker)
+        ;; Enter and the rerun check classify in the REPL context.
+        (with-repl-test-state
+          (let ((nshell.presentation::*environment*
+                  (nshell.domain.environment:env-set
+                   (nshell.domain.environment:make-environment)
+                   "XDG_CONFIG_HOME" (namestring directory) t))
+                (nshell.presentation::*functions* (make-hash-table :test #'equal)))
+            (expect (nshell.presentation::%assistant-proposal-level "echo hi")
+                    :to-be :confirm)
+            (expect (getf (nshell.presentation::%rerun-command-assessment "echo hi")
+                          :classification)
+                    :to-be :confirm)
+            (expect (%safety-view-registered-count
+                     (nshell.presentation::%make-repl-shell-context))
+                    :to-equal 0)))
+        ;; The gate classifies the line just before it runs.
+        (let ((context (%safety-view-autoload-context directory)))
+          (let ((nshell.application:*execution-origin* :proposal)
+                (nshell.application:*execution-approval* :safe)
+                (nshell.application::*execution-gate-parent-kind* nil)
+                (nshell.application:*execution-gate-stopped-p* nil))
+            (expect (second (nshell.application::%assistant-execution-gate
+                             context
+                             (nshell.domain.parsing:make-command-node "echo" '("hi"))))
+                    :to-equal 126))
+          (expect (%safety-view-registered-count context) :to-equal 0))
+        (expect (probe-file marker) :to-be nil))))
+
+  (it "lets the executor load and run the function after a confirm approval"
+    (host-kit:with-temporary-directory (directory)
+     (%safety-view-call-restoring-user-functions
+      '("echo")
+      (lambda ()
+      (let ((marker (merge-pathnames "loaded" directory)))
+        (%safety-view-write-function-file directory "echo" marker)
+        (let ((context (%safety-view-autoload-context directory)))
+          ;; A safe approval stops at the gate: nothing is loaded.
+          (let ((nshell.application:*execution-origin* :proposal)
+                (nshell.application:*execution-approval* :safe)
+                (nshell.application:*execution-gate-stopped-p* nil))
+            (expect (nth-value 1 (nshell.application:execute-ast-in-context
+                                  context
+                                  (nshell.domain.parsing:make-command-node "echo" nil)))
+                    :to-equal 126)
+            (expect (probe-file marker) :to-be nil))
+          ;; A confirm approval passes the gate; then the executor loads the
+          ;; file and runs the function it defines.
+          (let ((nshell.application:*execution-origin* :proposal)
+                (nshell.application:*execution-approval* :confirm)
+                (nshell.application:*execution-gate-stopped-p* nil))
+            (nshell.application:execute-ast-in-context
+             context (nshell.domain.parsing:make-command-node "echo" nil))
+            (expect nshell.application:*execution-gate-stopped-p* :to-be nil))
+          (expect (and (probe-file marker) t) :to-be t)
+          (expect (%safety-view-registered-count context) :to-equal 1))))))))

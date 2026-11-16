@@ -99,11 +99,10 @@ send Meta or an Escape prefix if Alt bindings do not register.
 
 ### Structural editing
 
-Structural editing moves through S-expressions, deletes a form at the cursor,
-or moves a list boundary around a neighboring form. It edits the input buffer
-without evaluating it. `up-list` leaves the surrounding list, and `down-list`
-enters a child list. Slurp pulls a neighboring form into a list; barf moves a
-form out. Deleted text can be restored with `Ctrl-Y`.
+Structural editing moves through S-expressions and deletes a form at the cursor.
+It edits the input buffer without evaluating it. `up-list` leaves the surrounding
+list, and `down-list` enters a child list. Deleted text can be restored with
+`Ctrl-Y`.
 
 | Key | Action |
 | --- | --- |
@@ -113,19 +112,6 @@ form out. Deleted text can be restored with `Ctrl-Y`.
 | `alt-ctrl-d` | `down-list` |
 | `alt-ctrl-k` | `delete-forward-sexp` |
 | `alt-ctrl-delete` | `delete-backward-sexp` |
-| `alt-ctrl-right` | `slurp-forward` |
-| `alt-ctrl-left` | `slurp-backward` |
-| `shift-alt-ctrl-right` | `barf-forward` |
-| `shift-alt-ctrl-left` | `barf-backward` |
-
-### Capturing the last command's output
-
-Press `Ctrl-X` after a command to request a captured rerun. nshell shows the
-command, its safety classification (`safe`, `confirm`, or `block`), and the
-reason. A blocked command or one that requires a live terminal cannot run
-through the capture runner. Press the displayed confirmation binding again to
-run an eligible command. Any other key or a terminal resize cancels the
-confirmation. The command runs again; nshell does not replay saved output.
 
 ### Vi mode
 

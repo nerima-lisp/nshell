@@ -1610,11 +1610,11 @@ The scanner ignores delimiter-like characters inside strings, comments, escaped 
 
 WP-E04 owns `apply-sexp-structural-edit(state scan-result action)`, which
 returns an updated input state and output event. `action` is one of
-`:forward-sexp`, `:backward-sexp`, `:delete-forward-sexp`,
-`:delete-backward-sexp`, `:slurp-forward`, `:slurp-backward`, `:barf-forward`,
-or `:barf-backward`. E04 consumes the L01 full-buffer scan result and does not
+`:forward-sexp`, `:backward-sexp`, `:delete-forward-sexp`, or
+`:delete-backward-sexp`. E04 consumes the L01 full-buffer scan result and does not
 tokenize the buffer again. E03 owns scanner invocation and the generic input
-reducer; E04 owns its named action entries and branches in the dispatch tables.
+reducer; E04 owns the remaining action entries and branches in the dispatch
+tables.
 
 WP-E05 owns `highlight-line(input &key scan-result cursor-position
 absolute-start)`. The input is one physical line; scanner spans and cursor

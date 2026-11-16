@@ -3,11 +3,12 @@
 ## Result
 
 The PTY candidate did not pass the production gate and is not connected to the
-foreground command path. The fallback remains active while the PTY/ring-buffer
-implementation is retained for a later retry. FR-010 is completed through the
-safe fallback alternative: press `Ctrl-X` twice to confirm a one-key rerun of
-the previous command in output-capture mode, after which the captured output is
-available to the AI context.
+foreground command path. At the time FR-010 was completed, the pre-F4
+captured-rerun fallback let users confirm a one-key rerun of the previous
+command by pressing `Ctrl-X` twice. It used output-capture mode, and its
+captured output was available to the AI context. F4 later removed this
+captured-rerun path. It was separate from the OSC 52 clipboard-copy fallback.
+The PTY/ring-buffer implementation is retained for a later retry.
 
 ## Root cause
 
@@ -65,12 +66,13 @@ evidence for the PTY harness but do not replace the named e2e/integration gate.
   shell usability worked, but direct foreground execution exposed a
   `PTY-PROCESS` type error because the production spawn wrapper had not yet
   been connected to the PTY runner. The wrapper was corrected in the retry,
-  but Ctrl-Z/fg recovery still failed, so the production route was restored to
-  the fallback.
+  but Ctrl-Z/fg recovery still failed, so the production route was restored at
+  that time to the captured-rerun fallback described above. F4 later removed
+  that path.
 
 ## Follow-up blocker
 
 Before declaring the PTY foreground execution production-ready, complete the
 non-sandboxed suite, the Linux integration job, and the exact tmux checklist with
-a usable command path while preserving the assertions. The fallback alternative
-does not claim that the PTY foreground route is production-ready.
+a usable command path while preserving the assertions. These unresolved checks
+do not establish the PTY foreground route as production-ready.

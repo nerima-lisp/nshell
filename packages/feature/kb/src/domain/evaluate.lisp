@@ -364,3 +364,25 @@ can run; the rule reads no PATH itself.  Each fix is a plist with :INPUT,
                         :rule rule)))
               (stable-sort (sort fixes #'string< :key #'first)
                            #'< :key #'second)))))
+
+(defun classify-rule-catalog (&optional (rulebase *builtin-classify-rulebase*))
+  "Return (RULE LEVEL TEXT) for each classify/4 rule RULEBASE states, in
+clause order and once per RULE and LEVEL.  TEXT is NIL when the rule takes its
+text from the input it judges.  Clauses that pass on a nested rule name are
+not rules of their own and are left out."
+  (let ((catalog '()))
+    (when rulebase
+      (dolist (clause (cl-prolog-kit:rulebase-visible-clauses rulebase))
+        (let ((head (cl-prolog-kit:clause-head clause)))
+          (when (and (consp head)
+                     (eq (first head) 'classify)
+                     (= (length head) 5)
+                     (keywordp (third head))
+                     (stringp (fourth head)))
+            (destructuring-bind (level rule text) (cddr head)
+              (unless (find-if (lambda (entry)
+                                 (and (string= rule (first entry))
+                                      (eq level (second entry))))
+                               catalog)
+                (push (list rule level (and (stringp text) text)) catalog)))))))
+    (nreverse catalog)))

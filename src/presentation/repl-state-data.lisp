@@ -7,8 +7,6 @@
 (defvar *last-command-output* nil)
 (defvar *last-command-text* nil)
 (defvar *capture-command-output-p* nil)
-(defvar *rerun-confirmation-pending-p* nil)
-(defvar *rerun-command-assessment* nil)
 (defvar *history* nil)
 (defvar *config* nil)
 (defvar *kb* nil)

@@ -143,7 +143,9 @@ so it is marked quoted and never read as an assignment or a prefix of one."
   "True while executing a line that came from an AI proposal or agent step."
   (member *execution-origin* '(:proposal :agent) :test #'eq))
 
-(defun %assistant-execution-gate (context ast)
+(defun %assistant-execution-gate (context ast &key (path :bare-line))
+  "PATH names the executor that runs AST, as for classify-ast: :READER for a
+reader stage, whose words carry no redirects and no assignment prefix."
   (when (%assistant-gate-active-p)
     (labels ((rank (value)
                (case (nshell.feature.assistant:assistant-safety-result-classification value)
@@ -163,7 +165,9 @@ so it is marked quoted and never read as an assignment or a prefix of one."
                    (let ((effective (%assistant-effective-ast-for-gate context value)))
                      (if (nshell.feature.assistant:assistant-safety-result-p effective)
                          effective
-                         (nshell.feature.assistant:classify-ast effective))))))
+                         ;; An alias expansion is a parsed command line.
+                         (nshell.feature.assistant:classify-ast
+                          effective :path (if (eq effective value) path :bare-line)))))))
       (let* ((classification (classify-effective ast))
              (agent-p (eq *execution-origin* :agent))
              (approval (and (or (null *execution-gate-parent-kind*)

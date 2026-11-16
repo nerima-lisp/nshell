@@ -1017,7 +1017,8 @@ running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
      context
      (if (rest command-nodes)
          (nshell.domain.parsing:make-pipeline-node command-nodes)
-         (first command-nodes)))))
+         (first command-nodes))
+     :path :reader)))
 
 (defun %reader-gate-evaluated-stages (context evaluated-stages parent-kind)
   (when (%assistant-gate-active-p)
@@ -1043,7 +1044,7 @@ running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
           (nshell.domain.parsing:command-node-assignment-words ast)))
     (when assignment-words
       (let ((refusal (and (%assistant-gate-active-p)
-                          (%assistant-execution-gate context ast))))
+                          (%assistant-execution-gate context ast :path :reader))))
         (when refusal
           (return-from %reader-execute-foreground-in-context
             (%reader-gate-refusal context refusal 1))))

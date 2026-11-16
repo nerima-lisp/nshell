@@ -13,10 +13,20 @@
 ;;; The evaluator describes one simple command as facts about SUBJECT:
 ;;;   command(S, Basename)     invoked-as(S, Word)    arguments(S, List)
 ;;;   argument(S, Word)        subcommand(S, Word)    option(S, Word)
-;;;   operand(S, Word)         redirect(S, Target)
+;;;   operand(S, Word)         word(S, Word)
+;;; ARGUMENTS are argv after the command word, with the redirects split off.
+;;; WORD holds every word as written, redirect targets included.  From the
+;;; redirects in the AST it adds
+;;;   redirect(S, Target)               an output redirect target
+;;;   redirect-not-allowed(S, Text)     a redirect outside the safe forms
+;;; and from matching the arguments against +safe-command-specs+ (2.2)
+;;;   spec-command(S)                   the command word has a spec row
+;;;   spec-match(S)                     every argument matched it
+;;;   argument-not-allowed(S, Text)     the words that did not match
 ;;; and the results it obtained by classifying embedded command text:
-;;;   wraps(S)                       a wrapper, eval, or sh -c target was read
-;;;   nested(S, Level, Rule, Text)   from that target or a substitution
+;;;   wraps(S)                       S runs another command (2.4)
+;;;   opaque-wrapper(S)              ... and what that command sees is opaque
+;;;   nested(S, Level, Rule, Text)   from that command or a substitution
 ;;;   embedded(S, Level, Rule, Text) from a known command name in the operands
 ;;;   unparsable(S, Text)            text that could not be read as a command
 ;;; S-expression proposals add form-redirect(S), sexp-unforced(S), and
@@ -24,17 +34,71 @@
 ;;; (`NAME=value cmd', `env NAME=value cmd') adds assignment(S, Name) per
 ;;; name and wrapper-option(S, Option) per option given to env.
 
+(defparameter +safe-command-specs+
+  '(;; --- read-only commands (D-P1-5 2.6) -----------------------------------
+    ;; A row matches the command word exactly (a path such as /bin/ls does
+    ;; not).  Keys: :flags (short options without a value), :value-flags,
+    ;; :long, :value-long, :exact (whole words), :positionals (:any or a
+    ;; maximum), :listing-options (options that allow any operands),
+    ;; :subcommands, and :grammar for find and echo/printf.
+    ("ls" :flags "1aAlhdFRtSrin" :long ("--all" "--color")
+          :exact ("--color=auto" "--color=never" "--color=always")
+          :positionals :any)
+    ("cat" :flags "nbvets" :positionals :any)
+    ("file" :flags "bLhks" :long ("--mime-type" "--mime-encoding")
+            :positionals :any)
+    ("rg" :flags "iSsvnNclLwxFoHu."
+          :value-flags (("e" :any) ("g" :any) ("t" :any) ("T" :any)
+                        ("A" :count) ("B" :count) ("C" :count) ("m" :count))
+          :long ("--hidden" "--no-ignore" "--files" "--json")
+          :exact ("--color=auto" "--color=never" "--color=always")
+          :value-long (("--glob" :any) ("--type" :any))
+          :positionals :any)
+    ("find" :grammar :find
+            :leading-options ("-H" "-L" "-P" "-x")
+            :primaries ("-empty" "-prune" "-print" "-print0" "-ls" "-not" "!"
+                        "-o" "-a" "(" ")")
+            :value-primaries ("-name" "-iname" "-path" "-ipath" "-type"
+                              "-maxdepth" "-mindepth" "-mtime" "-mmin" "-newer"
+                              "-size" "-perm" "-user"))
+    ("echo" :grammar :echo)
+    ("printf" :grammar :echo)
+    ("git" :subcommands
+           (("status" :flags "sbv"
+                      :exact ("-u" "-uno" "-unormal" "-uall"
+                              "--porcelain=v1" "--porcelain=v2")
+                      :long ("--short" "--branch" "--porcelain" "--long"
+                             "--verbose" "--ignored")
+                      :positionals :any)
+            ("log" :flags "p" :value-flags (("n" :count))
+                   :long ("--oneline" "--decorate" "--stat" "--name-only"
+                          "--name-status" "--graph" "--all" "--follow"
+                          "--no-merges")
+                   :value-long (("--pretty" :git-format) ("--format" :git-format))
+                   :positionals :any)
+            ("show" :flags "p"
+                    :long ("--stat" "--patch" "--name-only" "--name-status"
+                           "--no-patch")
+                    :value-long (("--pretty" :git-format) ("--format" :git-format))
+                    :positionals :any)
+            ("diff" :flags "p"
+                    :long ("--stat" "--shortstat" "--numstat" "--cached"
+                           "--staged" "--name-only" "--name-status" "--patch"
+                           "--no-ext-diff" "--no-textconv")
+                    :positionals :any)
+            ;; An operand creates a branch unless --list makes it a pattern.
+            ("branch" :flags "arv" :long ("--list" "--show-current")
+                      :positionals 0 :listing-options ("--list"))
+            ("remote" :flags "v" :long ("--verbose") :positionals 0))))
+  "The closed-world allow list (D-P1-5 2.2).  A command is safe only when
+its row matches every argument; anything else is confirm.  Adding a row
+changes no other command.")
+
 (defparameter *builtin-classify-rulebase*
   (cl-prolog-kit:prolog
     ;; --- vocabulary ---------------------------------------------------------
-    ((read-only-name "ls")) ((read-only-name "pwd")) ((read-only-name "cat"))
-    ((read-only-name "head")) ((read-only-name "tail")) ((read-only-name "wc"))
-    ((read-only-name "stat")) ((read-only-name "file")) ((read-only-name "du"))
-    ((read-only-name "df")) ((read-only-name "which")) ((read-only-name "type"))
-    ((read-only-name "grep")) ((read-only-name "rg")) ((read-only-name "find"))
-    ((read-only-name "echo")) ((read-only-name "printf"))
-    ;; Names matched as typed (a path such as /tmp/x/ls is not read-only).
-    ((known-command-name "git")) ((known-command-name "source"))
+    ;; Names matched as typed.  Read-only commands are the spec table above.
+    ((known-command-name "source"))
     ;; Basenames whose own rules always decide them.
     ((covered-command "rm")) ((covered-command "curl"))
     ((network-command "curl")) ((network-command "wget")) ((network-command "ssh"))
@@ -50,12 +114,10 @@
     ((root-path ?p) (:when (root-path-p ?p)))
     ((harmless-environment-name ?n) (:when (harmless-environment-name-p ?n)))
     ((deletes-root ?c) (effect ?c (deletes ?p)) (root-path ?p))
-    ((read-only-command ?c) (invoked-as ?c ?n) (read-only-name ?n))
-    ((read-only-command ?c)
-     (invoked-as ?c "git") (arguments ?c ?args)
-     (:when (read-only-git-arguments-p ?args)))
+    ;; The only way to safe: every argument matched the spec (2.1 item 1).
+    ((read-only-command ?c) (spec-match ?c))
     ((known-command ?c) (wraps ?c))
-    ((known-command ?c) (read-only-command ?c))
+    ((known-command ?c) (spec-command ?c))
     ((known-command ?c) (invoked-as ?c ?n) (known-command-name ?n))
     ((known-command ?c) (command ?c ?n) (covered-command ?n))
 
@@ -78,6 +140,8 @@
     ((classify ?c :confirm "classify/git-not-read-only"
                "writing, external command execution, or configuration injection requires confirmation")
      (invoked-as ?c "git") (not (read-only-command ?c)))
+    ((classify ?c :confirm "classify/argument-not-allowed" ?text)
+     (argument-not-allowed ?c ?text) (not (invoked-as ?c "git")))
     ((classify ?c :confirm "classify/device-write"
                "writing a device can destroy data")
      (command ?c "dd") (argument ?c ?a) (:when (string-prefix-p "of=/dev/" ?a)))
@@ -98,15 +162,6 @@
     ((classify ?c :confirm "classify/output-redirect"
                "output redirection or process substitution requires confirmation")
      (argument ?c ?w) (:when (contains-p ">" ?w)))
-    ((classify ?c :confirm "classify/find-exec"
-               "find actions can execute commands and require confirmation")
-     (invoked-as ?c "find") (argument ?c ?w) (:when (find-exec-action-p ?w)))
-    ((classify ?c :confirm "classify/find-write"
-               "find actions can write files and require confirmation")
-     (invoked-as ?c "find") (argument ?c ?w) (:when (find-write-action-p ?w)))
-    ((classify ?c :confirm "classify/ripgrep-preprocessor"
-               "ripgrep can execute external preprocessors and requires confirmation")
-     (invoked-as ?c "rg") (argument ?c ?w) (:when (ripgrep-preprocessor-option-p ?w)))
     ((classify ?c :confirm "classify/environment-assignment"
                "assigning this environment variable can change what the command runs")
      (assignment ?c ?n) (not (harmless-environment-name ?n)))

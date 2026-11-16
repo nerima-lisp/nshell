@@ -80,6 +80,7 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 ## 非対話で詰まらないように
 
 - 機械向けモード (--json・--serve・MCP) と NSHELL_AGENT=1 のときは、PAGER=cat・GIT_PAGER=cat・TERM=dumb・NO_COLOR=1・stdin は /dev/null を既定にする。
+- stdin を常に /dev/null にするのは、エージェントの stdin が閉じないパイプであることが多く、端末のときだけに絞ると子がそのパイプを読んで止まる経路が残るため。
 - 子プロセスが端末からの入力を待ったら E_WAITING_FOR_INPUT で止め、最後の出力 (例: Password:) を返す。子を PTY と背景プロセスグループで動かし、SIGTTIN と WUNTRACED で検出する。
 - vim・less・top など全画面のプログラムは E_INTERACTIVE_PROGRAM。コマンド名の表と `ESC[?1049h` で検出する。代わりの書き方 (git --no-pager など) を fixes に。
 - timeout は必ずかかる。--timeout は実行全体の期限で、--json の既定は 120 秒 (initialize の応答で知らせる)。超えたらプロセスグループごと止めて E_TIMEOUT、そこまでの出力は返す。

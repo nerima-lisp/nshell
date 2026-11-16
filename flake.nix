@@ -817,7 +817,7 @@
         ./docs/src/reference/error-codes.md
         ./docs/design/conformance/language-probes-v0.7.0.json
         ./docs/design/language
-        ./docs/design/inventory/I4-builtins.md
+        ./docs/design/inventory
         ./docs/design/proposal/08-robustness.md
         ./docs/design/tasks/P2-language-and-cuts.md
         ./t/golden/bug-report.txt

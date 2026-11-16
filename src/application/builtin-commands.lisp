@@ -198,34 +198,39 @@
       (%builtin-usage "not" "not command [args...]" 2)))
 
 (defvar *exec-exit-function*
-  (lambda (status) (sb-ext:quit :unix-status status))
-  "Function of the exit status that ends the shell after exec. The --json
-runner binds it so exec ends the run, not the process, before the envelope is
-printed.")
+  (lambda (program) (sb-ext:quit :unix-status (funcall program)))
+  "Function that exec calls with the exec'd program, a function of no
+arguments that runs it and returns its exit status, to run it and end the
+shell. The --json runner binds it so exec ends the run, not the process,
+before the envelope is printed.")
 
 (defvar *subshell-exit-function* nil
   "Inside a subshell-like context (a pipeline stage, a process substitution's
-stage, or a command substitution), a function of a status that ends only that
-context: see CALL-WITH-SUBSHELL-EXIT. NIL outside every such context.")
+stage, or a command substitution), a function that takes the exec'd program as
+*EXEC-EXIT-FUNCTION* does, runs it, and ends only that context: see
+CALL-WITH-SUBSHELL-EXIT. NIL outside every such context.")
 
 (defun call-with-subshell-exit (thunk on-exit)
   "Call THUNK as a subshell-like context and return its values. While THUNK
-runs, *SUBSHELL-EXIT-FUNCTION* unwinds THUNK, running its cleanup, and then
-returns the values of ON-EXIT called with the status it was given. The
-innermost context wins, so a context nested in another one ends alone.
-*EXEC-EXIT-FUNCTION* decides whether exec uses it; the default quits the
-process instead."
+runs, *SUBSHELL-EXIT-FUNCTION* runs the program it is given through
+RUN-DELIVERING-CAPTURED-OUTPUT, so no output the context produced stays
+behind, unwinds THUNK, running its cleanup, and then returns the values of
+ON-EXIT called with the program's status. The innermost context wins, so a
+context nested in another one ends alone. *EXEC-EXIT-FUNCTION* decides whether
+exec uses it; the default quits the process instead."
   (let* ((tag (list :subshell-exit))
          (status (catch tag
                    (return-from call-with-subshell-exit
-                     (let ((*subshell-exit-function*
-                             (lambda (status) (throw tag status))))
+                     (let ((*output-captures* (cons :subshell *output-captures*))
+                           (*subshell-exit-function*
+                             (lambda (program)
+                               (throw tag (run-delivering-captured-output program)))))
                        (funcall thunk))))))
     (funcall on-exit status)))
 
 (defun %exec-and-exit (command args)
   (funcall *exec-exit-function*
-           (nshell.infrastructure.acl:run-external-exec command args)))
+           (lambda () (nshell.infrastructure.acl:run-external-exec command args))))
 
 (define-builtin %builtin-exec (context args) (context)
   (if args

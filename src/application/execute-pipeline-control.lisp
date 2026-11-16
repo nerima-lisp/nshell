@@ -30,19 +30,19 @@ cons; pipeline stage threads share it, so a refusal in a stage reaches it.")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defmacro %with-output-code-accumulator ((output code) &body body)
-    "Accumulate string chunks in OUTPUT and track final exit CODE.
-Builds the final output string by joining all pushed chunks in order."
-    `(let ((,output nil)
-           (,code 0))
-       ,@body
-       (values (apply #'concatenate 'string (nreverse ,output)) ,code)))
+    "Collect string chunks in OUTPUT, an output collector, and track final exit
+CODE. Returns the chunks joined in order and CODE."
+    `(let ((,code 0))
+       (with-output-collector (,output)
+         ,@body
+         (values (get-output-stream-string ,output) ,code))))
 
   (defmacro %collect-execution-result ((output code) form &optional (code-value 'exit-code))
-    "Execute FORM, push its output chunk onto OUTPUT, and set CODE."
+    "Execute FORM, add its output chunk to OUTPUT, and set CODE."
     `(multiple-value-bind (chunk exit-code)
          ,form
        (when chunk
-         (push chunk ,output))
+         (write-string chunk ,output))
        (setf ,code ,code-value)))
 
   (defmacro %handle-loop-control (iteration-block)
@@ -426,51 +426,51 @@ following the data/logic separation principle."
 (defun %execute-reader-sequence-node-in-context
     (context ast stage-evaluator &optional command-failure-policy)
   (let ((previous-separator nil)
-        (output nil)
         (last-status (shell-context-last-exit-code context))
         (last-result nil))
-    (dolist (entry (nshell.domain.parsing:sequence-node-command-separators ast))
-      (let* ((command
-               (nshell.domain.parsing:sequence-node-command-separator-command entry))
-             (separator
-               (nshell.domain.parsing:sequence-node-command-separator-separator entry))
-             (skip-p
-               (or (and (eq previous-separator :and) (/= last-status 0))
-                   (and (eq previous-separator :or) (= last-status 0)))))
-        (unless skip-p
-          (let ((*command-test-position-p*
-                  (and separator (or (eq separator :and) (eq separator :or)))))
-            (multiple-value-bind (value status pipeline-result)
-                (cond
-                  ((eq separator :amp)
-                   (%reader-spawn-background-node-in-context
-                    context command stage-evaluator))
-                  (command-failure-policy
-                   (let ((item-pipeline-result nil))
-                     (multiple-value-bind (value status)
-                         (funcall
-                          command-failure-policy
-                          command
-                          (lambda ()
-                            (multiple-value-bind (value status pipeline-result)
-                                (execute-reader-ast-in-context
-                                 context command stage-evaluator)
-                              (setf item-pipeline-result pipeline-result)
-                              (values value status pipeline-result))))
-                       (values value status item-pipeline-result))))
-                  (t
-                   (execute-reader-ast-in-context
-                    context command stage-evaluator)))
-              (when value
-                (push value output))
-              (setf last-status status
-                    last-result pipeline-result)
-              (%record-last-exit-code context status))))
-        (setf previous-separator separator)
-        (when (or *loop-control-signal*
-                  (not (shell-context-running context)))
-          (return))))
-    (values (apply (function concatenate) (quote string) (nreverse output))
-            last-status
-            (or last-result
-                (make-pipeline-execution-result last-status nil nil)))))
+    (with-output-collector (output)
+      (dolist (entry (nshell.domain.parsing:sequence-node-command-separators ast))
+        (let* ((command
+                 (nshell.domain.parsing:sequence-node-command-separator-command entry))
+               (separator
+                 (nshell.domain.parsing:sequence-node-command-separator-separator entry))
+               (skip-p
+                 (or (and (eq previous-separator :and) (/= last-status 0))
+                     (and (eq previous-separator :or) (= last-status 0)))))
+          (unless skip-p
+            (let ((*command-test-position-p*
+                    (and separator (or (eq separator :and) (eq separator :or)))))
+              (multiple-value-bind (value status pipeline-result)
+                  (cond
+                    ((eq separator :amp)
+                     (%reader-spawn-background-node-in-context
+                      context command stage-evaluator))
+                    (command-failure-policy
+                     (let ((item-pipeline-result nil))
+                       (multiple-value-bind (value status)
+                           (funcall
+                            command-failure-policy
+                            command
+                            (lambda ()
+                              (multiple-value-bind (value status pipeline-result)
+                                  (execute-reader-ast-in-context
+                                   context command stage-evaluator)
+                                (setf item-pipeline-result pipeline-result)
+                                (values value status pipeline-result))))
+                         (values value status item-pipeline-result))))
+                    (t
+                     (execute-reader-ast-in-context
+                      context command stage-evaluator)))
+                (when value
+                  (write-string value output))
+                (setf last-status status
+                      last-result pipeline-result)
+                (%record-last-exit-code context status))))
+          (setf previous-separator separator)
+          (when (or *loop-control-signal*
+                    (not (shell-context-running context)))
+            (return))))
+      (values (get-output-stream-string output)
+              last-status
+              (or last-result
+                  (make-pipeline-execution-result last-status nil nil))))))

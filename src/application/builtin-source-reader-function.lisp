@@ -19,7 +19,6 @@
 
 (define-value-struct %source-lines-step-result
     ((remaining-lines nil :type list)
-     (output-chunks nil :type list)
      (exit-code 0 :type integer)
      (stop-p nil :type boolean)))
 

@@ -227,16 +227,16 @@
   (handler-case
       (let ((status 0))
         (values
-         (with-output-to-string (output)
-           (let ((*standard-output* output))
-             (dolist (reader-result
-                      (nshell.domain.parsing:read-submission
-                       (%string-join args " ")
-                       :reader-context :auto))
-               (multiple-value-bind (value next-status)
-                   (evaluate-reader-result-in-context context reader-result)
-                 (declare (ignore value))
-                 (setf status next-status)))))
+         (%call-capturing-standard-output
+          (lambda ()
+            (dolist (reader-result
+                     (nshell.domain.parsing:read-submission
+                      (%string-join args " ")
+                      :reader-context :auto))
+              (multiple-value-bind (value next-status)
+                  (evaluate-reader-result-in-context context reader-result)
+                (declare (ignore value))
+                (setf status next-status)))))
          status))
     (nshell.domain.parsing:sexp-reader-error (condition)
       (let* ((cause

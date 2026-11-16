@@ -74,7 +74,7 @@ SBCL thread otherwise sees only global values.")
   ;; The car lists every process group the run created (*PROCESS-GROUP-LOG*).
   (group-log (list nil)))
 
-(defun %exec-exit-function (run tag out err)
+(defun %exec-exit-function (run tag)
   "Return the *EXEC-EXIT-FUNCTION* of RUN, which gives exec under --json the
 meaning it has in a POSIX shell.
 
@@ -83,20 +83,24 @@ substitution, or a command substitution) ends only that context, with the
 exec'd program's status as the context's status, and the run goes on: a
 pipeline still joins and closes all its stages and has its normal status (the
 last stage's, or under pipefail the first nonzero one), and a command
-substitution yields the exec'd program's output.
+substitution yields what its commands wrote before exec followed by the
+exec'd program's output.
 
 exec anywhere else (at top level, in a function called there, or in a file
 sourced from there) ends the run with the program's status: no later command
-runs. It records the status, passes on the captured output, and throws to
-TAG; the unwinding runs every cleanup of the commands it leaves, so their
-process substitutions are still waited for and closed before the envelope is
-made."
-  (lambda (status)
+runs. It records the status and throws to TAG; the unwinding runs every
+cleanup of the commands it leaves, so their process substitutions are still
+waited for and closed before the envelope is made.
+
+Either way the output that commands before exec produced and that is still
+held in the process reaches its destination before the program's output (see
+RUN-DELIVERING-CAPTURED-OUTPUT)."
+  (lambda (program)
     (if nshell.application::*subshell-exit-function*
-        (funcall nshell.application::*subshell-exit-function* status)
+        (funcall nshell.application::*subshell-exit-function* program)
         (progn
-          (setf (json-run-status run) status)
-          (nshell.application::flush-pending-captured-output out err)
+          (setf (json-run-status run)
+                (nshell.application::run-delivering-captured-output program))
           (throw tag :exec)))))
 
 (defun %worker-bindings (run tag out err timeout agent-p)
@@ -107,7 +111,7 @@ made."
              (push value values)))
       (bind '*standard-output* out)
       (bind '*error-output* err)
-      (bind 'nshell.application::*exec-exit-function* (%exec-exit-function run tag out err))
+      (bind 'nshell.application::*exec-exit-function* (%exec-exit-function run tag))
       ;; Every process group the run creates, so the deadline can stop a
       ;; group whose leader was already reaped.
       (bind 'nshell.infrastructure.acl:*process-group-log* (json-run-group-log run))
@@ -139,7 +143,7 @@ true when it has exited."
     (sb-thread:join-thread worker :default nil :timeout *json-unwind-seconds*))
   (not (sb-thread:thread-alive-p worker)))
 
-(defun %park-and-stop (worker tag before log out err)
+(defun %park-and-stop (worker tag before log)
   "Stop the run in WORKER after its deadline; see the comment at the top.
 Return true when the worker has exited."
   (let ((parked (sb-thread:make-semaphore))
@@ -151,7 +155,7 @@ Return true when the worker has exited."
            (sb-thread:signal-semaphore parked)
            (sb-thread:wait-on-semaphore release :timeout 10)
            ;; Output the stopped command had captured but not yet passed on.
-           (nshell.application::flush-pending-captured-output out err)
+           (nshell.application::flush-pending-captured-output)
            ;; The worker may already have left the CATCH for TAG.
            (ignore-errors (throw tag :deadline))))
       (error () nil))
@@ -201,8 +205,7 @@ Return true when the worker has exited."
         (when (sb-thread:thread-alive-p worker)
           (setf (json-run-timed-out-p run) t
                 (json-run-worker-alive-p run)
-                (not (%park-and-stop worker tag before (json-run-group-log run)
-                                     out err))))))
+                (not (%park-and-stop worker tag before (json-run-group-log run)))))))
     run))
 
 ;;; Envelope

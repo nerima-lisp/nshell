@@ -237,7 +237,8 @@ is none.  It only looks for the file; it reads nothing."
             (unless (eq (nshell.domain.parsing:scan-result-status
                          scan-result)
                         :complete)
-              (error "Function file ~a is incomplete." path))
+              (error (nshell.domain.parsing:scan-result-reader-error
+                      scan-result :source-path path)))
             (let* ((reader-results
                     (nshell.domain.parsing:read-submission
                      source :reader-context :auto :source-path path))

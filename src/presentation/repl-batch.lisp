@@ -113,8 +113,10 @@ SCRIPT-ARGS are exposed as $argv for --command."
             (nshell.application:collect-source-lines stream))))
 
 (defun %report-repl-script-source-diagnostic (condition path)
+  ;; The condition can come from another file, such as an autoloaded
+  ;; function file; locate it in the text of the file it names.
   (format *error-output* "~a~%"
-          (format-sexpr-source-diagnostic
+          (format-sexpr-source-diagnostic-for-input
            condition (%read-repl-script-source-text path)))
   (let ((span
           (and (typep condition 'nshell.domain.parsing:sexp-reader-error)

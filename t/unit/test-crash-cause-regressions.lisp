@@ -3,10 +3,11 @@
 ;;; earlier on the same command line.
 (in-package #:nshell/test)
 
-(defun %crash-cause-run-script (source &key path-directory)
+(defun %crash-cause-run-script (source &key path-directory config-home)
   "Run SOURCE as a script file under a fresh XDG_STATE_HOME. Return the exit
 status, the standard output, the error output, and the crash log count. When
-PATH-DIRECTORY is given, PATH holds only that directory while the script runs."
+PATH-DIRECTORY is given, PATH holds only that directory while the script runs;
+CONFIG-HOME likewise replaces XDG_CONFIG_HOME."
   (with-crash-state-home (state-home)
     (with-repl-test-state
       (host-kit:with-temporary-directory (root)
@@ -19,15 +20,17 @@ PATH-DIRECTORY is given, PATH holds only that directory while the script runs."
                   (with-output-to-string (*error-output*)
                     (setf output
                           (with-output-to-string (*standard-output*)
-                            (flet ((run ()
-                                     (setf status
-                                           (nshell.presentation::run-repl-script
-                                            script))))
-                              (if path-directory
-                                  (with-crash-test-environment
-                                      (("PATH" (namestring path-directory)))
-                                    (run))
-                                  (run))))))))
+                            (with-crash-test-environment
+                                (("PATH" (if path-directory
+                                             (namestring path-directory)
+                                             (host-kit:getenv "PATH")))
+                                 ("XDG_CONFIG_HOME"
+                                  (if config-home
+                                      (namestring config-home)
+                                      (host-kit:getenv "XDG_CONFIG_HOME"))))
+                              (setf status
+                                    (nshell.presentation::run-repl-script
+                                     script))))))))
             (values status output error-output
                     (length (%crash-log-files state-home)))))))))
 
@@ -131,6 +134,29 @@ Return the exit status, the error output, and the crash log count."
       (expect "" :to-equal output)
       (expect (search "Inconsistent command status" error-output) :to-be-null)
       (expect (search "Inconsistent command status" output) :to-be-null)))
+
+  (it "an-incomplete-autoloaded-function-file-is-located-in-that-file"
+    ;; The script has one line; the location must come from the function
+    ;; file's own text. Its lines are joined without the final newline, so
+    ;; the end of the input is the end of line 2, column 12.
+    (host-kit:with-temporary-directory (config-home)
+      (let ((function-file
+              (merge-pathnames "nshell/functions/bug1_incomplete_fn.nsh"
+                               (uiop:ensure-directory-pathname config-home))))
+        (ensure-directories-exist function-file)
+        (with-open-file (stream function-file :direction :output)
+          (format stream "(defun bug1_incomplete_fn ()~%  (echo hi)~%"))
+        (multiple-value-bind (status output error-output crash-logs)
+            (%crash-cause-run-script (format nil "(bug1_incomplete_fn)~%")
+                                     :config-home config-home)
+          (expect 0 :to-equal crash-logs)
+          (expect 1 :to-equal status)
+          (expect "" :to-equal output)
+          (expect (search (format nil "~a:2:12: syntax error [41,41): Incomplete form at the end of the input."
+                                  (namestring function-file))
+                          error-output)
+                  :to-be-truthy)
+          (expect (search "crash log" error-output) :to-be-null)))))
 
   (it "a-reader-error-in-batch-mode-reports-its-message-and-location"
     (dolist (case '(("(echo hi" "<input>: syntax error [8,8): Expected a datum.")

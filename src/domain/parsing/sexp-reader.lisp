@@ -19,7 +19,10 @@
                      (path (sexp-reader-error-source-path condition))
                      (cause (sexp-reader-error-cause condition)))
                  (format stream "~a: syntax error~@[ [~{~d,~d~})~]: ~a"
-                         (if path (namestring path) "<input>")
+                         (typecase path
+                           (null "<input>")
+                           (pathname (namestring path))
+                           (t (princ-to-string path)))
                          (and (consp span) (integerp (first span))
                               (consp (cdr span)) (integerp (second span))
                               (list (first span) (second span)))
@@ -72,6 +75,23 @@ unchanged when it cannot be mapped."
       (t
        (list (first (aref source-map start))
              (second (aref source-map (1- end))))))))
+(defun scan-result-reader-error (scan-result &key source-path source-map)
+  "Return the SEXP-READER-ERROR for SCAN-RESULT, a scan whose status is
+:INVALID or :INCOMPLETE, located at the span where the scanner stopped."
+  (let ((invalid-p (eq (scan-result-status scan-result) :invalid)))
+    (make-condition 'sexp-reader-error
+                    :source-span (if invalid-p
+                                     (scan-result-invalid-span scan-result)
+                                     (scan-result-incomplete-span scan-result))
+                    :source-path source-path
+                    :source-map source-map
+                    :cause (make-condition
+                            'simple-error
+                            :format-control "~A"
+                            :format-arguments
+                            (list (if invalid-p
+                                      "Invalid syntax in this form."
+                                      "Incomplete form at the end of the input."))))))
 (defun %sexp-reader-whitespace-p (character)
   (and character (find character '(#\Space #\Tab #\Newline #\Return #\Page))))
 (defun %sexp-reader-signal (cause source-path source-map span)

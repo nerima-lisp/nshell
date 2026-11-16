@@ -214,23 +214,10 @@
               :source-map source-map)))
       ;; The reader accepted the text but the scanner did not: report it as a
       ;; syntax error of the source, located where the scanner stopped.
-      (let ((status (nshell.domain.parsing:scan-result-status scan-result)))
-        (unless (eq status :complete)
-          (error 'nshell.domain.parsing:sexp-reader-error
-                 :source-span
-                 (if (eq status :invalid)
-                     (nshell.domain.parsing:scan-result-invalid-span scan-result)
-                     (nshell.domain.parsing:scan-result-incomplete-span
-                      scan-result))
-                 :source-path source-path
-                 :source-map source-map
-                 :cause (make-condition
-                         'simple-error
-                         :format-control "~A"
-                         :format-arguments
-                         (list (if (eq status :invalid)
-                                   "Invalid syntax in this form."
-                                   "Incomplete form at the end of the input."))))))
+      (unless (eq (nshell.domain.parsing:scan-result-status scan-result)
+                  :complete)
+        (error (nshell.domain.parsing:scan-result-reader-error
+                scan-result :source-path source-path :source-map source-map)))
       (let ((output nil)
             (code 0))
         (dolist (reader-result reader-results)

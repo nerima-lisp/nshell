@@ -21,8 +21,8 @@
     (push (subseq string start) parts)
     (nreverse parts)))
 
-(defun %brace-range-bounds (content)
-  "Return endpoints and :INTEGER or :CHARACTER for a supported brace range."
+(defun %brace-range-parts (content)
+  "Return endpoint strings and :INTEGER or :CHARACTER without converting them."
   (let ((dots (search ".." content)))
     (when dots
       (let ((lo (subseq content 0 dots))
@@ -30,10 +30,19 @@
         (cond
           ((and (plusp (length lo)) (every #'digit-char-p lo)
                 (plusp (length hi)) (every #'digit-char-p hi))
-           (values (parse-integer lo) (parse-integer hi) :integer))
+           (values lo hi :integer))
           ((and (= 1 (length lo)) (alpha-char-p (char lo 0))
                 (= 1 (length hi)) (alpha-char-p (char hi 0)))
-           (values (char-code (char lo 0)) (char-code (char hi 0)) :character)))))))
+           (values lo hi :character)))))))
+
+(defun %brace-range-bounds (content)
+  "Convert supported range endpoints for enumeration."
+  (multiple-value-bind (lo hi kind) (%brace-range-parts content)
+    (case kind
+      (:integer
+       (values (parse-integer lo) (parse-integer hi) kind))
+      (:character
+       (values (char-code (char lo 0)) (char-code (char hi 0)) kind)))))
 
 (defun %brace-range-expansion (content)
   "Return expansions for a supported numeric or character range, or NIL."
@@ -126,7 +135,7 @@ INPUT carries the same quote and escape protection as for EXPAND-BRACES."
         for close = (%find-matching-brace input open)
         while close
         for content = (subseq input (1+ open) close)
-        when (or (nth-value 2 (%brace-range-bounds content))
+        when (or (nth-value 2 (%brace-range-parts content))
                  (rest (%split-top-level-commas content)))
           return t
         do (setf start (1+ close))

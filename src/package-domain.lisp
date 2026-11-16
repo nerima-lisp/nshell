@@ -194,7 +194,8 @@ filesystem capability, so expansion remains testable without a disk.")
                 #:register-infix-left #:register-infix-right
                 #:register-grouping #:register-ternary
                 #:parse-pratt-all #:parse-failure->string)
-  (:export #:glob-match-p #:glob-pattern-p #:brace-expansion-p #:expand-variables #:expand-tilde #:expand-glob #:expand-all
+  (:export #:glob-match-p #:glob-pattern-p #:brace-expansion-p
+           #:expand-variables #:expand-tilde #:expand-glob #:expand-all
            #:expand-by-quote-style
            #:expand-command-name-fields-by-quote-style
            #:expand-command-name-by-quote-style

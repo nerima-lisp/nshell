@@ -5,18 +5,20 @@
      (column 0 :type fixnum)))
 
 (defun %advance-rendered-string (position text terminal-width)
-  (loop with current = position
-        for grapheme in (cl-tty-kit:string-graphemes (or text ""))
-        do (setf current
-                 (%advance-rendered-grapheme current grapheme terminal-width))
-        finally (return current)))
+  (let ((row (rendered-position-row position))
+        (column (rendered-position-column position)))
+    (dolist (grapheme (cl-tty-kit:string-graphemes (or text "")))
+      (multiple-value-setq (row column)
+        (%advance-rendered-components row column grapheme terminal-width)))
+    (%make-rendered-position row column)))
 
 (defun %advance-rendered-grapheme (position grapheme terminal-width)
-  (if (and (= (length grapheme) 1)
-           (char= (char grapheme 0) #\Newline))
-      (%make-rendered-position (1+ (rendered-position-row position)) 2)
-      (let ((width (%string-visible-width grapheme)))
-        (%advance-rendered-width position width terminal-width))))
+  (multiple-value-bind (row column)
+      (%advance-rendered-components (rendered-position-row position)
+                                    (rendered-position-column position)
+                                    grapheme
+                                    terminal-width)
+    (%make-rendered-position row column)))
 
 (defun %rendered-grapheme-start-position (position grapheme terminal-width)
   (if (and (= (length grapheme) 1)
@@ -32,19 +34,21 @@
              0)
             position))))
 
-(defun %advance-rendered-width (position width terminal-width)
-  (let ((row (rendered-position-row position))
-        (column (rendered-position-column position)))
-    (when (and terminal-width
-               (plusp terminal-width)
-               (> (+ column width) terminal-width))
-      (setf row (1+ row)
-            column 0))
-    (if (and terminal-width
-             (plusp terminal-width)
-             (> width terminal-width))
-        (%make-rendered-position (1+ row) (- width terminal-width))
-        (%make-rendered-position row (+ column width)))))
+(defun %advance-rendered-components (row column grapheme terminal-width)
+  (if (and (= (length grapheme) 1)
+           (char= (char grapheme 0) #\Newline))
+      (values (1+ row) 2)
+      (let ((width (%string-visible-width grapheme)))
+        (when (and terminal-width
+                   (plusp terminal-width)
+                   (> (+ column width) terminal-width))
+          (setf row (1+ row)
+                column 0))
+        (if (and terminal-width
+                 (plusp terminal-width)
+                 (> width terminal-width))
+            (values (1+ row) (- width terminal-width))
+            (values row (+ column width))))))
 
 (defun %initial-rendered-position (prompt-width terminal-width)
   (let ((prompt-width (or prompt-width 0)))
@@ -55,28 +59,50 @@
                                  (1+ (mod (1- prompt-width) terminal-width)))
         (%make-rendered-position 0 prompt-width))))
 
-(defun %rendered-buffer-line-count (text &key suggestion search-suffix terminal-width
+(defun %rendered-buffer-line-count (text &key cursor suggestion search-suffix terminal-width
                                          (prompt-width 0))
   (let* ((initial-position (%initial-rendered-position prompt-width terminal-width))
-         (text-position (%advance-rendered-string initial-position text terminal-width))
-         (suggestion-position (%advance-rendered-string text-position
-                                                        suggestion
-                                                        terminal-width))
-         (final-position (%advance-rendered-string suggestion-position
-                                                   search-suffix
-                                                   terminal-width)))
-    (1+ (rendered-position-row final-position))))
+         (row (rendered-position-row initial-position))
+         (column (rendered-position-column initial-position))
+         (consumed 0)
+         (cursor-position (and cursor
+                               (<= cursor 0)
+                               initial-position)))
+    (dolist (grapheme (cl-tty-kit:string-graphemes (or text "")))
+      (incf consumed (length grapheme))
+      (multiple-value-setq (row column)
+        (%advance-rendered-components row column grapheme terminal-width))
+      (when (and cursor
+                 (null cursor-position)
+                 (>= consumed cursor))
+        (setf cursor-position (%make-rendered-position row column))))
+    (let* ((text-end-position (%make-rendered-position row column))
+           (suggestion-position (%advance-rendered-string text-end-position
+                                                          suggestion
+                                                          terminal-width))
+           (final-position (%advance-rendered-string suggestion-position
+                                                     search-suffix
+                                                     terminal-width))
+           (line-count (1+ (rendered-position-row final-position))))
+      (if cursor
+          (values line-count
+                  (or cursor-position text-end-position)
+                  text-end-position
+                  final-position)
+          line-count))))
 
 (defun %rendered-buffer-position (text cursor prompt-width &key terminal-width)
-  (let ((initial-position (%initial-rendered-position prompt-width terminal-width)))
-    (loop with current = initial-position
-          with consumed = 0
-          for grapheme in (cl-tty-kit:string-graphemes text)
-          while (< consumed cursor)
-          do (incf consumed (length grapheme))
-             (setf current
-                   (%advance-rendered-grapheme current grapheme terminal-width))
-          finally (return current))))
+  (let* ((initial-position (%initial-rendered-position prompt-width terminal-width))
+         (row (rendered-position-row initial-position))
+         (column (rendered-position-column initial-position))
+         (consumed 0))
+    (dolist (grapheme (cl-tty-kit:string-graphemes text))
+      (when (>= consumed cursor)
+        (return))
+      (incf consumed (length grapheme))
+      (multiple-value-setq (row column)
+        (%advance-rendered-components row column grapheme terminal-width)))
+    (%make-rendered-position row column)))
 
 (defun %rendered-buffer-index-at-position (text row column prompt-width
                                            &key terminal-width
@@ -126,16 +152,14 @@ lies outside the rendered buffer."
 
 (defun %cursor-tail-visible-width (text cursor prompt-width suggestion
                                    &optional search-suffix terminal-width)
-  (let* ((cursor-position (%rendered-buffer-position text cursor prompt-width
-                                                     :terminal-width terminal-width))
-         (text-end-position (%rendered-buffer-position text (length text) prompt-width
-                                                       :terminal-width terminal-width))
-         (suggestion-position (%advance-rendered-string text-end-position
-                                                        suggestion
-                                                        terminal-width))
-         (final-position (%advance-rendered-string suggestion-position
-                                                   search-suffix
-                                                   terminal-width)))
+  (multiple-value-bind (line-count cursor-position text-end-position final-position)
+      (%rendered-buffer-line-count text
+                                   :cursor cursor
+                                   :suggestion suggestion
+                                   :search-suffix search-suffix
+                                   :terminal-width terminal-width
+                                   :prompt-width prompt-width)
+    (declare (ignore line-count text-end-position))
     (if (= (rendered-position-row cursor-position)
            (rendered-position-row final-position))
         (max 0 (- (rendered-position-column final-position)
@@ -144,26 +168,25 @@ lies outside the rendered buffer."
 
 (defun %move-cursor-to-rendered-position (text cursor prompt-width suggestion search-suffix
                                           &key terminal-width)
-  (let* ((target-position (%rendered-buffer-position text cursor prompt-width
-                                                     :terminal-width terminal-width))
-         (text-end-position (%rendered-buffer-position text (length text) prompt-width
-                                                       :terminal-width terminal-width))
-         (suggestion-position (%advance-rendered-string text-end-position
-                                                        suggestion
-                                                        terminal-width))
-         (final-position (%advance-rendered-string suggestion-position
-                                                   search-suffix
-                                                   terminal-width))
-         (target-row (rendered-position-row target-position))
-         (target-column (rendered-position-column target-position))
-         (final-row (rendered-position-row final-position))
-         (final-column (rendered-position-column final-position)))
-    (let ((rows-up (- final-row target-row)))
-      (cond
-        ((plusp rows-up)
-         (nshell.infrastructure.terminal:ansi-cursor-up rows-up)
-         (nshell.infrastructure.terminal:ansi-cursor-column (1+ target-column)))
-        (t
-         (let ((columns (- final-column target-column)))
-           (when (plusp columns)
-             (nshell.infrastructure.terminal:ansi-cursor-back columns))))))))
+  (multiple-value-bind (line-count target-position text-end-position final-position)
+      (%rendered-buffer-line-count text
+                                   :cursor cursor
+                                   :suggestion suggestion
+                                   :search-suffix search-suffix
+                                   :terminal-width terminal-width
+                                   :prompt-width prompt-width)
+    (declare (ignore text-end-position))
+    (let ((target-row (rendered-position-row target-position))
+          (target-column (rendered-position-column target-position))
+          (final-row (rendered-position-row final-position))
+          (final-column (rendered-position-column final-position)))
+      (let ((rows-up (- final-row target-row)))
+        (cond
+          ((plusp rows-up)
+           (nshell.infrastructure.terminal:ansi-cursor-up rows-up)
+           (nshell.infrastructure.terminal:ansi-cursor-column (1+ target-column)))
+          (t
+           (let ((columns (- final-column target-column)))
+             (when (plusp columns)
+               (nshell.infrastructure.terminal:ansi-cursor-back columns))))))
+      (values line-count target-position))))

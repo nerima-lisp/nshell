@@ -70,6 +70,7 @@ of ux/U6, its builders, and its JSON serialization.")
              #:+noninteractive-child-environment+
              #:full-screen-program-kind
              #:full-screen-program-replacement
+             #:make-alternate-screen-scanner
              ;; Output store
              #:output-store-root
              #:output-session #:output-session-p

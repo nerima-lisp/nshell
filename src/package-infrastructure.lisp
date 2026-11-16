@@ -21,6 +21,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
            #:%foreground-external-command-timeout
            #:%spawn-terminal-command
            #:%start-stream-copier
+           #:*process-output-watch*
            #:%wait-process-with-copiers
            #:%wait-process-with-copiers-or-stop
            #:%assign-process-group

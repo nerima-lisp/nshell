@@ -30,7 +30,7 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 
 - [x] 機械向けモードと `NSHELL_AGENT=1` のときだけ、色・プロンプト・ページャ・autosuggest を無効化し、子プロセスに PAGER=cat などを渡す
 - [ ] 端末からの入力待ちを検出して E_WAITING_FOR_INPUT (最後の出力を返す)。子を PTY と背景プロセスグループで動かし、SIGTTIN と WUNTRACED で検出する
-- [ ] 全画面プログラムを E_INTERACTIVE_PROGRAM で止め、代わりの書き方を fixes に。コマンド名の表と `ESC[?1049h` で検出する
+- [x] 全画面プログラムを E_INTERACTIVE_PROGRAM で止め、代わりの書き方を fixes に。コマンド名の表と `ESC[?1049h` で検出する
 
 ## P1-4 explain・initialize・policy・read_output
 

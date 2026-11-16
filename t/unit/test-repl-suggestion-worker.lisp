@@ -145,18 +145,14 @@
                (release (sb-thread:make-semaphore :count 0))
                (event (nshell.domain.input:make-key-event :right))
                (caller-thread sb-thread:*current-thread*)
-               (awaiting nil)
-               (polls 0)
-               (original-alive-p
-                 (symbol-function 'nshell.presentation::%suggestion-worker-alive-p))
-               (original-await
+               (pauses 0)
+               (original-pause
                  (symbol-function
-                  'nshell.presentation::%await-current-suggestion-before-acceptance))
+                  'nshell.presentation::%pause-suggestion-acceptance-wait))
                (nshell.presentation::*suggestion-acceptance-wait-seconds* 5)
-               ;; Releases the computation only once the acceptance is
-               ;; polling for it, so the result cannot be ready before the
-               ;; wait starts. It never signals STARTED, which only the
-               ;; worker may do.
+               ;; Releases the computation only once the acceptance has found
+               ;; the result missing and paused to wait for it. It never
+               ;; signals STARTED, which only the worker may do.
                (releaser
                  (sb-thread:make-thread
                   (lambda ()
@@ -170,21 +166,14 @@
                        (sb-thread:signal-semaphore started)
                        (sb-thread:wait-on-semaphore release)
                        " ps"))
-                    ;; The acceptance wait checks the worker on every poll.
-                    ;; Scheduling checks it too, so count only inside the
-                    ;; wait.
-                    ('nshell.presentation::%suggestion-worker-alive-p
-                     (lambda (state)
-                       (when (and awaiting
-                                  (eq sb-thread:*current-thread* caller-thread)
-                                  (= 1 (incf polls)))
-                         (sb-thread:signal-semaphore waiting))
-                       (funcall original-alive-p state)))
-                    ('nshell.presentation::%await-current-suggestion-before-acceptance
+                    ;; Called only in the wait branch: no result yet and the
+                    ;; request still running.
+                    ('nshell.presentation::%pause-suggestion-acceptance-wait
                      (lambda ()
-                       (setf awaiting t)
-                       (unwind-protect (funcall original-await)
-                         (setf awaiting nil)))))
+                       (when (and (eq sb-thread:*current-thread* caller-thread)
+                                  (= 1 (incf pauses)))
+                         (sb-thread:signal-semaphore waiting))
+                       (funcall original-pause))))
                  (setf nshell.presentation::*input-state*
                        (nshell.presentation:make-input-state
                         :buffer "docker" :cursor-pos 6))
@@ -196,8 +185,8 @@
                   :to-be-truthy)
                  (expect (nshell.presentation::%await-current-suggestion-before-acceptance)
                          :to-be-truthy)
-                 ;; More than one poll: the wait saw the request still running.
-                 (expect (> polls 1) :to-be-truthy)
+                 ;; The acceptance entered the wait branch before the result.
+                 (expect (plusp pauses) :to-be-truthy)
                  (expect " ps" :to-equal
                          (nshell.presentation::input-state-suggestion
                           nshell.presentation::*input-state*))

@@ -402,6 +402,11 @@ suggestion changed."
           :accept-suggestion-word)
         :test #'eq)))
 
+(defun %pause-suggestion-acceptance-wait ()
+  "One poll interval of the acceptance wait, taken only after the result was
+found missing while its request is still running."
+  (sleep 0.001))
+
 (defun %await-current-suggestion-before-acceptance ()
   "Wait for the suggestion of the current buffer before an acceptance key.
 The wait ends when the result arrives, when no request for the buffer is left,
@@ -453,7 +458,7 @@ shown. A dead worker cannot answer, so the suggestion is computed here."
                 ((>= (get-internal-real-time) deadline)
                  (return nil))
                 (t
-                 (sleep 0.001))))))))))
+                 (%pause-suggestion-acceptance-wait))))))))))
 
 (defparameter *suggestion-worker-stop-seconds* 0.1
   "Time an idle worker gets to see the shutdown flag before it is terminated.")

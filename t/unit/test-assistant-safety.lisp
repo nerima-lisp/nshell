@@ -293,7 +293,7 @@
                    ("git branch new-name" :confirm)
                    ("git branch new-name HEAD" :confirm)
                    ("git branch -l new-name" :confirm)
-                   ("git branch --" :confirm)
+                   ("git branch --" :safe)
                    ("git branch -- new-name" :confirm)
                    ("git branch --list -d topic" :confirm)
                    ("git branch -m old new" :confirm)

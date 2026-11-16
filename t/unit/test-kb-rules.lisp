@@ -64,10 +64,14 @@
                      ("classify/environment-assignment"))
                     ("env TZ=UTC GIT_EXTERNAL_DIFF=x git log" :confirm
                      ("classify/environment-assignment"))
-                    ("sudo PAGER=x ls" :confirm ("classify/environment-assignment"))
-                    ("env -i git status" :confirm ("classify/env-option"))
-                    ("env -u PATH ls" :confirm ("classify/env-option"))
-                    ("env -S 'git status'" :confirm ("classify/env-option"))
+                    ("sudo PAGER=x ls" :confirm
+                     ("classify/opaque-wrapper" "classify/environment-assignment"))
+                    ("env -i git status" :confirm
+                     ("classify/opaque-wrapper" "classify/env-option"))
+                    ("env -u PATH ls" :confirm
+                     ("classify/opaque-wrapper" "classify/env-option"))
+                    ("env -S 'git status'" :confirm
+                     ("classify/opaque-wrapper" "classify/env-option"))
                     ("PATH=/tmp/x rm -rf /" :block ("classify/root-recursive-delete"))))
       (let ((result (%kb-classify-line (first case))))
         (expect (nshell.feature.assistant:assistant-safety-result-classification result)
@@ -103,11 +107,19 @@
              :command "rm" :arguments '("-r" "target/" "--" "-x"))
             :to-equal '((nshell.feature.kb::deletes "target/")
                         (nshell.feature.kb::deletes "-x")))
-    (expect (nshell.feature.kb:subject-effects
-             :command "curl" :arguments '("-o" "page" "http://x" ">" "out"))
+    ;; Writes come from the redirects of the AST, not from argument words.
+    (expect (nshell.feature.assistant:command-effects
+             (nshell.domain.parsing:parse-result-ast
+              (nshell.domain.parsing:parse-command-line
+               "curl -o page http://x > out")))
             :to-equal '((nshell.feature.kb::writes "out") :network))
-    (expect (nshell.feature.kb:subject-effects :command "ls" :arguments '(">log"))
-            :to-equal '((nshell.feature.kb::writes "log")))))
+    (expect (nshell.feature.assistant:command-effects
+             (nshell.domain.parsing:parse-result-ast
+              (nshell.domain.parsing:parse-command-line "ls >log")))
+            :to-equal '((nshell.feature.kb::writes "log")))
+    (expect (nshell.feature.kb:subject-effects
+             :command "grep" :arguments '(">" "log"))
+            :to-equal nil)))
 
 (describe "knowledge-base user rules"
   (it "caps a user block at confirm"

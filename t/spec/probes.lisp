@@ -7,13 +7,15 @@
 ;;;   entry (warning mode :optional when that :v07 row has a :warning, :none
 ;;;   otherwise);
 ;;; - every row and probe change gets one v0.8 test, `it` without owners and
-;;;   `it-fails` with, except an :unsettled probe change without :warning;
+;;;   `it-fails` with, except a :deferred probe change;
 ;;; - every row and probe change with :v09 gets an `it-fails` v0.9.0 test;
 ;;; - every crash probe gets "no crash log for ID", `it-fails` with an owner.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *row-owners* '("S2" "S3" "S4" "S5" "S6" "F3"))
   (defparameter *crash-owners* '("C"))
+  (defparameter *unsettled-reasons*
+    '(:design-conflict :format-undecided :behaviour-undefined :rule-scope))
 
   (defun %plist-keys-within (plist keys where)
     (unless (and (listp plist) (evenp (length plist)))
@@ -81,8 +83,9 @@
         (%validate-basis (getf entry :input-basis)
                          (format nil "~a :input-basis" where)))))
 
-  (defun %validate-v08 (v08 row where &key unsettled-without-warning)
-    (%plist-keys-within v08 '(:expect :conflict :warning :owners :basis) where)
+  (defun %validate-v08 (v08 row where &key allow-deferred)
+    (%plist-keys-within v08 '(:expect :conflict :reason :deferred :warning :owners :basis)
+                        where)
     (dolist (key '(:expect :warning :owners :basis))
       (unless (%plist-key-p v08 key)
         (error "~a: :v08 needs ~s" where key)))
@@ -96,14 +99,30 @@
          (when (getf row :input)
            (error "~a: :expect :v07 runs the fixture src; :input must be nil" where)))
         (:unsettled
-         (unless (or (getf v08 :warning) unsettled-without-warning)
-           (error "~a: :expect :unsettled needs a :warning" where))
          (let ((conflict (getf v08 :conflict)))
            (unless (and (stringp conflict) (plusp (length conflict)))
-             (error "~a: :expect :unsettled needs a non-empty :conflict string" where))))
+             (error "~a: :expect :unsettled needs a non-empty :conflict string" where)))
+         (unless (member (getf v08 :reason) *unsettled-reasons*)
+           (error "~a: :expect :unsettled needs :reason, one of ~s, got ~s"
+                  where *unsettled-reasons* (getf v08 :reason)))
+         ;; The owners name the unit that settles the conflict.
+         (unless (getf v08 :owners)
+           (error "~a: :expect :unsettled needs non-empty :owners" where))
+         (cond
+           ((%plist-key-p v08 :deferred)
+            (unless (eq (getf v08 :deferred) t)
+              (error "~a: :deferred must be t" where))
+            (unless allow-deferred
+              (error "~a: :deferred is allowed only in *probe-changes*" where))
+            (when (getf v08 :warning)
+              (error "~a: :deferred excludes :warning; a warning is testable" where)))
+           ((null (getf v08 :warning))
+            (error "~a: :expect :unsettled without :warning must declare :deferred t"
+                   where))))
         (t (%validate-expectation expect where)))
-      (when (and (%plist-key-p v08 :conflict) (not (eq expect :unsettled)))
-        (error "~a: :conflict belongs only to :expect :unsettled" where))))
+      (dolist (key '(:conflict :reason :deferred))
+        (when (and (%plist-key-p v08 key) (not (eq expect :unsettled)))
+          (error "~a: ~s belongs only to :expect :unsettled" where key)))))
 
   (defun %validate-v09 (entry where)
     (when (%plist-key-p entry :v09)
@@ -136,7 +155,7 @@
       (let ((v08 (getf entry :v08)))
         (when (eq (getf v08 :expect) :v07)
           (error "~a: :expect :v07 is only for L7.1 rows" where))
-        (%validate-v08 v08 entry where :unsettled-without-warning t))
+        (%validate-v08 v08 entry where :allow-deferred t))
       (%validate-v09 entry where)))
 
   (defun %validate-crash-probe (entry ids)
@@ -206,13 +225,12 @@
                      collect `(it-fails ,(format nil "L7.1 row ~d probe ~a v0.9.0"
                                                  (getf row :row) (getf row :probe))
                                 (%check-v09 ,(getf row :row))))
-           ;; An unsettled probe change without a warning has nothing to
-           ;; assert; its :conflict text and :owners are the record.
+           ;; A deferred probe change has nothing to assert; its :conflict,
+           ;; :reason and :owners are the record.
            ,@(loop for entry in probe-changes
                    for id = (getf entry :probe)
                    for v08 = (getf entry :v08)
-                   unless (and (eq (getf v08 :expect) :unsettled)
-                               (null (getf v08 :warning)))
+                   unless (getf v08 :deferred)
                      collect (%maybe-failing (getf v08 :owners)
                                              (format nil "language-probe ~a v0.8" id)
                                              `(%check-v08 ,id))

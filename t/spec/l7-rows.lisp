@@ -310,6 +310,7 @@
  :input nil
  :input-basis ("language/L7-diff-and-migration.md:29")
  :v08 (:expect :unsettled
+       :reason :design-conflict
        :conflict "language/L7-diff-and-migration.md:29, language/L7-diff-and-migration.md:49 vs language/L3-command-forms.md:19, language/L7-diff-and-migration.md:23: v0.8 keeps PATH-before-CL resolution for last, but the v0.8 substitution rule turns (list 1 2) in a command argument into one argument per element, so v0.8 runs the command `last 1 2` instead of v0.7.0's argument type error"
        :warning (:code "W_RESOLUTION_ORDER" :rewrite nil)
        :owners ("S6")
@@ -515,17 +516,21 @@ end
                "execution-plan.md:76" "execution-plan.md:337" "execution-plan.md:338")))
 
 (:probe "unquote-list"
- :input nil
- ;; Line 1: ,(list 1 2 3) is a list after , -> E_ARG_TYPE; (1 18) = the ( after the ,.
- ;; exit 1 assumes the error ends the script (L6.5 "エラーで終わったとき"); L6.3 names only
- ;; E_LISP_ERROR as terminating a script. Inferred; see conflict C1. If the PM rules that it
- ;; terminates, add :absent ("[1][2][3]") (output of line 3, L3:18).
+ :input "(^printf \"[%s]\" ,(list 1 2 3))
+"
+ :input-basis ("language/L3-command-forms.md:35"
+               ;; Lines 2-4 of the fixture are dropped so the expectation does not depend on
+               ;; whether an E_ARG_TYPE ends a script: language/L6-execution-and-errors.md:39 names
+               ;; only E_LISP_ERROR, language/L6-execution-and-errors.md:60 covers every code.
+               "language/L6-execution-and-errors.md:39" "language/L6-execution-and-errors.md:60")
+ ;; (1 18) = the ( after the , (the offending , argument). ",@(list" = the L6.4 fix applied;
+ ;; inferred, drop it if only exit/code/position are wanted.
  :v08 (:expect (:exit 1 :error "E_ARG_TYPE" :position (1 18) :contains (",@(list"))
        :warning nil
        :owners ("S3" "S4")
        :basis ("language/L3-command-forms.md:17" "language/L3-command-forms.md:35"
-               "language/L6-execution-and-errors.md:51" "language/L6-execution-and-errors.md:60"
-               "language/L6-execution-and-errors.md:65" "language/L6-execution-and-errors.md:25"
+               "language/L6-execution-and-errors.md:51" "language/L6-execution-and-errors.md:65"
+               "language/L6-execution-and-errors.md:9" "language/L6-execution-and-errors.md:25"
                "language/L6-execution-and-errors.md:27" "language/L6-execution-and-errors.md:29"
                "execution-plan.md:76" "execution-plan.md:337" "execution-plan.md:338")))
 
@@ -679,10 +684,13 @@ end
 ;; ---- r4b-diag: probes with no writable v0.8 expectation ----
 (:probe "quote-arg"
  :input nil
+ ;; S2: the reader's command-word ' rule (L1:27, L3:11) must define whether '(a b) is a quoted list or a word.
  :v08 (:expect :unsettled
+       :reason :rule-scope
+       :deferred t
        :conflict "C2: language/L1-lexical.md:27 (command word: ' passes the following word without expansion) vs language/L2-resolution.md:64 with language/L3-command-forms.md:19 (a list in argument position is a substitution); reading A gives stdout `x a b`, reading B `x (a b)`, exit 0 both"
        :warning nil
-       :owners ("S3")
+       :owners ("S2")
        :basis ("language/L1-lexical.md:27"
                "language/L2-resolution.md:64"
                "language/L3-command-forms.md:19"
@@ -690,10 +698,13 @@ end
 
 (:probe "quote-list"
  :input nil
+ ;; S2: same command-word ' rule as quote-arg.
  :v08 (:expect :unsettled
+       :reason :rule-scope
+       :deferred t
        :conflict "C2: language/L1-lexical.md:27 (command word: ' passes the following word without expansion) vs language/L2-resolution.md:64 with language/L3-command-forms.md:19 (a list in argument position is a substitution); reading A gives stdout `a b`, reading B `(a b)`, exit 0 both"
        :warning nil
-       :owners ("S3")
+       :owners ("S2")
        :basis ("language/L1-lexical.md:27"
                "language/L2-resolution.md:64"
                "language/L3-command-forms.md:19"
@@ -701,10 +712,13 @@ end
 
 (:probe "redir-3"
  :input nil
+ ;; S4: the value-position check (D-28 walker/lowering, execution-plan.md:69) decides whether it runs before CL evaluation.
  :v08 (:expect :unsettled
+       :reason :behaviour-undefined
+       :deferred t
        :conflict "C3: language/L4-values-and-positions.md:9 (command in a value position is E_VALUE_POSITION, at (1 13)) vs CL left-to-right evaluation with language/L6-execution-and-errors.md:39 (unbound OUT3.TXT evaluated first, E_LISP_ERROR at (1 4)); the design does not say whether the position check precedes evaluation; exit 1 both"
        :warning nil
-       :owners ("S3")
+       :owners ("S4")
        :basis ("language/L4-values-and-positions.md:9"
                "language/L6-execution-and-errors.md:39"
                "language/L4-values-and-positions.md:13"
@@ -712,21 +726,32 @@ end
 
 (:probe "value-pipe"
  :input nil
- :v08 (:expect :unsettled
-       :conflict "language/L4-values-and-positions.md:76, language/L4-values-and-positions.md:94 and language/L4-values-and-positions.md:70 make it no error in v0.8, but no design line fixes the to-json text (spacing); candidate [{\"a\":1},{\"a\":2}] if compact (inferred)"
+ ;; :a reads as :A (L1:47, L1:50); (-> X (select :a)) is (select X :a) (L4:96) and keeps
+ ;; the column (L4:91); to-json of a select result is fixed in v0.8 (L4:76) and maps :A to
+ ;; "a" (L4:70), the list to an array (L4:71), numbers to numbers (L4:73). echo prints the
+ ;; one argument (L3:27). No line fixes the JSON spacing or line layout, so stdout is
+ ;; compared as one parsed JSON value with object member order ignored.
+ :v08 (:expect (:exit 0 :stdout-json "[{\"a\": 1}, {\"a\": 2}]"
+                :stderr () :stderr-final-newline nil)
        :warning nil
-       :owners ("S3")
-       :basis ("language/L4-values-and-positions.md:70"
-               "language/L4-values-and-positions.md:76"
-               "language/L4-values-and-positions.md:94"
-               "language/L6-execution-and-errors.md:25")))
+       :owners ("S5")
+       :basis ("language/L1-lexical.md:47" "language/L1-lexical.md:50"
+               "language/L4-values-and-positions.md:96" "language/L4-values-and-positions.md:91"
+               "language/L4-values-and-positions.md:76" "language/L4-values-and-positions.md:70"
+               "language/L4-values-and-positions.md:71" "language/L4-values-and-positions.md:73"
+               "language/L4-values-and-positions.md:94" "language/L3-command-forms.md:27"
+               "language/L3-command-forms.md:13" "language/L6-execution-and-errors.md:9"
+               "execution-plan.md:340" "tasks/P2-language-and-cuts.md:41")))
 
 (:probe "cl-last"
  :input nil
+ ;; S4: line 2 inherits row 29's conflict between PATH-first resolution and element-wise substitution (L3:19), which S4 implements.
  :v08 (:expect :unsettled
+       :reason :design-conflict
+       :deferred t
        :conflict "C4 with C1: v0.8 keeps PATH-before-CL for last (language/L7-diff-and-migration.md:29, language/L7-diff-and-migration.md:49), so ,(last (list 1 2 3)) is a command in a value position, E_VALUE_POSITION at (1 8) (language/L4-values-and-positions.md:9) with W_RESOLUTION_ORDER (proposal/02-machine-interface.md:138); whether line 2 runs depends on C1, language/L6-execution-and-errors.md:39 (only E_LISP_ERROR ends a script) vs language/L6-execution-and-errors.md:60 (exit codes for every code), and line 2 inherits row 29's conflict"
        :warning nil
-       :owners ("S3" "S4" "S6")
+       :owners ("S4")
        :basis ("language/L7-diff-and-migration.md:29"
                "language/L7-diff-and-migration.md:49"
                "language/L4-values-and-positions.md:9"
@@ -736,15 +761,15 @@ end
 
 (:probe "dollar-paren-sexp-word"
  :input nil
- :v08 (:expect :unsettled
-       :conflict "C5: language/L1-lexical.md:33 ($ not followed by a letter, _ or { is a character) with language/L1-lexical.md:25 (( delimits words) gives args `x$` and `y`, vs the bare-line word grammar language/L5-bare-line.md:16-17 (\"$(\" line \")\" is a part) giving one word `xy`; language/L3-command-forms.md:20 does not say whether $(...) may follow other characters; exit 0 both"
+ :v08 (:expect (:exit 0 :stdout ("x$ y") :stdout-final-newline t)
        :warning nil
-       :owners ("S3")
-       :basis ("language/L1-lexical.md:33"
-               "language/L1-lexical.md:25"
-               "language/L5-bare-line.md:16"
-               "language/L5-bare-line.md:17"
-               "language/L3-command-forms.md:20")))
+       :owners ("S2" "S4")
+       :basis ("language/L1-lexical.md:7" "language/L1-lexical.md:25" "language/L1-lexical.md:33"
+               "language/L3-command-forms.md:19" "language/L2-resolution.md:14"
+               "language/L2-resolution.md:64" "inventory/I4-builtins.md:51"
+               "language/L6-execution-and-errors.md:9"
+               "execution-plan.md:336" "execution-plan.md:337"
+               "tasks/P2-language-and-cuts.md:11" "tasks/P2-language-and-cuts.md:27")))
 
 ;; ---- r4b-scan-aa ----
 (:probe "toplevel-value"
@@ -931,10 +956,13 @@ EOF
 
 (:probe "num-arg"
  :input nil
+ ;; S2: the reader's word-head # dispatch (L1:34, D-26) versus numbers passed as written (L1:46, L3:12).
  :v08 (:expect :unsettled
+       :reason :design-conflict
+       :deferred t
        :conflict "language/L1-lexical.md:21, language/L1-lexical.md:34 and execution-plan.md:67 (D-26: # is a dispatch character at word head in command words, #x10 reads as 16 -> \"16\") vs language/L1-lexical.md:46 with language/L3-command-forms.md:12 (a number in a command word is passed as written, \"#x10\")"
        :warning nil
-       :owners ("S3")
+       :owners ("S2")
        :basis ("language/L1-lexical.md:21"
                "language/L1-lexical.md:34"
                "language/L1-lexical.md:45"
@@ -944,10 +972,13 @@ EOF
 
 (:probe "dollar-undefined"
  :input nil
+ ;; S6: the kept $xs shape with W_LIST_SPLICE (L7:17, L7:54) must say whether it covers an undefined variable.
  :v08 (:expect :unsettled
+       :reason :rule-scope
+       :deferred t
        :conflict "language/L3-command-forms.md:14 with language/L4-values-and-positions.md:31 and language/L4-values-and-positions.md:33 (an undefined variable gives no argument, \"< >\") vs language/L7-diff-and-migration.md:17 and language/L7-diff-and-migration.md:54 (v0.8 keeps the old $xs argument shape with W_LIST_SPLICE, one empty argument \"<  >\"); no line says whether W_LIST_SPLICE fires for an undefined variable"
        :warning nil
-       :owners ("S3")
+       :owners ("S6")
        :basis ("language/L3-command-forms.md:14"
                "language/L4-values-and-positions.md:31"
                "language/L4-values-and-positions.md:33"
@@ -958,7 +989,10 @@ EOF
 
 (:probe "pipe-mixed-1"
  :input nil
+ ;; S2: the bare-line (...) substitution (L5:17, L5:24) is not defined as a pipeline stage's command name.
  :v08 (:expect :unsettled
+       :reason :rule-scope
+       :deferred t
        :conflict "language/L5-bare-line.md:17 and language/L5-bare-line.md:24 (( ... ) in a bare-line word is an S-expression and substituted, L7:33 switch) vs language/L3-command-forms.md:19 (substitution is defined only in argument position, not as the command name, nor which stdin the substituted tr reads in a pipeline stage)"
        :warning nil
        :owners ("S2")
@@ -970,7 +1004,9 @@ EOF
 
 (:probe "defun-rest"
  :input nil
+ ;; S4: the kept evaluation of (g x y z) gives "空" (L7:30), undefined as nil or "", which the ,@ conversion (L3:33) turns into different output; S6 owns the warning.
  :v08 (:expect :unsettled
+       :reason :behaviour-undefined
        :conflict "language/L7-diff-and-migration.md:30, language/L7-diff-and-migration.md:56 and proposal/02-machine-interface.md:145 (v0.8 keeps the old evaluation of x y z and warns W_DEFUN_WORD_ARGS) vs language/L3-command-forms.md:18, language/L3-command-forms.md:33 and language/L7-diff-and-migration.md:15 (v0.8 drops nil elements of ,@): line 1 is \"\" or \"  \"; line 2 \"p q\" per language/L4-values-and-positions.md:59"
        :warning (:code "W_DEFUN_WORD_ARGS" :rewrite "defcmd")
        :owners ("S4" "S6")
@@ -1095,32 +1131,38 @@ EOF
 
 (:probe "errexit-like"
  :input nil
- :v08 (:expect :unsettled
-       :conflict "language/L6-execution-and-errors.md:37 (at top level a failing command only sets $status; command-failed is signalled only in a function body, language/L4-values-and-positions.md:7): stdout after-false, exit 0, vs language/L6-execution-and-errors.md:43 and inventory/I2-language.md:43 (handler-case ... command-failed catches failures without that restriction): stdout caught"
+ ;; Top level: (^false) only sets $status (L6:37), so no command-failed is signalled and the
+ ;; handler-case clause (L6:43) never runs; the progn continues to echo. Exit = the last
+ ;; command, echo (L6:9).
+ :v08 (:expect (:exit 0 :stdout ("after-false") :stdout-final-newline t)
        :warning nil
        :owners ("S3")
-       :basis ("language/L6-execution-and-errors.md:37"
-               "language/L4-values-and-positions.md:7"
-               "language/L6-execution-and-errors.md:43"
-               "inventory/I2-language.md:43")))
+       :basis ("language/L6-execution-and-errors.md:37" "language/L6-execution-and-errors.md:43"
+               "language/L6-execution-and-errors.md:9" "language/L4-values-and-positions.md:7"
+               "language/L2-resolution.md:9" "language/L2-resolution.md:26"
+               "language/L2-resolution.md:28" "inventory/I2-language.md:43")))
 
 (:probe "handler-upper"
  :input nil
- :v08 (:expect :unsettled
-       :conflict "language/L6-execution-and-errors.md:37 (top-level failure only sets $status: no output, exit 1) vs language/L6-execution-and-errors.md:43 (handler-case catches command-failed: caught-upper); case folding is not at issue (language/L1-lexical.md:47)"
+ ;; Same rule: nothing is signalled, the clause does not run, nothing is printed. Exit = the
+ ;; last command, (^false) (L6:9); false exits 1 (coreutils). COMMAND-FAILED and
+ ;; command-failed name the same symbol (L1:47), which this input no longer exercises.
+ :v08 (:expect (:exit 1 :stdout () :stdout-final-newline nil)
        :warning nil
        :owners ("S3")
-       :basis ("language/L6-execution-and-errors.md:37"
-               "language/L6-execution-and-errors.md:43"
-               "language/L1-lexical.md:47"
-               "language/L6-execution-and-errors.md:9")))
+       :basis ("language/L6-execution-and-errors.md:37" "language/L6-execution-and-errors.md:43"
+               "language/L6-execution-and-errors.md:9" "language/L2-resolution.md:9"
+               "language/L2-resolution.md:28" "language/L1-lexical.md:47")))
 
 (:probe "argv-index-fn"
  :input nil
+ ;; S4: $argv inside a defun called from bare-line (L4:59, L4:60, L4:35) is undefined.
  :v08 (:expect :unsettled
+       :reason :behaviour-undefined
+       :deferred t
        :conflict "language/L4-values-and-positions.md:60 ($argv only for defcmd), language/L4-values-and-positions.md:59, inventory/I2-language.md:40 and language/L6-execution-and-errors.md:7 ($argv is the empty script argv: an empty line) vs inventory/I3-expansion.md:26 ($argv / $argv[N] kept as is: p); language/L4-values-and-positions.md:35 does not say whether a defun binds $argv"
        :warning nil
-       :owners ("S3")
+       :owners ("S4")
        :basis ("language/L4-values-and-positions.md:60"
                "language/L4-values-and-positions.md:59"
                "inventory/I2-language.md:40"
@@ -1130,10 +1172,13 @@ EOF
 
 (:probe "set-list-bare"
  :input nil
+ ;; S4: how a bare-line head count resolves after F3 deletes the builtin (L2:5, L2:30) is undefined; line 2 also needs the L7:54 bare-line scope.
  :v08 (:expect :unsettled
+       :reason :rule-scope
+       :deferred t
        :conflict "line 2: language/L7-diff-and-migration.md:54 (warn on $xs element splitting, not restricted to S-expressions) makes the v0.7.0 record insufficient; line 4: F3 deletes the builtin count (execution-plan.md:331, inventory/I4-builtins.md:54) vs count as an L2.2 form (language/L2-resolution.md:30) while language/L2-resolution.md:5 classifies only S-expression lists; the v0.8 output of line 4 and the exit are not derivable"
        :warning nil
-       :owners ("S3")
+       :owners ("S4")
        :basis ("language/L7-diff-and-migration.md:54"
                "execution-plan.md:331"
                "inventory/I4-builtins.md:54"

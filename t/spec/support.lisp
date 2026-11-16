@@ -266,6 +266,7 @@
     (list :exit exit
           :stdout (%stream-shape stdout)
           :stderr (%stream-shape stderr)
+          :stdout-text stdout
           :text (format nil "~a~%~a" stdout stderr)
           :home home)))
 
@@ -341,7 +342,7 @@
 
 (defparameter *expectation-keys*
   '(:exit :stdout :stdout-final-newline :stderr :stderr-final-newline
-    :error :position :contains :absent))
+    :error :position :contains :absent :stdout-json))
 
 (defun %plist-key-p (plist key)
   (loop for (candidate) on plist by #'cddr
@@ -365,9 +366,12 @@
     (need (integerp (getf expectation :exit)) ":exit must be an integer")
     (cond
       ((not (%plist-key-p expectation :stdout))
-       (need (and (%plist-key-p expectation :error)
+       (need (and (or (%plist-key-p expectation :error)
+                      (%plist-key-p expectation :stdout-json))
                   (not (%plist-key-p expectation :stdout-final-newline)))
-             ":stdout may be omitted only under :error, without :stdout-final-newline"))
+             ":stdout may be omitted only under :error or :stdout-json, without :stdout-final-newline"))
+      ((%plist-key-p expectation :stdout-json)
+       (need nil ":stdout-json replaces :stdout; give only one of them"))
       ((eq (getf expectation :stdout) :home)
        (need (not (%plist-key-p expectation :stdout-final-newline))
              ":stdout :home already fixes the final newline"))
@@ -393,6 +397,12 @@
                    (= 2 (length position))
                    (every (lambda (n) (typep n '(integer 1))) position))
               ":position must be (LINE COL) with positive integers")))
+    (when (%plist-key-p expectation :stdout-json)
+      (let ((text (getf expectation :stdout-json)))
+        (need (and (stringp text)
+                   (handler-case (progn (%parse-json-text text) t)
+                     (json-kit:json-kit-error () nil)))
+              ":stdout-json must be a JSON text string")))
     (dolist (key '(:contains :absent))
       (when (%plist-key-p expectation key)
         (need (%non-empty-strings-p (getf expectation key))
@@ -512,6 +522,38 @@
            ((%plist-key-p expectation :error) :uncompared)
            (t (%stream-shape ""))))))
 
+(defun %canonical-json (value)
+  ;; Objects become (:object (key . value) ...) sorted by key, so member order
+  ;; does not matter; arrays become (:array ...) and keep their order.
+  (cond
+    ((hash-table-p value)
+     (cons :object
+           (sort (loop for key being the hash-keys of value using (hash-value member)
+                       collect (cons key (%canonical-json member)))
+                 #'string< :key #'car)))
+    ((listp value) (cons :array (mapcar #'%canonical-json value)))
+    (t value)))
+
+(defun %parse-json-text (text)
+  ;; Hash-table objects keep objects and arrays apart, which an alist/list
+  ;; reading cannot; JSON null and false become :null and :false.
+  (%canonical-json
+   (json-kit:parse text :object-type :hash-table :array-type :list
+                        :duplicate-key-policy :error
+                        :null-value :null :false-value :false)))
+
+(defun %stdout-json-mismatches (expected-text run)
+  ;; EXPECTED-TEXT is JSON text; json-kit ignores the trailing newline.
+  (let ((expected (%parse-json-text expected-text))
+        (text (getf run :stdout-text)))
+    (handler-case
+        (let ((actual (%parse-json-text text)))
+          (unless (equal expected actual)
+            (list (list :check :stdout-json :expected expected :actual actual))))
+      (json-kit:json-kit-error (condition)
+        (list (list :check :stdout-json :expected expected
+                    :actual (list :unparsable text :reason (princ-to-string condition))))))))
+
 (defun %count-mismatches (check needle expected-count actual-count)
   (unless (= expected-count actual-count)
     (list (list :check check :text needle
@@ -554,6 +596,10 @@ from the v0.7.0 JSON record."
                  (if candidates
                      (push (cons name candidates) blocks)
                      (fail :check name :mode mode :expected expected :actual actual)))))))
+        (when (%plist-key-p expectation :stdout-json)
+          (setf mismatches (append (%stdout-json-mismatches
+                                    (getf expectation :stdout-json) run)
+                                   mismatches)))
         (when (%plist-key-p expectation :error)
           (let ((error-code (getf expectation :error)))
             (setf mismatches (append (%count-mismatches :error error-code 1

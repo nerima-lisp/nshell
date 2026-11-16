@@ -751,7 +751,10 @@ name: an unknown name resolves to an uninterned symbol instead."
                         (nshell.domain.parsing:command-node-argument-forms
                          command-node))
                        (nshell.domain.parsing:command-node-environment-assignments
-                        command-node))
+                        command-node)
+                       nil
+                       ;; The alias word is the name the input wrote.
+                       (nshell.domain.parsing:command-node-name-span command-node))
                       command-node))))))))
 
 
@@ -822,7 +825,8 @@ name: an unknown name resolves to an uninterned symbol instead."
               (nshell.domain.parsing:command-node-environment-assignments
                command-node)
               (nshell.domain.parsing::command-node-alias-template
-               command-node)))
+               command-node)
+              (nshell.domain.parsing:command-node-name-span command-node)))
            (name (nshell.domain.parsing:command-node-command command-node)))
       (if (or forced-p
               (nshell.domain.parsing:command-node-force-external-p command-node))
@@ -909,7 +913,9 @@ name: an unknown name resolves to an uninterned symbol instead."
                      (nshell.domain.parsing:command-node-environment-assignments
                       binding)
                      (nshell.domain.parsing:command-node-environment-assignments
-                      command-node)))))
+                      command-node))
+                    nil
+                    (nshell.domain.parsing:command-node-name-span command-node))))
             (let ((*sexp-command-alias-expansion-stack*
                     (cons
                      (nshell.domain.parsing:command-node-command command-node)

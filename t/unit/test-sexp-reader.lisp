@@ -859,3 +859,46 @@
                      :to-equal
                      (nshell.domain.parsing:sexp-reader-error-source-span
                       condition)))))
+
+(defun %name-span-of (node)
+  (let ((span (nshell.domain.parsing:command-node-name-span node)))
+    (list (nshell.domain.parsing:text-span-start span)
+          (nshell.domain.parsing:text-span-end span))))
+
+(describe "sexp-reader-command-name-span"
+  (it "records the command name token of a bare-line command in the text it read"
+    (loop for (source command span name-span)
+            in '(("less x" "less" (0 6) (0 4))
+                 ("X=1 ^less less" "less" (0 14) (4 9))
+                 ("l\"ess\" less" "less" (0 11) (0 6))
+                 ("echo a; gti status" "gti" (8 18) (8 11)))
+          do (let* ((form (nshell.domain.parsing:reader-result-form
+                           (first (nshell.domain.parsing:read-submission source))))
+                    (node (if (nshell.domain.parsing:sequence-node-p form)
+                              (car (last (nshell.domain.parsing:sequence-node-commands form)))
+                              form)))
+               (expect (nshell.domain.parsing:command-node-command node) :to-equal command)
+               (expect (nshell.domain.parsing:ast-node-span node) :to-equal span)
+               (expect (%name-span-of node) :to-equal name-span)
+               (expect (nshell.domain.parsing:text-span-text
+                        (nshell.domain.parsing:command-node-name-span node))
+                       :to-be source))))
+
+  (it "records the head of a command form in the text it read"
+    (loop for (source command span name-span)
+            in '(("(less \"x\")" "less" (0 10) (1 5))
+                 ("(^less \"less\")" "less" (0 14) (1 6)))
+          do (let* ((result (first (nshell.domain.parsing:read-submission source)))
+                    (node (nshell.domain.parsing:command-form->ast
+                           source
+                           (nshell.domain.parsing:reader-result-form result)
+                           (nshell.domain.parsing:reader-result-form-span-map result)
+                           (constantly :command-island)
+                           :symbol-origins
+                           (nshell.domain.parsing:reader-result-symbol-origins result))))
+               (expect (nshell.domain.parsing:command-node-command node) :to-equal command)
+               (expect (nshell.domain.parsing:ast-node-span node) :to-equal span)
+               (expect (%name-span-of node) :to-equal name-span)
+               (expect (nshell.domain.parsing:text-span-text
+                        (nshell.domain.parsing:command-node-name-span node))
+                       :to-be source)))))

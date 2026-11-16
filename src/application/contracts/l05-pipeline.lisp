@@ -429,7 +429,7 @@ execution errors that wrap it on the way out."
                               (setf (aref statuses stage-index) 127)
                               (%byte-stream-launch-thread
                                state stage-index
-                               (let ((span (nshell.domain.parsing:ast-node-span
+                               (let ((span (nshell.domain.parsing:command-node-name-span
                                            (evaluated-command-stage-command-node stage))))
                                  (lambda ()
                                    (let ((nshell.infrastructure.acl:*external-command-span* span))

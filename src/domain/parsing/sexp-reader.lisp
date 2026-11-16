@@ -1426,7 +1426,12 @@ unchanged when it cannot be mapped."
                     (nreverse redirects)
                     force-external-p
                     (nreverse argument-forms)
-                    nil)))))) (convert-form form span nil t))
+                    nil
+                    nil
+                    (and head-span
+                         (make-text-span
+                          (first head-span) (second head-span)
+                          (%sexp-reader-state-source *sexp-reader-state*))))))))) (convert-form form span nil t))
 )
 (defun command-form->ast
     (source form form-span-map head-classifier &key symbol-origins)
@@ -2143,7 +2148,10 @@ unchanged when it cannot be mapped."
            force-external-p
            ordered-argument-forms
            environment-assignments
-           alias-template)))))
+           alias-template
+           (make-text-span (token-start command-token)
+                           (token-end command-token)
+                           (%sexp-reader-state-source *sexp-reader-state*)))))))
 ) (defun %sexp-reader-read-bare-line (source)
   (let ((tokens (%sexp-reader-bare-tokenize source))
         (segment-reversed nil)

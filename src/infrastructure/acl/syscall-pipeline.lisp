@@ -136,7 +136,7 @@
                      (progn
                        (%close-unused-next-pipe-writer next-pipe output-pipe-stream)
                        (let ((*external-command-span*
-                               (nshell.domain.parsing:ast-node-span cmd-node)))
+                               (nshell.domain.parsing:command-node-name-span cmd-node)))
                          (%run-pipeline-command
                           cmd effective-args input output error-output environment effective-cmd
                           :preserve-fds preserve-fds

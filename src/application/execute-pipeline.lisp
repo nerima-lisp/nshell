@@ -32,7 +32,7 @@ spawns, so a stage's assignment reaches that stage's process alone.")
          (*foreground-terminal-runner* (and (null redirects)
                                            *foreground-terminal-runner*))
          (nshell.infrastructure.acl:*external-command-span*
-           (nshell.domain.parsing:ast-node-span clean-command)))
+           (nshell.domain.parsing:command-node-name-span clean-command)))
     (unwind-protect
          (let ((redirect-error
                  (when redirects

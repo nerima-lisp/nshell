@@ -121,9 +121,33 @@
 
   (defun %normalize-output (text result)
     (let* ((work (string-right-trim "/" (getf result :workdir)))
-           (real-work (string-right-trim "/" (getf result :real-workdir))))
-      (%normalize-tool-paths
-       (%replace-all (%replace-all text work "$WORK") real-work "$WORK"))))
+           (real-work (string-right-trim "/" (getf result :real-workdir)))
+           (normalized
+             (%normalize-tool-paths
+              (%replace-all (%replace-all text work "$WORK") real-work "$WORK"))))
+      (if (search "source: $WORK/case.nsh:" normalized)
+          (with-input-from-string (input normalized)
+            (with-output-to-string (output)
+              (loop with in-diagnostic = nil
+                    for line = (read-line input nil nil)
+                    while line
+                    do (let ((trimmed
+                               (string-left-trim
+                                '(#\Space #\Tab #\Return)
+                                line)))
+                         (if (eql 0 (search "source: $WORK/case.nsh:" trimmed))
+                             (progn
+                               (when in-diagnostic (terpri output))
+                               (write-string trimmed output)
+                               (setf in-diagnostic t))
+                             (if in-diagnostic
+                                 (progn
+                                   (write-char #\Space output)
+                                   (write-string trimmed output))
+                                 (progn
+                                   (write-string line output)
+                                   (terpri output))))))))
+          normalized)))
 
   (defun %normalize-nix-tool-path (text tool)
     (let ((suffix (format nil "/bin/~a" tool))
@@ -162,6 +186,8 @@
           for tool in (list "cat" "false" "ls" "printf" "sh" "tr" "wc"
                             "sleep" "sort" "last" "join" "find")
           for replacement = (format nil "<tool>/~a" tool)
+          for bare-prefix = (format nil "~a:" tool)
+          for normalized-prefix = (format nil "<tool>/~a:" tool)
           do (setf normalized (%normalize-nix-tool-path normalized tool)
                    normalized (%replace-all normalized
                                             (format nil "/usr/bin/~a" tool)
@@ -169,6 +195,17 @@
                    normalized (%replace-all normalized
                                             (format nil "/bin/~a" tool)
                                             replacement))
+             (when (search "No such file or directory" normalized)
+               (setf normalized
+                     (%replace-all normalized
+                                   (format nil "~%~a" bare-prefix)
+                                   (format nil "~%~a" normalized-prefix)))
+               (when (and (>= (length normalized) (length bare-prefix))
+                          (eql 0 (search bare-prefix normalized)))
+                 (setf normalized
+                       (concatenate 'string normalized-prefix
+                                    (subseq normalized
+                                            (length bare-prefix))))))
           finally (return normalized)))
 
   (defun %substring-occurrences (text needle)

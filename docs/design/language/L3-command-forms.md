@@ -76,3 +76,5 @@ glob が 1 つも一致しなければ E_NO_MATCH (fish と同じ)。文字と�
 | (progn A B) | 順に実行 (bare-line の ;) |
 | (and A B) (or A B) | 成功なら次・失敗なら次 (bare-line の && \|\|) |
 | (with-env ((FOO "1")) FORM) | その形式の間だけ環境変数を設定 (bare-line の FOO=1 cmd) |
+
+起動できない段の状態は127とし、段ごとに E_COMMAND_NOT_FOUND の診断を stderr へ1回出して入出力のパイプを閉じ（前の段が SIGPIPE で終了してもよい）、残りの段を起動し、$pipestatus に全段の状態を入れ、全体の状態は上表に従い、--json の応答も全体の状態に従う。

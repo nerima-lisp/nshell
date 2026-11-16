@@ -135,7 +135,8 @@ the environment.")
 
 (defun shell-context-job-processes (context job-id)
   "Return registered process objects for JOB-ID in CONTEXT."
-  (gethash job-id (shell-context-process-registry context)))
+  (let ((entry (gethash job-id (shell-context-process-registry context))))
+    (if (listp entry) (remove-if #'integerp entry) entry)))
 
 (defun %stop-shell-context (context)
   (unwind-protect

@@ -787,11 +787,13 @@
       # `self`. `./.` is the same directory.
       root = ./.;
       # Read by the builtin inventory and error-code page consistency tests,
-      # and by the bug-report golden test.
+      # the bug-report golden test, and the response envelope schema
+      # conformance test.
       sourceInclude = [
         ./docs/src/reference/builtins.md
         ./docs/src/reference/error-codes.md
         ./t/golden/bug-report.txt
+        ./docs/design/conformance/envelope.schema.json
       ];
 
       lispDependencies =

@@ -104,6 +104,12 @@
                  (:file "infrastructure/state-export")
                  (:file "infrastructure/mcp-server")
                  (:file "presentation/layer")))
+   (:module "feature-machine"
+    :pathname "../packages/feature/machine/src"
+    :serial t
+    :components ((:file "package")
+                 (:file "feature")
+                 (:file "domain/envelope")))
    (:file "util/struct-macros")
    (:file "util/strings")
    (:file "application/contracts/wp-interface-errors")
@@ -601,6 +607,7 @@
    (:file "unit/test-prompt-rendering")
    (:file "unit/test-prompt-properties")
    (:file "unit/test-error-codes")
+   (:file "unit/test-machine-envelope")
    (:file "main-test")
    (:file "unit/test-safe-mode")
    (:file "unit/test-crash-recovery")

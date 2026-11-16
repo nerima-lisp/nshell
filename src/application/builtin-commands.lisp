@@ -197,10 +197,15 @@
           (values output (%invert-status-code code))))
       (%builtin-usage "not" "not command [args...]" 2)))
 
+(defvar *exec-exit-function*
+  (lambda (status) (sb-ext:quit :unix-status status))
+  "Function of the exit status that ends the shell after exec. The --json
+runner binds it so exec ends the run, not the process, before the envelope is
+printed.")
+
 (defun %exec-and-exit (command args)
-  (sb-ext:quit
-   :unix-status
-   (nshell.infrastructure.acl:run-external-exec command args)))
+  (funcall *exec-exit-function*
+           (nshell.infrastructure.acl:run-external-exec command args)))
 
 (define-builtin %builtin-exec (context args) (context)
   (if args

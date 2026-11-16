@@ -118,7 +118,9 @@
     :components ((:file "package")
                  (:file "feature")
                  (:file "domain/envelope")
-                 (:file "domain/methods")))
+                 (:file "domain/methods")
+                 (:file "domain/output-economy")
+                 (:file "infrastructure/output-store")))
    (:file "util/struct-macros")
    (:file "util/strings")
    (:file "application/contracts/wp-interface-errors")
@@ -417,6 +419,10 @@
 	    :pathname "../packages/feature/machine/src"
 	    :serial t
 	    :components ((:file "application/methods")))
+   (:module "feature-machine-presentation"
+    :pathname "../packages/feature/machine/src"
+    :serial t
+    :components ((:file "presentation/json-command")))
 	   (:file "main")
     (:file "presentation/input-state-structural-editing")
     (:file "domain/completion/generated-external-command-kb-data"
@@ -629,6 +635,9 @@
    (:file "unit/test-prompt-properties")
    (:file "unit/test-error-codes")
    (:file "unit/test-machine-envelope")
+   (:file "unit/test-machine-output-economy")
+   (:file "unit/test-machine-output-store")
+   (:file "unit/test-machine-json-command")
    (:file "main-test")
    (:file "unit/test-safe-mode")
    (:file "unit/test-crash-recovery")
@@ -694,7 +703,8 @@
    (:file "e2e/test-crash-recovery")
    (:file "perf/test-startup")
    (:file "perf/key-cost")
-   (:file "perf/test-key-cost"))
+   (:file "perf/test-key-cost")
+   (:file "e2e/test-machine-json-golden"))
    :perform (asdf:test-op (o s)
               (declare (ignore o s))
               (unless (funcall (find-symbol "RUN-TESTS" (find-package "NSHELL/TEST")))

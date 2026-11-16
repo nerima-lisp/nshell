@@ -58,7 +58,24 @@ of ux/U6, its builders, and its JSON serialization.")
              #:explain-envelope
              #:build-envelope-response
              #:envelope-json-object
-             #:envelope-to-json)
+             #:envelope-to-json
+             ;; Output economy
+             #:+default-max-output-bytes+
+             #:+default-head-lines+
+             #:+default-tail-lines+
+             #:clean-output-text
+             #:economize-output-text
+             #:envelope-output-for-text
+             ;; Output store
+             #:output-store-root
+             #:output-session #:output-session-p
+             #:output-session-id #:output-session-directory
+             #:open-output-session
+             #:output-session-write
+             #:prune-output-sessions
+             ;; JSON command
+             #:+default-json-timeout-seconds+
+             #:run-json-command)
     (:export #:+json-default-timeout-seconds+
              #:*machine-methods*
              #:make-machine-context

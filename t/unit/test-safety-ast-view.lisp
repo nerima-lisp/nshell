@@ -298,3 +298,177 @@ when the executor dispatches no stage for it."
                   (list (nshell.application::%reader-gate-command-node context stage))
                   nil))
                 :to-equal 126)))))
+
+;;; R-P1-5: the executor runs a registered shell function or an alias before
+;;; the builtin or external command of that name.  The classifier at Enter,
+;;; the gate, and the executor must resolve a command the same way, because
+;;; they all ask the executor's own resolution functions.
+
+(defun %safety-view-register-function (context name ran)
+  "Register a shell function NAME in CONTEXT that records its call in RAN."
+  (nshell.application::register-shell-function
+   (nshell.application:context-shell-function-registry context)
+   name
+   (nshell.application:make-shell-function-binding
+    (lambda (&rest arguments)
+      (declare (ignore arguments))
+      (push name (car ran))
+      (values nil 0))
+    nil name nil nil)))
+
+(defun %safety-view-run-ai-line (context source reader-context approval)
+  "Run SOURCE as an AI line approved at APPROVAL; return its status and
+whether the gate stopped it."
+  (let ((nshell.application:*execution-origin* :proposal)
+        (nshell.application:*execution-approval* approval)
+        (nshell.application:*execution-gate-stopped-p* nil)
+        (status nil))
+    (capture-standard-output
+      (let ((*error-output* (make-string-output-stream)))
+        (dolist (result (nshell.domain.parsing:read-submission
+                         source :reader-context reader-context))
+          (setf status
+                (nth-value 1 (nshell.presentation:call-with-command-failure-restarts
+                              (lambda ()
+                                (nshell.application:evaluate-reader-result-in-context
+                                 context result))))))))
+    (values status nshell.application:*execution-gate-stopped-p*)))
+
+(describe "safety classifier resolves commands with the executor"
+  (it "does not run a shell function named echo on a safe approval"
+    (dolist (reader-context '(:bare-line :sexp))
+      (let* ((context (make-test-shell-context))
+             (ran (list nil))
+             (source (if (eq reader-context :sexp) "(echo hi)" "echo hi")))
+        (%safety-view-register-function context "echo" ran)
+        (multiple-value-bind (status stopped-p)
+            (%safety-view-run-ai-line context source reader-context :safe)
+          (expect (list source status stopped-p (car ran))
+                  :to-equal (list source 126 t nil))))))
+
+  (it "does not run a shell function named echo on a safe approval on the AST path"
+    (let ((context (make-test-shell-context))
+          (ran (list nil)))
+      (%safety-view-register-function context "echo" ran)
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :safe)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (multiple-value-bind (output code)
+            (nshell.application:execute-ast-in-context
+             context (nshell.domain.parsing:make-command-node "echo" '("hi")))
+          (declare (ignore output))
+          (expect (list code nshell.application:*execution-gate-stopped-p* (car ran))
+                  :to-equal (list 126 t nil)))))))
+
+(defparameter +safety-view-resolution-sources+
+  '((:bare "echo hi") (:bare "ls -la") (:bare "git status") (:bare "not ls")
+    (:bare "command echo x") (:bare "ls | cat")
+    (:auto "echo hi") (:auto "ls -la") (:auto "git status") (:auto "not ls")
+    (:auto "(echo hi)") (:auto "(ls)") (:auto "(^ls)") (:auto "(git status)")
+    (:auto "ls | cat"))
+  "Inputs whose command names a shell function or an alias in some context.")
+
+(defun %safety-view-resolution-contexts ()
+  "Return (LABEL CONTEXT) pairs: nothing defined, shell functions named
+echo, ls, and git, and aliases of those names to other commands."
+  (list (list :plain (make-test-shell-context))
+        (list :functions
+              (let ((context (make-test-shell-context)))
+                (dolist (name '("echo" "ls" "git") context)
+                  (%safety-view-register-function context name (list nil)))))
+        (list :aliases
+              (let ((context (make-test-shell-context)))
+                ;; Each alias runs a command of another resolution.
+                (loop for (name . text) in '(("echo" . "ls -la")
+                                             ("ls" . "echo aliased")
+                                             ("git" . "not ls"))
+                      do (setf (gethash name (nshell.application:shell-context-alias-table
+                                              context))
+                               text))
+                context))))
+
+(defun %safety-view-kind (kind)
+  (case kind
+    ((:builtin :external) kind)
+    ((nil) nil)
+    (t :function)))
+
+(defun %safety-view-recorded-resolutions (thunk)
+  "Call THUNK and return the resolution of every outermost command the
+classifier split meanwhile."
+  (let ((original (symbol-function 'nshell.feature.assistant::%assistant-command-parts))
+        (depth 0)
+        (seen nil))
+    (with-temporary-function
+        ('nshell.feature.assistant::%assistant-command-parts
+         (lambda (&rest arguments)
+           (let ((parts (progn
+                          (incf depth)
+                          (unwind-protect (multiple-value-list (apply original arguments))
+                            (decf depth)))))
+             (when (zerop depth) (push (eighth parts) seen))
+             (values-list parts))))
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :confirm)
+            (nshell.application::*execution-gate-parent-kind* nil)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (funcall thunk)))
+    (nreverse seen)))
+
+(defun %safety-view-resolution-triple (context reader source)
+  "Return the resolutions of SOURCE's commands as the classifier at Enter,
+the gate, and the executor see them."
+  (let ((resolve (nshell.application::assistant-command-resolver context)))
+    (if (eq reader :bare)
+        (let* ((ast (nshell.domain.parsing:parse-result-ast
+                     (nshell.domain.parsing:parse-command-line source)))
+               (nodes (%safety-view-command-nodes ast)))
+          (list (%safety-view-recorded-resolutions
+                 (lambda ()
+                   (nshell.feature.assistant:classify-ast ast :resolve resolve)))
+                (%safety-view-recorded-resolutions
+                 (lambda () (nshell.application::%assistant-execution-gate context ast)))
+                ;; %expand-command-node-in-context expands the alias, then
+                ;; %execute-command-by-name-in-context resolves the name.
+                (mapcar (lambda (node)
+                          (let ((run (nshell.application:expand-command-alias-node
+                                      node
+                                      (nshell.application:shell-context-alias-table
+                                       context))))
+                            (%safety-view-kind
+                             (nshell.application::%resolve-command-by-name
+                              context (nshell.domain.parsing:command-node-command run)))))
+                        nodes)))
+        (let* ((results (nshell.domain.parsing:read-submission
+                         source :reader-context :auto))
+               (nodes (%safety-view-reader-nodes source :auto))
+               (stages (mapcar (lambda (node)
+                                 (nshell.application:evaluate-command-stage-in-context
+                                  context node))
+                               nodes)))
+          (list (%safety-view-recorded-resolutions
+                 (lambda ()
+                   (nshell.feature.assistant:classify-ast results :resolve resolve)))
+                (%safety-view-recorded-resolutions
+                 (lambda ()
+                   (nshell.application::%reader-gate-evaluated-stages
+                    context stages nil)))
+                (mapcar (lambda (stage)
+                          (%safety-view-kind
+                           (nshell.application:evaluated-command-stage-dispatch-kind
+                            stage)))
+                        stages))))))
+
+(describe "safety classifier, gate, and executor resolve a command alike"
+  (it "agrees with shell functions and aliases defined"
+    (let ((compared 0))
+      (dolist (entry (%safety-view-resolution-contexts))
+        (destructuring-bind (label context) entry
+          (dolist (input +safety-view-resolution-sources+)
+            (destructuring-bind (reader source) input
+              (destructuring-bind (enter gate executor)
+                  (%safety-view-resolution-triple context reader source)
+                (incf compared)
+                (expect (list label reader source enter gate)
+                        :to-equal (list label reader source executor executor)))))))
+      (expect compared :to-equal 45))))

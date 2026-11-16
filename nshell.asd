@@ -120,6 +120,7 @@
                  (:file "domain/envelope")
                  (:file "domain/methods")
                  (:file "domain/output-economy")
+                 (:file "domain/noninteractive")
                  (:file "infrastructure/output-store")
                  (:file "infrastructure/output-reader")))
    (:file "util/struct-macros")
@@ -646,6 +647,7 @@
    (:file "unit/test-bug-report")
    (:file "unit/test-machine-methods")
    (:file "unit/test-machine-read-output")
+   (:file "unit/test-machine-noninteractive")
    (:file "unit/static-check-allowlist")
    (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is

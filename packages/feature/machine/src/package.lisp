@@ -66,6 +66,8 @@ of ux/U6, its builders, and its JSON serialization.")
              #:clean-output-text
              #:economize-output-text
              #:envelope-output-for-text
+             ;; Noninteractive runs
+             #:+noninteractive-child-environment+
              ;; Output store
              #:output-store-root
              #:output-session #:output-session-p

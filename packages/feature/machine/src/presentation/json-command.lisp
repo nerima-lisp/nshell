@@ -53,7 +53,10 @@ input runs nothing and is :SAFE."
 (defparameter +json-conveyed-specials+
   '(*standard-input*
     *default-pathname-defaults*
-    nshell.infrastructure.acl:*exported-environment*)
+    nshell.infrastructure.acl:*exported-environment*
+    nshell.presentation:*noninteractive-batch-p*
+    nshell.infrastructure.acl:*detach-child-standard-input*
+    nshell.infrastructure.terminal:*terminal-color-depth*)
   "Dynamic bindings of the calling thread that the worker thread keeps; a new
 SBCL thread otherwise sees only global values.")
 
@@ -377,7 +380,12 @@ first failing command, as -e does."
   (unless (%valid-json-timeout-p timeout)
     (error "The --json timeout must be a positive number of seconds, not ~S."
            timeout))
-  (let ((start (get-internal-real-time)))
+  (let ((start (get-internal-real-time))
+        ;; Bound, not assigned: the batch state below sets the last two for
+        ;; this run only, and a caller in the same image keeps its own.
+        (nshell.presentation:*noninteractive-batch-p* t)
+        (nshell.infrastructure.acl:*detach-child-standard-input* nil)
+        (nshell.infrastructure.terminal:*terminal-color-depth* nil))
     ;; The classifier resolves names in the batch shell state the run uses.
     (nshell.presentation::%initialize-batch-state)
     (multiple-value-bind (verdict readable-p) (%classify-input input)

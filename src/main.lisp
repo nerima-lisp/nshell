@@ -357,42 +357,44 @@ line of JSON and run nothing.  The exit status is the envelope's status."
   "Entry point for the nshell binary."
   (let* ((arguments (%current-process-arguments))
          (exit-code
-           (handler-case
-               ;; A leading non-flag token names a SCRIPT to run; the remaining
-               ;; arguments become $argv verbatim (including flag-like ones), so
-               ;; short-circuit before the feature parser, which would parse them
-               ;; as options.
-               (cond
-                 ((null arguments)
-                  ;; The common stdin batch path does not need a CLI specification.
-                  (%establish-safe-mode nil)
-                  (%run-default-invocation))
-                 ;; language/L2 2.5: `nshell --json explain INPUT'.  explain
-                 ;; always answers in JSON, so --json only selects it here.
-                 ((and (equal "--json" (first arguments))
-                       (equal "explain" (second arguments)))
-                  (%run-explain (rest (rest arguments))))
-                 ((not (%flag-argument-p (first arguments)))
-                  ;; A registered subcommand name wins over a script of the
-                  ;; same name (D-53); ./NAME and -- NAME reach the script.
-                  (let ((subcommand (nshell.feature.command-line:find-subcommand
-                                     (first arguments))))
-                    (if subcommand
-                        (funcall subcommand (rest arguments))
-                        (progn
-                          (%establish-safe-mode nil)
-                          (nshell.presentation:run-repl-script
-                           (first arguments) (rest arguments))))))
-                 (t
-                  (multiple-value-bind
-                        (invocation usage-error-p)
-                      (%parse-cli-arguments arguments)
-                    (if usage-error-p
-                        (progn
-                          ;; Unknown flag / missing -c value / unexpected argument.
-                          (%print-usage *error-output*)
-                          1)
-                        (%run-parsed-invocation invocation)))))
-             (error (error)
-               (%fatal-error error)))))
+           (let ((nshell.presentation:*noninteractive-batch-p*
+                  (%env-boolean-p "NSHELL_AGENT")))
+             (handler-case
+                 ;; A leading non-flag token names a SCRIPT to run; the remaining
+                 ;; arguments become $argv verbatim (including flag-like ones), so
+                 ;; short-circuit before the feature parser, which would parse them
+                 ;; as options.
+                 (cond
+                   ((null arguments)
+                    ;; The common stdin batch path does not need a CLI specification.
+                    (%establish-safe-mode nil)
+                    (%run-default-invocation))
+                   ;; language/L2 2.5: `nshell --json explain INPUT'.  explain
+                   ;; always answers in JSON, so --json only selects it here.
+                   ((and (equal "--json" (first arguments))
+                         (equal "explain" (second arguments)))
+                    (%run-explain (rest (rest arguments))))
+                   ((not (%flag-argument-p (first arguments)))
+                    ;; A registered subcommand name wins over a script of the
+                    ;; same name (D-53); ./NAME and -- NAME reach the script.
+                    (let ((subcommand (nshell.feature.command-line:find-subcommand
+                                       (first arguments))))
+                      (if subcommand
+                          (funcall subcommand (rest arguments))
+                          (progn
+                            (%establish-safe-mode nil)
+                            (nshell.presentation:run-repl-script
+                             (first arguments) (rest arguments))))))
+                   (t
+                    (multiple-value-bind
+                          (invocation usage-error-p)
+                        (%parse-cli-arguments arguments)
+                      (if usage-error-p
+                          (progn
+                            ;; Unknown flag / missing -c value / unexpected argument.
+                            (%print-usage *error-output*)
+                            1)
+                          (%run-parsed-invocation invocation)))))
+               (error (error)
+                 (%fatal-error error))))))
     (funcall *main-exit-function* :unix-status (or exit-code 0))))

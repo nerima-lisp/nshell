@@ -9,7 +9,7 @@
                 "ls" (list "unapproved")))
           (executed-p nil))
       (let ((nshell.application::*execution-origin* :agent)
-            (nshell.application::*execution-confirmed-p* nil))
+            (nshell.application::*execution-approval* nil))
         (with-temporary-function
             ('nshell.application::execute-command-node-in-context
              (lambda (ignored-context ignored-ast)
@@ -83,7 +83,7 @@
                       1 :result '(("command" . "ls"))))))
             (expect 0 :to-equal dispatches)
             (expect 0 :to-equal key-reads)
-            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect nil :to-be nshell.presentation::*assistant-command-approval*)
             (expect :awaiting-approval :to-equal
                     (nshell.application:agent-session-state session))
             (expect 0 :to-equal
@@ -120,7 +120,7 @@
                                                              :max-steps 1))
             (dispatches 0)
             (observed-origin nil)
-            (observed-confirmed nil))
+            (observed-approval nil))
         (nshell.application:agent-session-propose-step session "ls")
         (let ((step (nshell.application:agent-session-current-step session)))
           (setf nshell.presentation::*agent-session* session
@@ -132,7 +132,7 @@
                     (declare (ignore node context))
                     (incf dispatches)
                     (setf observed-origin nshell.application::*execution-origin*
-                          observed-confirmed nshell.application::*execution-confirmed-p*)
+                          observed-approval nshell.application::*execution-approval*)
                     (values "fixture-output" 0)))
                  ('nshell.presentation::render-prompt-cont
                   (lambda () nil))
@@ -146,7 +146,7 @@
                  (input-key-event :enter))))
             (expect 1 :to-equal dispatches)
             (expect :agent :to-be observed-origin)
-            (expect t :to-be observed-confirmed)
+            (expect :safe :to-be observed-approval)
             (expect :executed :to-equal
                     (nshell.application:agent-step-status step))
             (expect nil :to-be nshell.presentation::*agent-session*))))))
@@ -238,7 +238,7 @@
                       (nshell.application:agent-step-status
                        (nshell.application:agent-session-current-step session)))
               (expect 0 :to-equal dispatches)
-              (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)))))))
+              (expect nil :to-be nshell.presentation::*assistant-command-approval*)))))))
 
   (it "cancels-editing-with-control-c-without-executing"
     (with-repl-test-state
@@ -265,7 +265,7 @@
                                    nshell.presentation::*input-state*))
               (expect :awaiting-approval :to-equal (nshell.application:agent-step-status step))
               (expect 0 :to-equal dispatches)
-              (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)))))))
+              (expect nil :to-be nshell.presentation::*assistant-command-approval*)))))))
 
   (it "does-not-mint-approval-in-the-step-executor"
     (with-repl-test-state
@@ -287,7 +287,7 @@
             (capture-standard-output
               (nshell.presentation::%agent-execute-current-step))
             (expect 0 :to-equal dispatches)
-            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect nil :to-be nshell.presentation::*assistant-command-approval*)
             (expect :awaiting-approval :to-equal
                     (nshell.application:agent-session-state session)))))))
 
@@ -298,7 +298,7 @@
             (classification nil)
             (observed-text nil)
             (observed-origin nil)
-            (observed-confirmed nil))
+            (observed-approval nil))
         (nshell.application:agent-session-propose-step session "ls")
         (setf nshell.presentation::*agent-session* session
               nshell.presentation::*history-persistence-enabled-p* nil)
@@ -314,7 +314,7 @@
                            (nshell.application:agent-step-classification step))
                           observed-text (nshell.application:agent-step-text step)
                           observed-origin nshell.application::*execution-origin*
-                          observed-confirmed nshell.application::*execution-confirmed-p*))
+                          observed-approval nshell.application::*execution-approval*))
                   (values "fixture-output" 0)))
                ('nshell.presentation::render-prompt-cont (lambda () nil))
                ('nshell.presentation::render-transient-panel
@@ -324,7 +324,7 @@
                   (nshell.presentation::make-repl-input-state :buffer "rm -rf /"))
             (nshell.presentation::%process-agent-panel-event (input-key-event :enter))
             (expect 0 :to-equal dispatches)
-            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect nil :to-be nshell.presentation::*assistant-command-approval*)
             (expect t :to-be
                     (nshell.application:agent-step-blocked-p
                      (nshell.application:agent-session-current-step session)))
@@ -338,7 +338,7 @@
             (expect :confirm :to-be classification)
             (expect "rm fixture" :to-equal observed-text)
             (expect :agent :to-be observed-origin)
-            (expect t :to-be observed-confirmed))))))
+            (expect :confirm :to-be observed-approval))))))
 
   (it "requires-fresh-enter-approval-for-the-next-step"
     (with-repl-test-state
@@ -358,13 +358,13 @@
                   (declare (ignore context node))
                   (incf dispatches)
                   (push nshell.application::*execution-origin* dispatch-origins)
-                  (push nshell.application::*execution-confirmed-p* dispatch-approvals)
+                  (push nshell.application::*execution-approval* dispatch-approvals)
                   (values "fixture-output" 0)))
                ('nshell.presentation::%process-ask-submit-output-event
                 (lambda ()
                   (incf requests)
                   (setf approval-at-request
-                        nshell.presentation::*assistant-command-confirmed-p*)))
+                        nshell.presentation::*assistant-command-approval*)))
                ('nshell.presentation::read-key-cont (lambda () nil))
                ('nshell.presentation::render-prompt-cont (lambda () nil))
                ('nshell.presentation::render-transient-panel
@@ -374,7 +374,7 @@
             (expect 1 :to-equal dispatches)
             (expect 1 :to-equal requests)
             (expect nil :to-be approval-at-request)
-            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect nil :to-be nshell.presentation::*assistant-command-approval*)
             (nshell.presentation::%handle-agent-model-event
              (nshell.feature.assistant::make-assistant-model-event
               2 :result '(("command" . "ls"))))
@@ -385,10 +385,10 @@
               (nshell.presentation::%process-agent-panel-event (input-key-event :enter)))
             (expect 2 :to-equal dispatches)
             (expect '(:agent :agent) :to-equal dispatch-origins)
-            (expect '(t t) :to-equal dispatch-approvals)
+            (expect '(:safe :safe) :to-equal dispatch-approvals)
             (nshell.presentation::%process-agent-panel-event (input-key-event :enter))
             (expect 2 :to-equal dispatches)
-            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*))))))
+            (expect nil :to-be nshell.presentation::*assistant-command-approval*))))))
 
   (it "skips-a-step-with-s-and-does-not-execute-the-rest"
     (with-repl-test-state
@@ -414,7 +414,7 @@
             (expect :skipped :to-equal
                     (nshell.application:agent-step-status step))
             (expect 0 :to-equal dispatches)
-            (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+            (expect nil :to-be nshell.presentation::*assistant-command-approval*)
             (expect nil :to-be nshell.presentation::*agent-session*))))))
 
   (it "cancels-an-agent-session-with-q"
@@ -444,7 +444,7 @@
           (expect "canceled" :to-equal
                   (nshell.application:agent-session-stop-reason session))
           (expect 0 :to-equal dispatches)
-          (expect nil :to-be nshell.presentation::*assistant-command-confirmed-p*)
+          (expect nil :to-be nshell.presentation::*assistant-command-approval*)
           (expect nil :to-be nshell.presentation::*agent-session*)))))
 
   (it "rejects-agent-in-a-noninteractive-session-without-starting-the-sidecar"
@@ -472,8 +472,9 @@
         (with-repl-input-state (:mode :insert
                                 :buffer "echo from-agent"
                                 :cursor-pos 16)
-          (let ((nshell.presentation::*assistant-command-origin* :agent)
-                (nshell.presentation::*assistant-command-confirmed-p* t))
+          (progn
+            (setf nshell.presentation::*agent-session*
+                  (nshell.application:make-agent-session "echo" :max-steps 1))
             (with-temporary-functions
                 (('nshell.presentation::execute-ast
                   (lambda (ast)

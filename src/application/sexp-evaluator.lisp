@@ -1373,6 +1373,9 @@
                          (list (cdr binding)))))
          (*interactive-top-level-p* nil)
          (*command-test-position-p* nil)
+         ;; A function body cannot use the approval of the AI line that
+         ;; called it (D-P1-5 3.1, item 5).
+         (*execution-gate-parent-kind* :function)
          (nshell.domain.expansion:*positional-args* positional-args))
     (%eval-body context body reader-result
                 (%extend-lexical-environment nil bindings)

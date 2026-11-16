@@ -3,10 +3,27 @@
 (progn
   (define-condition sexp-reader-error
     (error nshell.domain.error-codes:nshell-error-code-mixin)
-    ((source-span :initarg :source-span :reader sexp-reader-error-source-span)
-     (source-path :initarg :source-path :reader sexp-reader-error-source-path)
-     (source-map :initarg :source-map :reader sexp-reader-error-source-map)
-     (cause :initarg :cause :reader sexp-reader-error-cause))
+    ((source-span :initarg :source-span :initform nil
+                  :reader sexp-reader-error-source-span)
+     (source-path :initarg :source-path :initform nil
+                  :reader sexp-reader-error-source-path)
+     (source-map :initarg :source-map :initform nil
+                 :reader sexp-reader-error-source-map)
+     (cause :initarg :cause :initform nil :reader sexp-reader-error-cause))
+    ;; Without the source text this report gives character offsets; callers
+    ;; that have the text use FORMAT-SEXPR-SOURCE-DIAGNOSTIC for line:column.
+    (:report (lambda (condition stream)
+               (let ((span (source-map-span
+                            (sexp-reader-error-source-map condition)
+                            (sexp-reader-error-source-span condition)))
+                     (path (sexp-reader-error-source-path condition))
+                     (cause (sexp-reader-error-cause condition)))
+                 (format stream "~a: syntax error~@[ [~{~d,~d~})~]: ~a"
+                         (if path (namestring path) "<input>")
+                         (and (consp span) (integerp (first span))
+                              (consp (cdr span)) (integerp (second span))
+                              (list (first span) (second span)))
+                         (if cause (princ-to-string cause) "unknown cause")))))
     (:default-initargs :error-code "E_PARSE"))
   (defstruct reader-result
     form
@@ -28,6 +45,33 @@
 (progn (defvar *sexp-reader-backquote-depth* 0) (defvar *sexp-reader-nesting-depth* 0) (defparameter +sexp-reader-max-nesting-depth+ 256))
 (defparameter *sexp-reader-eof* (gensym "READER-EOF-"))
 (defparameter *sexp-reader-skipped* (gensym "READER-SKIPPED-"))
+(defun source-map-span (source-map span)
+  "Map SPAN, a [start,end) list of offsets into the text SOURCE-MAP describes,
+to offsets in the original source. SOURCE-MAP is a vector holding the original
+[start,end) span of each character, or NIL when no mapping applies. Return SPAN
+unchanged when it cannot be mapped."
+  (let* ((start (and (consp span) (first span)))
+         (end (and (consp span) (consp (cdr span)) (second span)))
+         (map-length (if (vectorp source-map) (length source-map) 0)))
+    (cond
+      ((not (and (vectorp source-map)
+                 (integerp start)
+                 (integerp end)
+                 (<= 0 start end map-length)
+                 (or (= start end)
+                     (and (consp (aref source-map start))
+                          (consp (aref source-map (1- end)))))))
+       span)
+      ((= start end)
+       (let ((anchor (cond
+                       ((< start map-length) (first (aref source-map start)))
+                       ((plusp map-length)
+                        (second (aref source-map (1- map-length))))
+                       (t 0))))
+         (list anchor anchor)))
+      (t
+       (list (first (aref source-map start))
+             (second (aref source-map (1- end))))))))
 (defun %sexp-reader-whitespace-p (character)
   (and character (find character '(#\Space #\Tab #\Newline #\Return #\Page))))
 (defun %sexp-reader-signal (cause source-path source-map span)

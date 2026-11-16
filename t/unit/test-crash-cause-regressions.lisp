@@ -130,4 +130,17 @@ Return the exit status, the error output, and the crash log count."
       (expect 0 :to-equal status)
       (expect "" :to-equal output)
       (expect (search "Inconsistent command status" error-output) :to-be-null)
-      (expect (search "Inconsistent command status" output) :to-be-null))))
+      (expect (search "Inconsistent command status" output) :to-be-null)))
+
+  (it "a-reader-error-in-batch-mode-reports-its-message-and-location"
+    (dolist (case '(("(echo hi" "<input>: syntax error [8,8): Expected a datum.")
+                    ("(echo ,(sort (list 3 1 2) (function <)))"
+                     "<input>: syntax error [37,38): Invalid syntax in this form.")))
+      (destructuring-bind (line expected) case
+        (multiple-value-bind (status error-output crash-logs)
+            (%crash-cause-run-batch line)
+          (expect 0 :to-equal crash-logs)
+          (expect 1 :to-equal status)
+          (expect (search (format nil "nshell error: ~a" expected) error-output)
+                  :to-be-truthy)
+          (expect (search "was signalled" error-output) :to-be-null))))))

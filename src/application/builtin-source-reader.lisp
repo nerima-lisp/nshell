@@ -206,30 +206,7 @@
 
 (defun %source-evaluate-reader-submission (context source source-path source-map)
   (labels ((source-span-in-file (span)
-             (let* ((start (and (consp span) (first span)))
-                    (end (and (consp span) (second span)))
-                    (map-length (if (vectorp source-map)
-                                    (length source-map)
-                                    0)))
-               (if (and (vectorp source-map)
-                        (integerp start)
-                        (integerp end)
-                        (<= 0 start end map-length)
-                        (or (= start end)
-                            (and (consp (aref source-map start))
-                                 (consp (aref source-map (1- end))))))
-                   (if (= start end)
-                       (let ((anchor
-                               (if (< start map-length)
-                                   (first (aref source-map start))
-                                   (if (plusp map-length)
-                                       (second (aref source-map
-                                                     (1- map-length)))
-                                       0))))
-                         (list anchor anchor))
-                       (list (first (aref source-map start))
-                             (second (aref source-map (1- end)))))
-                   span))))
+             (nshell.domain.parsing:source-map-span source-map span)))
     (let* ((scan-result (%source-reader-scan-result context source))
            (reader-results
              (nshell.domain.parsing:read-submission

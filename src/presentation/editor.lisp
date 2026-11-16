@@ -77,5 +77,9 @@
          (sync-exported-environment)
          (nshell.infrastructure.acl:run-external-exec
           (first argv) (append (rest argv) (list (namestring path)))))
+    (ignore-errors
+      (progn
+        (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
+        (finish-output)))
     (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
     (ignore-errors (nshell.infrastructure.terminal:ansi-enable-bracketed-paste))))

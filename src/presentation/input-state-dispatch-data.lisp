@@ -102,6 +102,7 @@
     (:ctrl-t . :transpose-chars)
     (:ctrl-u . :kill-to-bol)
     (:ctrl-w . :backward-kill-word)
+    (:ctrl-x . :none)
     (:ctrl-y . :yank-last-kill)
     (:ctrl-underscore . :undo)
     (:alt-r . :redo)
@@ -125,9 +126,9 @@
     (:shift-ctrl-up . :redraw) (:shift-ctrl-down . :redraw)
     (:shift-ctrl-left . :redraw) (:shift-ctrl-right . :redraw)
     (:alt-ctrl-up . :redraw) (:alt-ctrl-down . :redraw)
-    (:alt-ctrl-left . :redraw) (:alt-ctrl-right . :redraw)
+    (:alt-ctrl-left . :none) (:alt-ctrl-right . :none)
     (:shift-alt-ctrl-up . :redraw) (:shift-alt-ctrl-down . :redraw)
-    (:shift-alt-ctrl-left . :redraw) (:shift-alt-ctrl-right . :redraw)))
+    (:shift-alt-ctrl-left . :none) (:shift-alt-ctrl-right . :none)))
 
 (defvar *input-dispatch-bindings*
   (let ((table (make-hash-table :test 'eq)))

@@ -419,3 +419,17 @@
         (list (input-state :buffer "" :cursor-pos 0)
               (input-state :buffer "one" :cursor-pos 3)
               (input-state :buffer "one " :cursor-pos 4)))))
+
+(it-each (("ctrl-x" :ctrl-x)
+            ("alt-ctrl-right" :alt-ctrl-right)
+            ("alt-ctrl-left" :alt-ctrl-left)
+            ("shift-alt-ctrl-right" :shift-alt-ctrl-right)
+            ("shift-alt-ctrl-left" :shift-alt-ctrl-left))
+    "input-state-removed-default-binding-~A-stays-bindable"
+    (key-name key-event)
+  (with-fresh-input-dispatch-bindings
+    (expect :none :to-be
+            (gethash key-event nshell.presentation::*input-dispatch-bindings*))
+    (expect :ok :to-be
+            (nshell.presentation::input-dispatch-set-binding
+             key-name "clear-input"))))

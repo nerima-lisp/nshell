@@ -1,9 +1,6 @@
 # G08: S-expression navigation and deletion
 
-Start nshell and wait for its interactive prompt. Here `C-` means Ctrl and
-`M-` means Meta (Alt). In `bind` names, `C-M-f` is `alt-ctrl-f`;
-`C-M-Shift-Left` and `C-M-Shift-Right` are `shift-alt-ctrl-left` and
-`shift-alt-ctrl-right`, sent to tmux as `C-M-S-Left` and `C-M-S-Right`.
+From the repository root, run `nix build`, then start nshell with `./result/bin/nshell` and wait for its interactive prompt. Here `C-` means Ctrl and `M-` means Meta (Alt). In `bind` names, `C-M-f` is `alt-ctrl-f`.
 Do not press Enter on the forms. Inspect each edit in the input line, then use
 `C-c` to clear it before starting the next form.
 
@@ -22,6 +19,8 @@ Do not press Enter on the forms. Inspect each edit in the input line, then use
 3. Type `(+ G08_BW_LEFT G08_BW_KILL G08_BW_RIGHT)`. Use `C-a`, `C-M-d`,
    `C-M-f` three times, then `C-M-Delete` to delete backward over
    `G08_BW_KILL`. Press `C-y` immediately to restore it, then `C-e`, `C-b`,
+   type ` G08_BW_NEW`, then `C-e`. The line should show
+   `(+ G08_BW_LEFT G08_BW_KILL G08_BW_RIGHT G08_BW_NEW)`.
 
 Pass when each intermediate and final line matches the shown form, the
 parentheses remain balanced, and the killed expressions

@@ -226,29 +226,7 @@
   ;; A new prompt cycle starts here, after a command ran; per-keystroke redraws
   ;; reuse the git probe so typing never forks git.
   (nshell.infrastructure.acl:clear-git-status-cache)
-  (%reset-rendered-prompt-geometry)
-  (setf *prompt-rendered-origin-row* 1
-        *prompt-rendered-origin-column* 1
-        *prompt-rendered-origin-known-p* nil))
-
-(defun %ensure-rendered-prompt-origin ()
-  (unless *prompt-rendered-origin-known-p*
-    (when *interactive-terminal-installed-p*
-      (handler-case
-          (multiple-value-bind (row column)
-              (nshell.infrastructure.terminal:query-cursor-position)
-            (when (and (integerp row)
-                       (integerp column)
-                       (plusp row)
-                       (plusp column))
-              (setf *prompt-rendered-origin-row* row
-                    *prompt-rendered-origin-column* column))
-            (setf *prompt-rendered-origin-known-p* t))
-        (error () nil)))
-    (unless *prompt-rendered-origin-known-p*
-      (setf *prompt-rendered-origin-row* 1
-            *prompt-rendered-origin-column* 1
-            *prompt-rendered-origin-known-p* t))))
+  (%reset-rendered-prompt-geometry))
 
 (defun clear-rendered-prompt ()
   (if (> *prompt-rendered-lines* 0)
@@ -287,7 +265,6 @@
       (%refresh-history-from-file)
       (nshell.application:run-shell-hooks
        :prompt (boundary-current-directory) *last-exit-code*))
-    (%ensure-rendered-prompt-origin)
     (let* ((terminal-width (terminal-width))
            (prompt-width
              (progn

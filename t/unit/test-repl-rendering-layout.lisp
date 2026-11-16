@@ -124,55 +124,27 @@ line's own geometry unchanged."
             " history: git"
             :terminal-width 10)))))
 
-  (it "repl-mouse-coordinate-maps-rendered-buffer-cells"
-    "SGR coordinates should map through prompt wrapping and continuation prompts."
-    (expect 0 :to-equal
-            (nshell.presentation::%rendered-buffer-index-at-position
-             "abc" 1 5 4 :terminal-width 10))
-    (expect (null
-             (nshell.presentation::%rendered-buffer-index-at-position
-              "abc" 1 1 4 :terminal-width 10))
-            :to-be-truthy)
-    (expect 2 :to-equal
-            (nshell.presentation::%rendered-buffer-index-at-position
-             "abc" 2 1 2 :terminal-width 4))
-    (expect 2 :to-equal
-            (nshell.presentation::%rendered-buffer-index-at-position
-             (format nil "a~%b") 2 3 0 :terminal-width 10))
-    (expect (null
-             (nshell.presentation::%rendered-buffer-index-at-position
-              (format nil "a~%b") 2 2 0 :terminal-width 10))
-            :to-be-truthy)
-    (expect 0 :to-equal
-            (nshell.presentation::%rendered-buffer-index-at-position
-             "x" 5 10 0
-             :terminal-width 80
-             :origin-row 5
-             :origin-column 10)))
-
-  (it "repl-render-captures-terminal-origin-once"
-    "Interactive redraw should query the terminal origin only after state reset."
+  (it "repl-render-prompt-does-not-query-terminal-origin"
+    "Prompt rendering must not query the terminal for its cursor origin."
     (with-repl-test-state
-      (let ((queries 0))
-        (let ((nshell.presentation::*interactive-terminal-installed-p* t)
-              (nshell.presentation::*prompt-rendered-origin-known-p* nil))
+      (let ((queries 0)
+            (cursor-query (esc-sequence "[6n")))
+        (let ((nshell.presentation::*interactive-terminal-installed-p* t))
           (with-temporary-function
               ('nshell.infrastructure.terminal:query-cursor-position
                (lambda (&rest args)
                  (declare (ignore args))
                  (incf queries)
+                 (write-string cursor-query)
                  (values 5 10)))
             (with-stable-repl-prompt (:text "PROMPT> ")
               (with-fixed-terminal-size (24 80)
                 (with-repl-render-state (:buffer "abc" :cursor-pos 3)
-                  (capture-standard-output
-                    (nshell.presentation::render-prompt-cont))
-                  (expect 1 :to-equal queries)
-                  (expect 5 :to-equal nshell.presentation::*prompt-rendered-origin-row*)
-                  (expect 10 :to-equal nshell.presentation::*prompt-rendered-origin-column*)
-                  (capture-standard-output
-                    (nshell.presentation::render-prompt-cont))
-                  (expect 1 :to-equal queries)))))))))
+                  (let ((output
+                          (capture-standard-output
+                            (nshell.presentation::render-prompt-cont))))
+                    (expect 0 :to-equal queries)
+                    (expect nil :to-be (search cursor-query output)))))))))))
 
   (it "repl-render-edit-buffer-styles-continuation-prompt"
     "A second logical line should style its continuation prompt with the theme's role."

@@ -198,15 +198,18 @@
       (expect :shift-ctrl-right :to-be (nshell.infrastructure.terminal:key-event-type shift-ctrl-right))))
 
   (it "terminal-stream-decodes-unknown-escape-events"
-    "Unknown CSI and SS3 forms remain explicit events."
+    "Unknown CSI, SS3, and SGR mouse forms remain explicit events."
     (let ((unknown-csi (single-key-event-from-string (esc-sequence "[999~")))
           (unknown-ss3 (single-key-event-from-string (esc-sequence "O?")))
+          (unknown-sgr-mouse (single-key-event-from-string (esc-sequence "[<0;12;34M")))
           (empty-csi (single-key-event-from-string (esc-sequence "[")))
           (empty-ss3 (single-key-event-from-string (esc-sequence "O"))))
       (expect :unknown :to-be
               (nshell.infrastructure.terminal:key-event-type unknown-csi))
       (expect :unknown :to-be
               (nshell.infrastructure.terminal:key-event-type unknown-ss3))
+      (expect :unknown :to-be
+              (nshell.infrastructure.terminal:key-event-type unknown-sgr-mouse))
       (expect :escape :to-be
               (nshell.infrastructure.terminal:key-event-type empty-csi))
       (expect :escape :to-be

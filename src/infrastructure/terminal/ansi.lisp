@@ -24,6 +24,7 @@
   (when (terminal-control-sequences-supported-p)
     (write-string (cl-tty-kit:ansi-disable-bracketed-paste) stream)))
 (defun ansi-disable-sgr-mouse (&optional (stream *standard-output*))
+  "Reset mouse reporting modes that a child process may have left enabled."
   (when (terminal-control-sequences-supported-p)
     (format stream "~c[?1006l~c[?1000l" #\Esc #\Esc)))
 (%define-ansi-forwarder ansi-enable-alternate-screen () (cl-tty-kit:ansi-enter-alternate-screen) :with-stream t)

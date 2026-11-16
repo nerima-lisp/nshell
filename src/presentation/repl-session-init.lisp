@@ -158,13 +158,15 @@ reading the file.")
 
 (defun %merge-history-file-into (history)
   ;; The stamp is taken before reading, so a write that lands during the read
-  ;; leaves a stamp that differs from the file's next one.
+  ;; leaves a stamp that differs from the file's next one. A failed read keeps
+  ;; the old stamp so the unchanged file is read again at the next refresh.
   (let ((stamp (nshell.infrastructure.persistence:history-file-stamp)))
     (unless (and stamp (equal stamp *history-file-stamp*))
-      (prog1 (%merge-history-records
-              history
-              (nshell.infrastructure.persistence:load-history-file))
-        (setf *history-file-stamp* stamp)))))
+      (multiple-value-bind (records read-p)
+          (nshell.infrastructure.persistence:load-history-file)
+        (prog1 (%merge-history-records history records)
+          (when read-p
+            (setf *history-file-stamp* stamp)))))))
 
 (defun %seed-history-from-file (history)
   "Load persisted entries oldest first so the newest record is most recent in HISTORY."

@@ -547,7 +547,9 @@ be stat'ed. An append changes SIZE; a replacement changes INO or the times."
             (values nil nil))))
 
   (defun load-history-file ()
-    "Return v3 records oldest first, promoting v2 records with NIL metadata."
+    "Return v3 records oldest first, promoting v2 records with NIL metadata.
+The second value is true when the file was read or is absent, and NIL when the
+read failed and was reported."
     (let ((path (history-file-path)))
       (handler-case
           (let* ((legacy-path
@@ -558,7 +560,7 @@ be stat'ed. An append changes SIZE; a replacement changes INO or the times."
                    (and legacy-path
                         (%history-file-present-p legacy-path))))
             (if (not (or destination-present legacy-present))
-                nil
+                (values nil t)
                 (progn
                   (when (and legacy-present (not destination-present))
                     (ensure-directories-exist path))
@@ -571,10 +573,10 @@ be stat'ed. An append changes SIZE; a replacement changes INO or the times."
                       (%report-history-error
                        "read" path
                        (format nil "~a history record" status)))
-                    records))))
+                    (values records t)))))
         (error (condition)
           (%report-history-error "read" path condition)
-          nil))))
+          (values nil nil)))))
 
   (defun %append-history-record-under-lock (path record)
     (let ((stream (%open-history-stream path :append t))

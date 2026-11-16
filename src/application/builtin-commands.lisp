@@ -335,3 +335,8 @@ Usage: seq LAST | seq FIRST LAST | seq FIRST STEP LAST. Useful with for loops:
             (values (%builtin-help-entry-output entry) 0)
             (values (format nil "help: no help for ~a~%" (first args)) 1)))
       (values (%builtin-help-overview-output) 0)))
+
+(defun context-current-directory (context)
+  "Return the directory pwd prints in CONTEXT."
+  (%logical-current-directory (shell-context-environment context)
+                              (ignore-errors (host-kit:getcwd))))

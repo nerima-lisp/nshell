@@ -325,45 +325,52 @@
 (defun registered-processes ()
   "Return the processes nshell spawned and has not reaped yet.
 
-A caller that suspends a thread inside a process wait may find that thread
-holding the registry lock, so this gives up waiting for the lock after half a
-second and reads the table without it."
-  (let ((lock *native-process-registry-lock*)
-        (locked-p nil))
-    (unwind-protect
-         (progn
-           (setf locked-p (sb-thread:grab-mutex lock :timeout 0.5))
-           (loop for process being the hash-values of *native-process-registry*
-                 collect process))
-      (when locked-p
-        (sb-thread:release-mutex lock)))))
+It copies the synchronized registry table under the table's own lock, not
+*NATIVE-PROCESS-REGISTRY-LOCK*: a thread parked in an interrupt can hold the
+latter, but not the former, whose holder runs without interrupts."
+  (sb-ext:with-locked-hash-table (*native-process-registry*)
+    (loop for process being the hash-values of *native-process-registry*
+          collect process)))
+
+(defun %signal-target (process own-pgid)
+  "Return (:GROUP . PGID), (:PROCESS . PID) or NIL for PROCESS right now.
+
+The recorded status is read without its lock, which a parked thread may hold.
+A process is left alone unless that status is :RUNNING or :STOPPED, and its
+group only while getpgid still returns the recorded group: a process can be
+reaped before its status is recorded, and then its pid may be reused."
+  (let ((pid (native-process-pid process))
+        (pgid (native-process-pgid process)))
+    (when (member (native-process-%status process) '(:running :stopped))
+      (let ((actual (ignore-errors (sb-posix:getpgid pid))))
+        (cond
+          ((null actual) nil)
+          ((and (integerp pgid) (plusp pgid) (/= pgid own-pgid))
+           (and (eql actual pgid) (cons :group pgid)))
+          ((eql actual own-pgid) (cons :process pid)))))))
 
 (defun stop-process-groups (processes &key (grace-seconds 0.5))
   "Send SIGTERM, wait GRACE-SECONDS, then send SIGKILL to each of PROCESSES:
 to its whole process group when it was spawned into a group of its own, and
-to the process alone when it shares this shell's group.
+to the process alone when it shares this shell's group. Each target is
+checked again before each signal (see %SIGNAL-TARGET).
 
-It neither waits for nor reaps the processes, so it cannot block on a thread
-that is suspended in their wait. The registry holds every process until it is
-reaped, so a pid or process group id taken from it cannot have been reused."
-  (let* ((own-pgid (sb-posix:getpgrp))
-         (targets
-           (remove-duplicates
-            (loop for process in processes
-                  for pid = (native-process-pid process)
-                  for pgid = (native-process-pgid process)
-                  collect (if (and (integerp pgid) (plusp pgid) (/= pgid own-pgid))
-                              (cons :group pgid)
-                              (cons :process pid)))
-            :test #'equal)))
+It neither waits for nor reaps the processes and takes no process lock, so it
+cannot block on a thread that is suspended in their wait."
+  (let ((own-pgid (sb-posix:getpgrp)))
     (flet ((send (signal)
-             (loop for (kind . id) in targets
+             (loop for target in (remove-duplicates
+                                  (remove nil
+                                          (mapcar (lambda (process)
+                                                    (%signal-target process own-pgid))
+                                                  processes))
+                                  :test #'equal)
+                   for (kind . id) = target
                    do (ignore-errors
                         (if (eq kind :group)
                             (%send-process-group-signal id signal)
                             (kill-process id signal))))))
-      (when targets
+      (when processes
         (send sb-unix:sigterm)
         (sleep grace-seconds)
-        (send sb-unix:sigkill)))
-    targets))
+        (send sb-unix:sigkill)))))

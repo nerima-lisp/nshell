@@ -32,13 +32,35 @@
         (error "NSHELL_BIN must name the nshell script-mode executable")))
 
   (defun %required-single-bin-path ()
-    (let ((path (uiop:getenv "PATH"))
-          (expected (uiop:getenv "NSHELL_SPEC_BIN_DIR")))
+    (let* ((path (uiop:getenv "PATH"))
+           (expected (uiop:getenv "NSHELL_SPEC_BIN_DIR"))
+           (resolved-path
+             (and path
+                  (uiop:directory-exists-p path)
+                  (string-right-trim "/" (namestring (truename path))))))
       (unless (and path expected
                    (string= path expected)
-                   (uiop:directory-exists-p path))
+                   resolved-path
+                   (not (member resolved-path
+                                '("/usr/bin" "/bin" "/usr/local/bin")
+                                :test #'string=)))
         (error "t/spec PATH must equal its fixed bin directory"))
       path))
+  (defun %check-spec-false-exits-nonzero ()
+    (let* ((false-bin
+             (merge-pathnames
+              #p"false"
+              (uiop:ensure-directory-pathname (%required-single-bin-path)))))
+      (unless (uiop:file-exists-p false-bin)
+        (error "The fixed t/spec bin directory has no false executable"))
+      (host-kit:with-temporary-directory (directory)
+        (let ((result
+                (host-kit:run-program (namestring false-bin) nil
+                                      :directory directory
+                                      :input ""
+                                      :timeout 20)))
+          (expect (host-kit:process-result-exit-code result)
+                  :to-equal 1)))))
 
   (defun %fixture-environment (directory)
     (let* ((home (merge-pathnames #p"home/" directory))
@@ -128,34 +150,78 @@
         (let ((final-newline (%output-final-newline-p normalized)))
           (with-input-from-string (input normalized)
             (with-output-to-string (output)
-              (let ((in-diagnostic nil))
-                (loop for line = (read-line input nil nil)
-                      while line
-                      do (let ((trimmed
-                                 (string-left-trim '(#\Space #\Tab #\Return) line)))
-                           (cond
-                             ((search "nshell: crash log:" trimmed)
-                              (when in-diagnostic (terpri output))
-                              (setf in-diagnostic nil)
-                              (write-string "nshell: crash log: <CRASH_LOG>" output)
-                              (terpri output))
-                             ((eql 0 (search "source: $WORK/case.nsh:" trimmed))
-                              (when in-diagnostic (terpri output))
-                              (write-string trimmed output)
-                              (setf in-diagnostic t))
-                             ((and in-diagnostic
-                                   (plusp (length line))
-                                   (find (char line 0) '(#\Space #\Tab #\Return)))
-                              (write-char #\Space output)
-                              (write-string trimmed output))
-                             (t
-                              (when in-diagnostic
-                                (terpri output)
-                                (setf in-diagnostic nil))
-                              (write-string line output)
-                              (terpri output)))))
-                (when (and in-diagnostic final-newline)
-                  (terpri output))))))
+              (let ((in-diagnostic nil)
+                    (value-diagnostic nil)
+                    (section nil)
+                    (pending nil)
+                    (pending-prefix ""))
+                (labels ((flush-diagnostic-line (newline-p)
+                           (when pending
+                             (write-string pending-prefix output)
+                             (write-string pending output)
+                             (when newline-p
+                               (terpri output))
+                             (setf pending nil
+                                   pending-prefix "")))
+                         (start-diagnostic (line)
+                           (when in-diagnostic
+                             (flush-diagnostic-line t))
+                           (setf in-diagnostic t
+                                 value-diagnostic (search "The value" line)
+                                 section (if value-diagnostic :value :ordinary)
+                                 pending line
+                                 pending-prefix "")))
+                  (loop for line = (read-line input nil nil)
+                        while line
+                        do (let ((trimmed
+                                   (string-left-trim
+                                    (quote (#\Space #\Tab #\Return)) line)))
+                             (cond
+                               ((search "nshell: crash log:" trimmed)
+                                (when in-diagnostic
+                                  (flush-diagnostic-line t))
+                                (setf in-diagnostic nil
+                                      value-diagnostic nil
+                                      section nil)
+                                (write-string "nshell: crash log: <CRASH_LOG>" output)
+                                (terpri output))
+                               ((eql 0 (search "source: $WORK/case.nsh:" trimmed))
+                                (start-diagnostic trimmed))
+                               ((and in-diagnostic
+                                     value-diagnostic
+                                     (eql 0 (search "is not of type" trimmed)))
+                                (flush-diagnostic-line t)
+                                (setf section :marker
+                                      pending trimmed
+                                      pending-prefix ""))
+                               ((and in-diagnostic
+                                     value-diagnostic
+                                     (eql 0 (search "when binding" trimmed)))
+                                (flush-diagnostic-line t)
+                                (setf section :binding
+                                      pending trimmed
+                                      pending-prefix ""))
+                               ((and in-diagnostic
+                                     (plusp (length line))
+                                     (find (char line 0)
+                                           (quote (#\Space #\Tab #\Return))))
+                                (if (eq section :marker)
+                                    (progn
+                                      (flush-diagnostic-line t)
+                                      (setf section :type
+                                            pending trimmed
+                                            pending-prefix "  "))
+                                    (setf pending (format nil "~a ~a" pending trimmed))))
+                               (t
+                                (when in-diagnostic
+                                  (flush-diagnostic-line t)
+                                  (setf in-diagnostic nil
+                                        value-diagnostic nil
+                                        section nil))
+                                (write-string line output)
+                                (terpri output)))))
+                  (when in-diagnostic
+                    (flush-diagnostic-line final-newline)))))))
         normalized)))
 
   (defun %normalize-nix-tool-path (text tool)
@@ -319,23 +385,32 @@
              (let ((records nil)
                    (diagnostic nil))
                (dolist (line lines)
-                 (if (eql 0 (search "source: $WORK/case.nsh:" line))
-                     (progn
-                       (when diagnostic
-                         (push (string-trim '(#\Space #\Tab #\Return)
-                                            diagnostic)
-                               records))
-                       (setf diagnostic
-                             (string-trim '(#\Space #\Tab #\Return) line)))
-                     (if diagnostic
-                         (setf diagnostic
-                               (format nil "~a ~a"
-                                       diagnostic
-                                       (string-trim '(#\Space #\Tab #\Return)
-                                                    line)))
-                         (push line records))))
+                 (cond
+                   ((eql 0 (search "source: $WORK/case.nsh:" line))
+                    (when diagnostic
+                      (push (string-trim '(#\Space #\Tab #\Return)
+                                           diagnostic)
+                            records))
+                    (setf diagnostic
+                          (string-trim '(#\Space #\Tab #\Return) line)))
+                   ((and diagnostic
+                         (plusp (length line))
+                         (find (char line 0) '(#\Space #\Tab #\Return)))
+                    (setf diagnostic
+                          (format nil "~a ~a"
+                                  diagnostic
+                                  (string-trim '(#\Space #\Tab #\Return)
+                                               line))))
+                   (t
+                    (when diagnostic
+                      (push (string-trim '(#\Space #\Tab #\Return)
+                                           diagnostic)
+                            records)
+                      (setf diagnostic nil))
+                    (push line records))))
                (when diagnostic
-                 (push (string-trim '(#\Space #\Tab #\Return) diagnostic)
+                 (push (string-trim '(#\Space #\Tab #\Return)
+                                      diagnostic)
                        records))
                (nreverse records))))
     (let* ((expected-exit (getf expectation :exit))
@@ -492,7 +567,9 @@
   (or (find id *l7-rows* :key (lambda (row) (getf row :probe-id))
             :test #'string=)
       (loop for row in *l7-rows*
-            for related = (find id (getf row :additional-probes)
+            for related = (find id
+                                (append (getf row :additional-probes)
+                                        (getf row :additional-crash-probes))
                                 :key (lambda (probe) (getf probe :probe-id))
                                 :test #'string=)
             when related
@@ -540,10 +617,12 @@
        (unless (and row (getf row :warning))
          (error "L7 row for probe ~a has no warning expectation" id))
        (let ((baseline (%run-probe fixture-source case)))
-         (unless (%fixture-result-matches-p case baseline t)
+         (unless (%fixture-result-matches-p case baseline)
            (return-from %check-l7-next-version nil)))
        (let* ((warning-source (or (getf row :warning-source) fixture-source))
               (result (%run-probe warning-source case)))
+         (unless (%fixture-result-matches-p case result)
+           (return-from %check-l7-next-version nil))
          (expect (%warning-expectation-matches-p
                   result (getf row :warning))
                  :to-be-truthy)))

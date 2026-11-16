@@ -753,8 +753,8 @@ name: an unknown name resolves to an uninterned symbol instead."
                        (nshell.domain.parsing:command-node-environment-assignments
                         command-node)
                        nil
-                       ;; The alias word is the name the input wrote.
-                       (nshell.domain.parsing:command-node-name-span command-node))
+                       (nshell.domain.parsing:alias-word-text-span
+                        (nshell.domain.parsing:command-node-name-span command-node)))
                       command-node))))))))
 
 
@@ -915,7 +915,8 @@ name: an unknown name resolves to an uninterned symbol instead."
                      (nshell.domain.parsing:command-node-environment-assignments
                       command-node))
                     nil
-                    (nshell.domain.parsing:command-node-name-span command-node))))
+                    (nshell.domain.parsing:alias-word-text-span
+                     (nshell.domain.parsing:command-node-name-span command-node)))))
             (let ((*sexp-command-alias-expansion-stack*
                     (cons
                      (nshell.domain.parsing:command-node-command command-node)

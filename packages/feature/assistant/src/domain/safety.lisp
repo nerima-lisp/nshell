@@ -72,19 +72,13 @@
                 args (rest inner))
           (return (values (%assistant-command-basename command) args))))))
 
-(defvar *assistant-reader-stage-p* nil
-  "True while classifying a node the reader path runs (a reader result's
-form).  The reader executor keeps redirects and assignments in their own
-slots and passes every argument word as it is; only the bare-line executor
-splits a NAME=value prefix and redirect words off the words.")
-
 (defun %assistant-classify-command-line (text)
   "Classify TEXT as a bare command line: the reader of eval, sh -c, and
 process substitutions."
-  (let ((parsed (nshell.domain.parsing:parse-command-line text))
-        (*assistant-reader-stage-p* nil))
+  (let ((parsed (nshell.domain.parsing:parse-command-line text)))
     (if (nshell.domain.parsing:parse-complete-p parsed)
-        (classify-ast (nshell.domain.parsing:parse-result-ast parsed))
+        (%assistant-classify-node (nshell.domain.parsing:parse-result-ast parsed)
+                                  :bare-line)
         (%assistant-unparsable-result "the wrapped command could not be parsed"))))
 
 (defun %assistant-classify-substitution-text (text)
@@ -110,8 +104,9 @@ as a command line, anything else goes through the auto reader
        (%assistant-classify-command-line text))
       (t
        (handler-case
-           (classify-ast (nshell.domain.parsing:read-submission
-                          text :reader-context :auto))
+           (%assistant-classify-node (nshell.domain.parsing:read-submission
+                                      text :reader-context :auto)
+                                     :reader)
          (error ()
            (%assistant-unparsable-result
             "the command substitution could not be read")))))))
@@ -184,13 +179,13 @@ written words of the outermost command."
   "Redirect kinds that write a file: bare-line kinds from ast-redirect-split
 and reader kinds from ast-redirect-entry.")
 
-(defun %assistant-redirects (split-redirects entries)
+(defun %assistant-redirects (split-redirects entries path)
   "Describe the redirects of one command (D-P1-5 2.5).  SPLIT-REDIRECTS are
 the (KIND . TARGET) pairs of ast-redirect-split and ENTRIES the reader's
 ast-redirect-entry values.  Return the output targets, a text for each
 redirect outside the safe forms, the texts whose substitutions run
 (targets, here-document bodies, here-strings), and the results of the
-process substitutions."
+process substitutions, read on PATH."
   (let ((writes nil)
         (problems nil)
         (texts nil)
@@ -223,8 +218,9 @@ process substitutions."
               (target (nshell.domain.parsing:ast-redirect-entry-target entry)))
           (cond
             ((nshell.domain.parsing:redirect-procsub-target-p target)
-             (push (classify-ast (nshell.domain.parsing:redirect-procsub-target-form
-                                  target))
+             (push (%assistant-classify-node
+                    (nshell.domain.parsing:redirect-procsub-target-form target)
+                    path)
                    results)
              (when (eq (nshell.domain.parsing:redirect-procsub-target-direction target)
                        :output)
@@ -246,34 +242,40 @@ process substitutions."
       (values (nreverse writes) (nreverse problems) (nreverse texts)
               (nreverse results)))))
 
-(defun %assistant-command-parts (node)
-  "Split a command NODE the way the executors split it.  Assignments come
-from command-node-assignment-words (a line that runs no command) or, on the
-bare-line path, split-command-node-assignments (a prefix), plus a reader
-node's own assignment slot.  Redirects come from the reader node's redirect
-entries and, on the bare-line path, from ast-redirect-split of the command
-that remains, as in %execute-plain-command-node-in-context.  Return the argv of
-that command without its redirects (NIL when the line runs no command), the
+(defun %assistant-command-parts (node path)
+  "Split a command NODE the way the executor on PATH splits it.  PATH is
+:BARE-LINE for a node execute-command-node-in-context runs and :READER for
+a reader stage, which keeps its assignments and redirects in their own slots
+and passes every word as an argument.  Assignments come from
+command-node-assignment-words (a line that runs no command) or, on the
+bare-line path, split-command-node-assignments (a prefix), plus the node's
+own assignment slot.  Redirects come from the node's redirect entries and,
+on the bare-line path, from ast-redirect-split of the command that remains,
+as in %execute-plain-command-node-in-context.  Return the argv of that
+command without its redirects (NIL when the line runs no command), the
 assigned names, the words as written (redirect targets, here-document
 bodies, and assignments included), the output targets, the redirect
-problems, and the results of its process substitution redirects."
-  (let* ((reader-assignments
+problems, the results of its process substitution redirects, and the
+redirects used."
+  (let* ((reader-p (eq path :reader))
+         (reader-assignments
            (mapcar #'nshell.domain.parsing:arg-value
                    (nshell.domain.parsing:command-node-environment-assignments node)))
          (assignment-only (nshell.domain.parsing:command-node-assignment-words node)))
     (multiple-value-bind (prefix rest)
         (cond
           (assignment-only (values assignment-only nil))
-          (*assistant-reader-stage-p* (values nil node))
+          (reader-p (values nil node))
           (t (nshell.domain.parsing:split-command-node-assignments node)))
-      (let ((split (and rest
-                        (not *assistant-reader-stage-p*)
-                        (nshell.domain.parsing:split-command-node-redirects rest))))
+      (let* ((split (and rest
+                         (not reader-p)
+                         (nshell.domain.parsing:split-command-node-redirects rest)))
+             (split-redirects
+               (and split
+                    (nshell.domain.parsing:command-redirect-split-result-redirects split)))
+             (entries (nshell.domain.parsing:command-node-redirects node)))
         (multiple-value-bind (writes problems texts results)
-            (%assistant-redirects
-             (and split
-                  (nshell.domain.parsing:command-redirect-split-result-redirects split))
-             (nshell.domain.parsing:command-node-redirects node))
+            (%assistant-redirects split-redirects entries path)
           (let ((words (append (list (nshell.domain.parsing:command-node-command node))
                                (nshell.domain.parsing:command-node-arg-values node)
                                reader-assignments
@@ -297,13 +299,15 @@ problems, and the results of its process substitution redirects."
                               words)
                         (append problems (list "process substitution >(...)"))
                         problems)
-                    results)))))))
+                    results
+                    (append split-redirects entries))))))))
 
-(defun classify-command (node)
-  "Classify a command-node using its effective command and arguments."
+(defun classify-command (node &key (path :bare-line))
+  "Classify a command-node using its effective command and arguments.  PATH
+names the executor that runs NODE (see %assistant-command-parts)."
   (if (nshell.domain.parsing:command-node-p node)
       (multiple-value-bind (argv assignments words writes problems results)
-          (%assistant-command-parts node)
+          (%assistant-command-parts node path)
         (let ((nested (mapcan #'%assistant-result-reasons
                               (append results (%assistant-substitution-results words)))))
           (if argv
@@ -327,7 +331,7 @@ problems, and the results of its process substitution redirects."
   "Return the effects of the command NODE runs: (DELETES PATH), (WRITES PATH),
 and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
   (multiple-value-bind (argv assignments words writes)
-      (%assistant-command-parts node)
+      (%assistant-command-parts node :bare-line)
     (declare (ignore assignments words))
     (nshell.feature.kb:subject-effects
      :command (and argv (%assistant-command-basename (first argv)))
@@ -335,18 +339,18 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
      :arguments (rest argv)
      :writes writes)))
 
-(defun classify-pipeline (node)
+(defun classify-pipeline (node &key (path :bare-line))
   "Classify a pipeline by its most restrictive stage."
   (if (nshell.domain.parsing:pipeline-node-p node)
       (%assistant-most-restrictive-result
-       (mapcar #'classify-ast
+       (mapcar (lambda (stage) (%assistant-classify-node stage path))
                (nshell.domain.parsing:pipeline-node-commands node)))
       (%assistant-unparsable-result "the value is not a pipeline AST node")))
 
-(defun %assistant-classify-sequence (node)
+(defun %assistant-classify-sequence (node path)
   (if (nshell.domain.parsing:sequence-node-p node)
       (%assistant-most-restrictive-result
-       (mapcar #'classify-ast
+       (mapcar (lambda (item) (%assistant-classify-node item path))
                (nshell.domain.parsing:sequence-node-commands node)))
       (%assistant-unparsable-result "the value is not a sequence AST node")))
 
@@ -374,8 +378,7 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
       ((or (nshell.domain.parsing:command-node-p form)
            (nshell.domain.parsing:pipeline-node-p form)
            (nshell.domain.parsing:sequence-node-p form))
-       (%assistant-form-result (let ((*assistant-reader-stage-p* t))
-                                 (classify-ast form))
+       (%assistant-form-result (%assistant-classify-node form :reader)
                                :form-redirect
                                (%assistant-ast-has-redirect-p form)))
       ((consp form)
@@ -389,8 +392,7 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
                          (declare (ignore head-source))
                          :command-island))))
              (%assistant-form-result
-              (let ((*assistant-reader-stage-p* t))
-                (classify-ast ast))
+              (%assistant-classify-node ast :reader)
               :sexp-unforced
               (not (and (nshell.domain.parsing:command-node-p ast)
                         (nshell.domain.parsing:command-node-force-external-p ast)
@@ -401,8 +403,7 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
       (t
        (%assistant-unclassifiable-result "unclassifiable S-expression form")))))
 
-(defun classify-ast (node)
-  "Classify shell AST and S-expression input without inspecting raw text."
+(defun %assistant-classify-node (node path)
   (cond
     ((nshell.domain.parsing:reader-result-p node)
      (%assistant-classify-reader-result node))
@@ -411,10 +412,17 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
             (every #'nshell.domain.parsing:reader-result-p node)))
      (%assistant-most-restrictive-result
       (mapcar #'%assistant-classify-reader-result node)))
-    ((nshell.domain.parsing:command-node-p node) (classify-command node))
-    ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node))
+    ((nshell.domain.parsing:command-node-p node) (classify-command node :path path))
+    ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node :path path))
     ((nshell.domain.parsing:sequence-node-p node)
-     (%assistant-classify-sequence node))
+     (%assistant-classify-sequence node path))
     ((consp node)
      (%assistant-unclassifiable-result "unclassifiable S-expression form"))
     (t (%assistant-unparsable-result "unsupported AST node"))))
+
+(defun classify-ast (node &key (path :bare-line))
+  "Classify shell AST and S-expression input without inspecting raw text.
+PATH names the executor that runs a command, pipeline, or sequence node:
+:BARE-LINE for execute-ast-in-context, :READER for a reader stage.  Reader
+results always run as reader stages."
+  (%assistant-classify-node node path))

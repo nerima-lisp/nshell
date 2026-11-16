@@ -81,11 +81,11 @@ nodes run as reader stages."
 
 (defun %safety-view-classifier (path node)
   ;; The classifier reads a reader result's form as a reader stage
-  ;; (%assistant-classify-reader-result binds the same variable).
-  (let ((nshell.feature.assistant::*assistant-reader-stage-p* (eq path :reader)))
-    (multiple-value-bind (argv names)
-        (nshell.feature.assistant::%assistant-command-parts node)
-      (list names argv))))
+  ;; (%assistant-classify-reader-result passes :READER).
+  (multiple-value-bind (argv names)
+      (nshell.feature.assistant::%assistant-command-parts
+       node (if (eq path :reader) :reader :bare-line))
+    (list names argv)))
 
 (defun %safety-view-executor (context path node)
   "The names and command words the executor's own functions give NODE.  The

@@ -370,3 +370,33 @@ first, as (SOURCE ORIGIN APPROVAL)."
           (expect nil :to-be executed)
           (%approval-press-enter)
           (expect '(("rm -rf target" :proposal :confirm)) :to-equal executed))))))
+
+(describe "assistant-execution-gate-approval-levels"
+  (it "stops-a-confirm-command-approved-only-at-the-safe-level"
+    (let ((context (nshell.application:make-shell-context
+                    :environment (nshell.domain.environment:make-environment)))
+          (ast (nshell.domain.parsing:make-command-node "rm" (list "file")))
+          (executed 0))
+      (with-temporary-function
+          ('nshell.application::execute-command-node-in-context
+           (lambda (ignored-context ignored-ast)
+             (declare (ignore ignored-context ignored-ast))
+             (incf executed)
+             (values "executed" 0)))
+        (let ((nshell.application:*execution-origin* :proposal)
+              (nshell.application:*execution-approval* :safe)
+              (nshell.application:*execution-gate-stopped-p* nil))
+          (multiple-value-bind (output code)
+              (nshell.application:execute-ast-in-context context ast)
+            (expect 126 :to-equal code)
+            (expect (search "requires confirmation" output) :to-be-truthy)
+            (expect t :to-be nshell.application:*execution-gate-stopped-p*)))
+        (let ((nshell.application:*execution-origin* :proposal)
+              (nshell.application:*execution-approval* :confirm)
+              (nshell.application:*execution-gate-stopped-p* nil))
+          (multiple-value-bind (output code)
+              (nshell.application:execute-ast-in-context context ast)
+            (expect "executed" :to-equal output)
+            (expect 0 :to-equal code)
+            (expect nil :to-be nshell.application:*execution-gate-stopped-p*)))
+        (expect 1 :to-equal executed)))))

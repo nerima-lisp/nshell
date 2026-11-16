@@ -1489,7 +1489,7 @@
                 "rm" (list "file")))
           (executed-p nil))
       (let ((nshell.application::*execution-origin* :proposal)
-            (nshell.application::*execution-confirmed-p* nil))
+            (nshell.application::*execution-approval* nil))
         (with-temporary-function
             ('nshell.application::execute-command-node-in-context
              (lambda (ignored-context ignored-ast)
@@ -1502,7 +1502,7 @@
             (expect 126 :to-equal code)
             (expect (search "requires confirmation" output) :to-be-truthy))))
       (let ((nshell.application::*execution-origin* :proposal)
-            (nshell.application::*execution-confirmed-p* t))
+            (nshell.application::*execution-approval* :confirm))
         (with-temporary-function
             ('nshell.application::execute-command-node-in-context
              (lambda (ignored-context ignored-ast)
@@ -1526,7 +1526,7 @@
              (nshell.application:shell-context-environment context)
              "NSHELL_AGENT_PIPELINE_CMD" "rm" nil))
       (let ((nshell.application::*execution-origin* :agent)
-            (nshell.application::*execution-confirmed-p* t))
+            (nshell.application::*execution-approval* :confirm))
         (with-temporary-function
             ('nshell.application::%execute-command-by-name-in-context
              (lambda (ignored-context ignored-command ignored-args)
@@ -1567,7 +1567,7 @@
              (nshell.application:shell-context-environment context)
              "NSHELL_AGENT_TARGET" "/" nil))
       (let ((nshell.application::*execution-origin* :agent)
-            (nshell.application::*execution-confirmed-p* t))
+            (nshell.application::*execution-approval* :confirm))
         (with-temporary-function
             ('nshell.application::%execute-command-by-name-in-context
              (lambda (ignored-context ignored-command ignored-args)

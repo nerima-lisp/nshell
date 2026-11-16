@@ -441,7 +441,7 @@
             (ast (nshell.domain.parsing:make-command-node
                   "eval" '("git push --force"))))
         (let ((nshell.application::*execution-origin* :agent)
-              (nshell.application::*execution-confirmed-p* t))
+              (nshell.application::*execution-approval* :confirm))
           (multiple-value-bind (output code)
               (nshell.application:execute-ast-in-context context ast)
             (expect 126 :to-equal code)
@@ -457,7 +457,7 @@
              (nshell.application:shell-context-environment context)
              "NSHELL_AGENT_CMD" "rm" nil))
       (let ((nshell.application::*execution-origin* :agent)
-            (nshell.application::*execution-confirmed-p* t))
+            (nshell.application::*execution-approval* :confirm))
         (multiple-value-bind (output code)
             (nshell.application:execute-ast-in-context context ast)
           (expect 126 :to-equal code)

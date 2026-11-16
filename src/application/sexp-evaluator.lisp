@@ -81,11 +81,16 @@
                        (loop for item across object do (visit item)))))))
       (visit form))))
 
-(defun %find-user-symbol (name)
+(defun %find-user-symbol (name &key (intern t))
+  "Return NAME's symbol in NSHELL.USER.  With INTERN NIL a name the package
+does not hold yet gives a fresh uninterned symbol, which names no function or
+macro, as the symbol INTERN would create does not."
   (or (find-symbol name (find-package "NSHELL.USER"))
-      (intern name (find-package "NSHELL.USER"))))
+      (if intern
+          (intern name (find-package "NSHELL.USER"))
+          (make-symbol name))))
 
-(defun %resolve-reader-symbol (reader-result symbol)
+(defun %resolve-reader-symbol (reader-result symbol &key (intern t))
   (multiple-value-bind (source-name escaped-p package-qualifier)
       (%reader-symbol-origin-info reader-result symbol)
     (if (null source-name)
@@ -108,16 +113,20 @@
              (let ((package (find-package package-name)))
                (unless package
                  (error "Unknown package qualifier ~S" package-name))
-               (if (eq package (find-package "KEYWORD"))
-                   (intern name package)
-                   (or (find-symbol name package)
-                       (intern name package)))))
+               (cond
+                 ((not intern)
+                  (or (find-symbol name package) (make-symbol name)))
+                 ((eq package (find-package "KEYWORD"))
+                  (intern name package))
+                 (t
+                  (or (find-symbol name package)
+                      (intern name package))))))
             ((and (not escaped-p)
                   (find-symbol (string-upcase source-name)
                                (find-package "COMMON-LISP")))
              (find-symbol (string-upcase source-name)
                           (find-package "COMMON-LISP")))
-            (t (%find-user-symbol source-name)))))))
+            (t (%find-user-symbol source-name :intern intern)))))))
 
 (defun %materialize-reader-form (form reader-result)
   (cond
@@ -447,25 +456,30 @@
       (classify-sexp-head context (%form-head-source form reader-result))
       (%symbol-command-classification context (first form))))
 
-(defun %resolve-form-operator (context form reader-result)
+(defun %resolve-form-operator (context form reader-result &key (intern t))
+  "Return the operator FORM's head names.  INTERN NIL (explain) interns no
+name: an unknown name resolves to an uninterned symbol instead."
   (let ((head (first form)))
     (if (or (not (%source-backed-form-p form reader-result))
             (not (symbolp head))
             (null (%reader-symbol-origin reader-result head)))
-        (if (symbolp head) (%resolve-reader-symbol reader-result head) head)
+        (if (symbolp head)
+            (%resolve-reader-symbol reader-result head :intern intern)
+            head)
         (multiple-value-bind (source-name escaped-p package-qualifier)
             (%reader-symbol-origin-info reader-result head)
           (cond
-            (package-qualifier (%resolve-reader-symbol reader-result head))
-            (escaped-p (%find-user-symbol source-name))
+            (package-qualifier
+             (%resolve-reader-symbol reader-result head :intern intern))
+            (escaped-p (%find-user-symbol source-name :intern intern))
             ((%evaluator-aware-head-p source-name nil)
              (or (find-symbol (string-upcase source-name) "CL")
-                 (%find-user-symbol (string-upcase source-name))))
+                 (%find-user-symbol (string-upcase source-name) :intern intern)))
             ((%user-package-function-or-macro-p source-name)
-             (%find-user-symbol source-name))
+             (%find-user-symbol source-name :intern intern))
             ((find-symbol (string-upcase source-name) "CL")
              (find-symbol (string-upcase source-name) "CL"))
-            (t (%find-user-symbol source-name)))))))
+            (t (%find-user-symbol source-name :intern intern)))))))
 
 (defun %reader-pipeline-form-p (form reader-result)
   (and (consp form)
@@ -1664,10 +1678,11 @@ FORM is not a list with a symbol head."
   (and (consp form) (symbolp (first form))
        (%form-command-classification context form reader-result)))
 
-(defun %form-operator (context form reader-result)
-  "Return the operator FORM's symbol head resolves to, or NIL."
+(defun %form-operator (context form reader-result &key (intern t))
+  "Return the operator FORM's symbol head resolves to, or NIL.  INTERN is as
+for %resolve-form-operator."
   (and (consp form) (symbolp (first form))
-       (%resolve-form-operator context form reader-result)))
+       (%resolve-form-operator context form reader-result :intern intern)))
 
 (defun %eval-form-branch (form reader-result operator raw-operator classification)
   "Return the branch %eval-form takes for FORM, whose resolved OPERATOR,
@@ -1844,17 +1859,19 @@ reports what evaluation would do."
                            classification)))
          (values value *current-evaluation-status*))))))
 
-(defun %reader-result-branch (context reader-result)
+(defun %reader-result-branch (context reader-result &key (intern nil))
   "Return the branch evaluate-reader-result-in-context takes for
 READER-RESULT's form, chosen by %eval-form-branch in the same evaluation
-state.  Resolving the operator may intern its name in NSHELL.USER, as
-evaluation does; nothing runs."
+state.  It interns no name unless INTERN is true, which resolves the operator
+exactly as evaluation does; an unknown name gives the same branch either way,
+since neither symbol names a function or macro.  Nothing runs."
   (%with-reader-evaluation-state
    reader-result
    (lambda ()
      (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
        (%eval-form-branch form reader-result
-                          (%form-operator context form reader-result)
+                          (%form-operator context form reader-result
+                                          :intern intern)
                           (and (consp form) (first form))
                           (%form-classification context form reader-result))))))
 

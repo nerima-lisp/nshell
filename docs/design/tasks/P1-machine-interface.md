@@ -41,15 +41,15 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 
 ## P1-5 危険度判定と効果モデルを Prolog の規則に
 
-- [ ] `safety.lisp` の判定を proposal/06 A・B の規則に置き換える
-- [ ] 未知のコマンドは confirm、読むだけの既知コマンド (git status・git log・git diff・ls・cat など) は safe、ルート以外への `rm -r` は confirm
-- [ ] これで変わる既存の分類テストは、理由をコミットに書いて直す。proposal/02 と ux/U7 の例も直す
-- [ ] 規則は `findall` ですべて評価し、最も高いレベルを採る。同じレベルの規則はすべて safety.reasons に入れる (規則名と説明)
-- [ ] 規則名は `classify/<kebab>` とし、1 つのデータファイルにまとめる
-- [ ] block を出せるのは組み込み規則だけ。ユーザー規則は別の rulebase で評価し、結果を confirm までに抑える。P1-5 で作るのは仕組みとテスト用の注入だけで、rules.pl を読むのは P5-7
+- [x] `safety.lisp` の判定を proposal/06 A・B の規則に置き換える
+- [x] 未知のコマンドは confirm、読むだけの既知コマンド (git status・git log・git diff・ls・cat など) は safe、ルート以外への `rm -r` は confirm
+- [x] これで変わる既存の分類テストは、理由をコミットに書いて直す。proposal/02 と ux/U7 の例も直す
+- [x] 規則は `findall` ですべて評価し、最も高いレベルを採る。同じレベルの規則はすべて safety.reasons に入れる (規則名と説明)
+- [x] 規則名は `classify/<kebab>` とし、1 つのデータファイルにまとめる
+- [x] block を出せるのは組み込み規則だけ。ユーザー規則は別の rulebase で評価し、結果を confirm までに抑える。P1-5 で作るのは仕組みとテスト用の注入だけで、rules.pl を読むのは P5-7
 - [ ] 判定は Enter のときと explain のときに行う。入力中の表示は P3-7
 - [ ] 診断の規則 (P4-3) のうち diagnose/typo の 1 本だけを P1 で作り、proposal/02 の例を golden test として通す
-- [ ] 旧判定と新規則を同じ入力群で比べるテスト
+- [x] 旧判定と新規則を同じ入力群で比べるテスト
 
 受け入れ条件: 上で直したものを除き既存の safety テストが全部通り、explain の出力に規則名が出る。
 

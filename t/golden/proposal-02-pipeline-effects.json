@@ -39,9 +39,7 @@
     }
   },
   "files": {
-    "a.txt": "a.txt\n",
-    "b.txt": "b.txt\n",
-    "c.txt": "c.txt\n"
+    "bin/git": "#!/bin/sh\nprintf '?? a.txt\\n?? b.txt\\n?? c.txt\\n'\n"
   },
   "input": "(| (git status --short) (wc -l))"
 }

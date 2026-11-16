@@ -94,41 +94,45 @@ directory and return the decoded envelope, its stdout text and exit status."
             (host-kit:process-result-exit-code result)
             (host-kit:process-result-stderr result))))
 
-(defun %json-golden-git-repository (directory)
-  "Make DIRECTORY a git repository with exactly three changed (untracked) files."
-  (let ((git (%resolve-real-external-executable "git")))
-    (host-kit:run-program git (list "init" "-q") :directory directory :timeout 60)
-    (dolist (name '("a.txt" "b.txt" "c.txt"))
-      (with-open-file (out (merge-pathnames name directory) :direction :output)
-        (write-line name out)))))
-
-(defun %json-golden-executable (path)
-  "Create PATH as an executable script that exits 0."
-  (ensure-directories-exist path)
-  (with-open-file (out path :direction :output)
-    (format out "#!/bin/sh~%exit 0~%"))
-  (sb-posix:chmod (sb-ext:native-namestring path) #o755))
+(defun %json-golden-bin-file (work name content)
+  "Create bin/NAME under WORK with CONTENT and make it executable, as the
+golden convention creates every file under bin/; return the bin directory."
+  (let ((bin (merge-pathnames "bin/" work)))
+    (ensure-directories-exist bin)
+    (with-open-file (out (merge-pathnames name bin) :direction :output)
+      (write-string content out))
+    (sb-posix:chmod (sb-ext:native-namestring (merge-pathnames name bin)) #o755)
+    bin))
 
 (defun %json-golden-native (directory)
   (string-right-trim "/" (sb-ext:native-namestring (truename directory))))
 
 (defun %json-golden-run-pipeline-example ()
-  "Run proposal/02's --json example in a fresh repository and return the
+  "Run proposal/02's --json example in a fresh directory and return the
 envelope with duration_ms set to 0 and state.cwd to $WORK."
   (host-kit:with-temporary-directory (work)
-    (%json-golden-git-repository work)
-    (multiple-value-bind (envelope stdout status stderr)
-        (%json-golden-run "(| (git status --short) (wc -l))" work)
-      (declare (ignore stdout))
-      (unless (eql status 0)
-        (format *error-output* "~&golden pipeline exited ~A; stderr:~%~A~%" status stderr))
-      (expect status :to-equal 0)
-      (expect (machine-envelope-failures envelope) :to-be-null)
-      (expect (gethash "cwd" (gethash "state" envelope))
-              :to-equal (%json-golden-native work))
-      (setf (gethash "duration_ms" envelope) 0
-            (gethash "cwd" (gethash "state" envelope)) "$WORK")
-      envelope)))
+    ;; As the golden convention has it: no repository, but a git on
+    ;; $WORK/bin, put before the host's PATH, that prints three changed
+    ;; files.  wc comes from the host.
+    (let ((bin (%json-golden-bin-file
+                work "git"
+                (format nil "#!/bin/sh~%printf '?? a.txt\\n?? b.txt\\n?? c.txt\\n'~%"))))
+      (multiple-value-bind (envelope stdout status stderr)
+          (%json-golden-run "(| (git status --short) (wc -l))" work
+                            :extra-environment
+                            (list (format nil "PATH=~A:~A" (%json-golden-native bin)
+                                          (uiop:getenv "PATH"))))
+        (declare (ignore stdout))
+        (unless (eql status 0)
+          (format *error-output* "~&golden pipeline exited ~A; stderr:~%~A~%"
+                  status stderr))
+        (expect status :to-equal 0)
+        (expect (machine-envelope-failures envelope) :to-be-null)
+        (expect (gethash "cwd" (gethash "state" envelope))
+                :to-equal (%json-golden-native work))
+        (setf (gethash "duration_ms" envelope) 0
+              (gethash "cwd" (gethash "state" envelope)) "$WORK")
+        envelope))))
 
 (defun %json-golden-pipeline-expected ()
   (let ((example (json-kit:parse
@@ -200,14 +204,15 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
 
   (it "matches proposal/02's structured error example"
     ;; The fixes come from the names the run can resolve, PATH included, so
-    ;; PATH holds only a git: another name one edit from gti on the host's
-    ;; PATH would be a fix as near as git.
+    ;; PATH holds only a git instead of being put before the host's PATH:
+    ;; a name one edit from gti on some host's PATH would be a fix as near
+    ;; as git.
     (host-kit:with-temporary-directory (work)
       (let ((example (json-kit:parse
                       (%json-golden-example "docs/design/proposal/02-machine-interface.md"
                                             "{" :whole-line-p t)))
-            (bin (merge-pathnames "bin/" work)))
-        (%json-golden-executable (merge-pathnames "git" bin))
+            (bin (%json-golden-bin-file work "git"
+                                        (format nil "#!/bin/sh~%exit 0~%"))))
         (multiple-value-bind (envelope stdout status)
             (%json-golden-run "gti status" work
                               :extra-environment

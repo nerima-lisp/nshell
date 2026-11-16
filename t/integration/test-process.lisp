@@ -66,6 +66,196 @@
         (expect (search "timed out after" error-output) :to-be-truthy)))))
 
 (describe "process-tests"
+  (it "BUG-3 scalar background failures report once through reader and builtin eval CLI"
+    (cl-weave:expect-assertions 26)
+    (with-repl-test-state
+      (dolist (input '("/nshell-bug-3-command-does-not-exist &"
+                       "builtin eval '/nshell-bug-3-command-does-not-exist &'"))
+        (dolist (json-p '(nil t))
+          (let ((status nil) (stdout nil))
+            (let ((stderr
+                    (with-output-to-string (*error-output*)
+                      (setf stdout
+                            (with-output-to-string (*standard-output*)
+                              (setf status
+                                    (nshell::%run-parsed-invocation
+                                     (nth-value 0
+                                       (nshell::%parse-cli-arguments
+                                        (append (when json-p '("--json"))
+                                                (list "--command" input)))))))))))
+              (expect 127 :to-equal status)
+              (expect 0 :to-equal (hash-table-count nshell.presentation::*proc-registry*))
+              (if json-p
+                  (let ((envelope (json-kit:parse stdout)))
+                    (expect nil :to-equal (machine-envelope-failures envelope))
+                    (expect 127 :to-equal (json-at envelope "status"))
+                    (expect "E_COMMAND_NOT_FOUND" :to-equal (json-at envelope "error" "code"))
+                    (expect "" :to-equal (json-at envelope "stdout" "text"))
+                    (expect 1 :to-equal (count #\Newline (json-at envelope "stderr" "text")))
+                    (expect "" :to-equal stderr)
+                    (expect 0 :to-equal (length (json-at envelope "state" "jobs"))))
+                  (progn
+                    (expect "" :to-equal stdout)
+                    (expect 1 :to-equal (count #\Newline stderr))))))))))
+  (it "BUG-3 failed process substitutions close every raw and duplicated descriptor"
+    (cl-weave:expect-assertions 18)
+    (dolist (direction '(:input :output))
+      (let ((duplicate (symbol-function 'nshell.infrastructure.acl::%duplicate-process-substitution-fd))
+            (make-pipes (symbol-function 'nshell.infrastructure.acl::%make-pipeline-pipes))
+            (make-stream (symbol-function 'nshell.infrastructure.acl::%process-substitution-stream))
+            (descriptors nil) (child-stream nil) (failure nil))
+        (with-output-to-string (*error-output*)
+          (with-temporary-functions
+              (('nshell.infrastructure.acl::%duplicate-process-substitution-fd
+                (lambda (fd)
+                  (push fd descriptors)
+                  (let ((copy (funcall duplicate fd))) (push copy descriptors) copy)))
+               ('nshell.infrastructure.acl::%make-pipeline-pipes
+                (lambda (count)
+                  (let ((pipes (funcall make-pipes count)))
+                    (dolist (pair pipes) (setf descriptors (append pair descriptors)))
+                    pipes)))
+               ('nshell.infrastructure.acl::%process-substitution-stream
+                (lambda (fd stream-direction)
+                  (setf child-stream (funcall make-stream fd stream-direction)))))
+            (handler-case
+                (nshell.infrastructure.acl:spawn-process-substitution
+                 direction
+                 (loop repeat 2 collect
+                   (nshell.domain.parsing:make-command-node
+                    "/nshell-bug-3-command-does-not-exist" nil)))
+              (error (condition) (setf failure condition)))))
+        (expect "process substitution command could not be started" :to-equal (princ-to-string failure))
+        (expect 6 :to-equal (length descriptors))
+        (expect nil :to-equal (open-stream-p child-stream))
+        (dolist (fd descriptors)
+          (expect sb-posix:ebadf :to-equal
+                  (handler-case (sb-posix:fcntl fd sb-posix:f-getfd)
+                    (sb-posix:syscall-error (condition) (sb-posix:syscall-errno condition))))))))
+  (it "BUG-3 all missing outer stages abort a live process substitution"
+    (cl-weave:expect-assertions 10)
+    (let ((release (symbol-function 'nshell.application::%release-process-substitution-resources))
+          (finish (symbol-function 'nshell.application::%finish-process-substitution-resources))
+          (abort (symbol-function 'nshell.application::%abort-process-substitution-resources))
+          (released 0) (finished 0) (aborted 0)
+          (resource nil) (processes nil) (fd nil))
+      (with-output-to-string (*error-output*)
+        (unwind-protect
+             (progn
+               (setf resource
+                     (nshell.infrastructure.acl:spawn-process-substitution
+                      :output (list (nshell.domain.parsing:make-command-node "cat" nil)))
+                     processes (copy-list (nshell.infrastructure.acl::process-substitution-resource-processes resource))
+                     fd (nshell.infrastructure.acl:process-substitution-resource-fd resource))
+               (expect 1 :to-equal (length processes))
+               (with-temporary-functions
+                   (('nshell.application::%release-process-substitution-resources
+                     (lambda (resources) (incf released) (funcall release resources)))
+                    ('nshell.application::%finish-process-substitution-resources
+                     (lambda (resources) (incf finished) (funcall finish resources)))
+                    ('nshell.application::%abort-process-substitution-resources
+                     (lambda (resources) (incf aborted) (funcall abort resources))))
+                 (multiple-value-bind (output status statuses)
+                     (nshell.application::%execute-os-pipeline-with-process-substitutions
+                      (loop repeat 2 collect
+                        (nshell.domain.parsing:make-command-node
+                         "/nshell-bug-3-command-does-not-exist" nil))
+                      nil (list resource))
+                   (declare (ignore output))
+                   (expect 127 :to-equal status)
+                   (expect '(127 127) :to-equal statuses)))
+               (expect 0 :to-equal released)
+               (expect 0 :to-equal finished)
+               (expect 1 :to-equal aborted)
+               (expect nil :to-equal (nshell.infrastructure.acl:process-substitution-resource-fd resource))
+               (expect nil :to-equal (nshell.infrastructure.acl::process-substitution-resource-processes resource))
+               (expect nil :to-equal (some #'nshell.infrastructure.acl:process-alive-p processes))
+               (expect sb-posix:ebadf :to-equal
+                       (handler-case (sb-posix:fcntl fd sb-posix:f-getfd)
+                         (sb-posix:syscall-error (condition)
+                           (sb-posix:syscall-errno condition)))))
+          (when resource (nshell.infrastructure.acl:close-process-substitution resource))
+          (nshell.infrastructure.acl:%abort-pipeline (reverse processes) nil)))))
+  (it "BUG-3 async launch returns while a long-lived neighbor remains alive"
+    (cl-weave:expect-assertions 18)
+    (dolist (failed-index '(0 1))
+      (let* ((spawn (symbol-function 'nshell.infrastructure.acl::%run-pipeline-command))
+             (commands
+               (loop for index below 2 collect
+                 (nshell.domain.parsing:make-command-node
+                  (if (= index failed-index) "/nshell-bug-3-command-does-not-exist" "/bin/sh")
+                  (unless (= index failed-index) '("-c" "exec sleep 100")))))
+             (diagnostics (make-string-output-stream))
+             (output (make-string-output-stream))
+             (owned nil) (processes nil) (stages nil) (worker nil)
+             (failure nil) (join-reason nil) (callbacks 0))
+        (unwind-protect
+             (with-rebound-function
+                 (nshell.infrastructure.acl::%run-pipeline-command
+                  (lambda (&rest arguments)
+                    (let ((process (apply spawn arguments)))
+                      (when process (push process owned))
+                      process)))
+               (setf worker
+                     (sb-thread:make-thread
+                      (lambda ()
+                        (let ((*error-output* diagnostics) (*standard-output* output))
+                          (handler-case
+                              (multiple-value-setq (processes stages)
+                                (nshell.infrastructure.acl:spawn-pipeline-async
+                                 commands :after-spawn (lambda () (incf callbacks))))
+                            (error (condition) (setf failure condition)))))))
+               (multiple-value-bind (value reason)
+                   (sb-thread:join-thread worker :timeout 2 :default nil)
+                 (declare (ignore value))
+                 (setf join-reason reason))
+               (expect nil :to-equal failure)
+               (expect nil :to-equal join-reason)
+               (expect 1 :to-equal (length processes))
+               (expect 2 :to-equal (length stages))
+               (expect '(127) :to-equal (remove-if-not #'integerp stages))
+               (expect t :to-equal (nshell.infrastructure.acl:process-alive-p (first processes)))
+               (expect 1 :to-equal callbacks))
+          (when (and worker (sb-thread:thread-alive-p worker))
+            (sb-thread:terminate-thread worker))
+          (when worker (sb-thread:join-thread worker))
+          (nshell.infrastructure.acl:%abort-pipeline (reverse owned) nil)
+          (close diagnostics)
+          (close output))
+        (expect nil :to-equal (sb-thread:thread-alive-p worker))
+        (expect nil :to-equal (some #'nshell.infrastructure.acl:process-alive-p owned)))))
+  (it "BUG-3 all missing stages do not release after-spawn resources"
+    (cl-weave:expect-assertions 6)
+    (dolist (async-p '(nil t))
+      (let ((called nil))
+        (with-output-to-string (*error-output*)
+          (multiple-value-bind (result stages)
+              (funcall (if async-p
+                           #'nshell.infrastructure.acl:spawn-pipeline-async
+                           #'nshell.infrastructure.acl:spawn-pipeline)
+                       (loop repeat 2 collect
+                         (nshell.domain.parsing:make-command-node
+                          "/nshell-bug-3-command-does-not-exist" nil))
+                       :after-spawn (lambda () (setf called t)))
+            (expect (if async-p nil 127) :to-equal result)
+            (expect '(127 127) :to-equal stages)
+            (expect nil :to-equal called))))))
+  (it "BUG-3 missing scalar background commands return 127 without registering a job"
+    (cl-weave:expect-assertions 6)
+    (dolist (pipefail-p '(nil t))
+      (let ((context (make-test-shell-context)) (status nil))
+        (setf (nshell.application:shell-context-pipefail-p context) pipefail-p)
+        (let ((diagnostics
+                (with-output-to-string (*error-output*)
+                  (setf status
+                        (nth-value 1
+                          (nshell.application::%spawn-background-command-in-context
+                           context (nshell.domain.parsing:make-command-node
+                                    "/nshell-bug-3-command-does-not-exist" nil)))))))
+          (expect 127 :to-equal status)
+          (expect 0 :to-equal
+                  (hash-table-count (nshell.application::shell-context-process-registry context)))
+          (expect 1 :to-equal (count #\Newline diagnostics))))))
   (it "BUG-3 preserves low-level timeout status with a missing pipeline stage"
     (cl-weave:expect-assertions 8)
     (dolist (pipefail-p '(nil t))

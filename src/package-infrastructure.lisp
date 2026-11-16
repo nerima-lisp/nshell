@@ -80,7 +80,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:run-sidecar-version #:stop-sidecar #:sidecar-alive-p
             #:sidecar-exit-status
             #:with-git-runner #:clear-git-status-cache
-            #:get-git-status #:consume-git-status-update-p)
+            #:get-git-status #:consume-git-status-update-p #:pipeline-stage-processes #:pipeline-stage-status)
   (:export #:make-reader-pipeline-pipe #:close-reader-descriptor
            #:reader-process-substitution-resource-p
            #:reader-process-substitution-resource-direction

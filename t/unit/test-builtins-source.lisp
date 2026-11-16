@@ -163,10 +163,14 @@
               (push "x01-command-b" foreground-calls)
               (values (format nil "x01-command-b~%") 0)))
           (with-temporary-function
-              ('nshell.infrastructure.acl:spawn-async
-               (lambda (command args &key redirects)
-                 (setf spawned (list command args redirects))
-                 t))
+              ('nshell.infrastructure.acl:spawn-pipeline-async
+               (lambda (commands &key redirects &allow-other-keys)
+                 (let ((command (first commands)))
+                   (setf spawned
+                         (list (nshell.domain.parsing:command-node-command command)
+                               (nshell.domain.parsing:command-node-arg-values command)
+                               (first redirects))))
+                 (values (list t) (list t))))
             (with-called-source (output code context
                                         (list "x01-command-a & x01-command-b"))
               (expect 0 :to-equal code)
@@ -193,7 +197,7 @@
                               (function nshell.domain.parsing:command-node-command)
                               commands)
                              redirects))
-                 commands))
+                 (values commands commands)))
             (with-called-source
                 (output code context
                         (list "x01-command-a | x01-command-b & x01-command-c"))
@@ -212,12 +216,15 @@
               (expect nil :to-equal *stubbed-command-builtin-arguments*)
               (values (format nil "x01-command-b~%") 0)))
           (with-temporary-function
-              ('nshell.infrastructure.acl:spawn-async
-               (lambda (command args &key redirects)
+              ('nshell.infrastructure.acl:spawn-pipeline-async
+               (lambda (commands &key redirects &allow-other-keys)
                  (declare (ignore redirects))
-                 (expect "x01-command-a" :to-equal command)
-                 (expect (list "arg") :to-equal args)
-                 process))
+                 (let ((command (first commands)))
+                   (expect "x01-command-a" :to-equal
+                           (nshell.domain.parsing:command-node-command command))
+                   (expect (list "arg") :to-equal
+                           (nshell.domain.parsing:command-node-arg-values command)))
+                 (values (list process) (list process))))
             (with-temporary-function
                 ('nshell.application::%background-process-pid
                  (lambda (proc)
@@ -262,7 +269,7 @@
                  (expect (list "x01-command-a" "x01-command-b") :to-equal
                          (mapcar (function nshell.domain.parsing:command-node-command)
                                  commands))
-                 processes))
+                 (values processes processes)))
             (with-temporary-function
                 ('nshell.application::%background-process-pid
                  (lambda (proc)

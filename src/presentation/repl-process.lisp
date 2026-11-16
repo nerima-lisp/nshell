@@ -18,22 +18,23 @@
   (let ((completed-jobs nil))
     (maphash
      (lambda (jid entry)
-       (let* ((stage-results (cond ((null entry) nil) ((listp entry) entry) (t (list entry))))
-              (procs (remove-if #'integerp stage-results)))
+       (let ((procs (nshell.infrastructure.acl:pipeline-stage-processes entry))
+             (stage-results (if (listp entry) entry (list entry))))
          (when (and entry
                     (not (some *background-proc-alive-p* procs)))
            (let* ((job
-                   (nshell.domain.job-control:monitor-find-job
-                    nshell.application:*job-monitor*
-                    jid))
+                    (nshell.domain.job-control:monitor-find-job
+                     nshell.application:*job-monitor*
+                     jid))
                   (statuses
-                   (mapcar (lambda (stage)
-                             (if (integerp stage)
-                                 stage
-                               (progn
-                                 (funcall *background-proc-wait* stage)
-                                 (or (funcall *background-proc-exit-code* stage) 0))))
-                           stage-results)))
+                    (mapcar
+                     (lambda (stage)
+                       (nshell.infrastructure.acl:pipeline-stage-status
+                        stage
+                        (lambda (process)
+                          (funcall *background-proc-wait* process)
+                          (or (funcall *background-proc-exit-code* process) 0))))
+                     stage-results)))
              (nshell.domain.job-control:complete-job
               nshell.application:*job-monitor*
               jid
@@ -43,7 +44,7 @@
                                  (not (zerop status)))
                                statuses)
                       0)
-                (or (car (last statuses)) 0)))
+                  (or (car (last statuses)) 0)))
              (when job
                (format t "[~d] Done ~a~%"
                        jid

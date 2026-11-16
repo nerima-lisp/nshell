@@ -97,8 +97,8 @@ tests rebind these boundary functions when they need deterministic behavior.")
 (defpackage #:nshell.infrastructure.terminal
   (:documentation
    "Infrastructure: the terminal device. Puts the tty into raw mode and restores
-it, emits ANSI sequences for cursor, colour, alternate screen, bracketed paste
-and optional SGR mouse reporting, and decodes incoming bytes -- including escape
+it, emits ANSI sequences for cursor, colour, alternate screen, and bracketed paste,
+and decodes incoming bytes -- including escape
 sequences -- into the key events defined by nshell.domain.input, which it
 re-exports so the line editor has a single place to import them from.")
   (:use #:cl)

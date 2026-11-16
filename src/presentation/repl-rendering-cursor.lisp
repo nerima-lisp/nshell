@@ -104,52 +104,6 @@
         (%advance-rendered-components row column grapheme terminal-width)))
     (%make-rendered-position row column)))
 
-(defun %rendered-buffer-index-at-position (text row column prompt-width
-                                           &key terminal-width
-                                             (origin-row 1)
-                                             (origin-column 1))
-  "Map a 1-based terminal cell to a buffer index.
-
-The prompt origin and rendered cursor geometry are kept in the presentation
-layer, so this function remains deterministic and does not perform terminal
-I/O. NIL means that the cell belongs to the prompt, continuation prompt, or
-lies outside the rendered buffer."
-  (when (and (integerp row)
-             (integerp column)
-             (integerp origin-row)
-             (integerp origin-column)
-             (>= row origin-row)
-             (>= column origin-column))
-    (let ((target-row (- row origin-row))
-          (target-column (- column origin-column)))
-      (loop with current = (%initial-rendered-position prompt-width terminal-width)
-            with index = 0
-            for grapheme in (cl-tty-kit:string-graphemes (or text ""))
-            for newline-p = (and (= (length grapheme) 1)
-                                 (char= (char grapheme 0) #\Newline))
-            for start = (%rendered-grapheme-start-position
-                         current grapheme terminal-width)
-            do (cond
-                 (newline-p
-                  (when (and (= target-row (rendered-position-row start))
-                             (>= target-column (rendered-position-column start)))
-                    (return index)))
-                 (t
-                  (let ((width (%string-visible-width grapheme)))
-                    (when (and (plusp width)
-                               (= target-row (rendered-position-row start))
-                               (>= target-column (rendered-position-column start))
-                               (< target-column
-                                  (+ (rendered-position-column start) width)))
-                      (return index)))))
-                (setf current
-                      (%advance-rendered-grapheme current grapheme terminal-width))
-                (incf index (length grapheme))
-            finally
-               (when (and (= target-row (rendered-position-row current))
-                          (>= target-column (rendered-position-column current)))
-                 (return (length (or text ""))))))))
-
 (defun %cursor-tail-visible-width (text cursor prompt-width suggestion
                                    &optional search-suffix terminal-width)
   (multiple-value-bind (line-count cursor-position text-end-position final-position)

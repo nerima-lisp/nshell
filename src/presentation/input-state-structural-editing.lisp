@@ -207,12 +207,6 @@
           expressions)))
     (car (stable-sort matches #'< :key #'%sexp-expression-span-length))))
 
-(defun %sexp-expression-siblings (expressions expression)
-  (let ((parent (%sexp-parent-list expressions expression)))
-    (if parent
-        (%sexp-list-children expressions parent)
-        (%sexp-root-expressions expressions))))
-
 (defun %sexp-command-island-position-p (expressions position)
   (some
    (lambda (expression)
@@ -297,73 +291,6 @@
       (values state :none)
       (values (copy-input-state-clearing-completion state :cursor-pos position)
               :redraw)))
-
-(defun %sexp-change-buffer (state buffer cursor)
-  (if (string= buffer (input-state-buffer state))
-      (values state :none)
-      (values
-       (copy-input-state-clearing-completion state
-                                             :buffer
-                                             buffer
-                                             :cursor-pos
-                                             cursor)
-       :suggest-update)))
-
-(defun %sexp-move-delimiter (buffer from to delimiter cursor)
-  (let* ((without-delimiter
-          (concatenate 'string (subseq buffer 0 from) (subseq buffer (1+ from))))
-         (insert-position
-          (if (> to from)
-              (1- to)
-              to))
-         (new-buffer
-          (concatenate 'string
-                       (subseq without-delimiter 0 insert-position)
-                       (string delimiter)
-                       (subseq without-delimiter insert-position)))
-         (cursor-after-delete
-          (if (> cursor from)
-              (1- cursor)
-              cursor))
-         (new-cursor
-          (if (<= insert-position cursor-after-delete)
-              (1+ cursor-after-delete)
-              cursor-after-delete)))
-    (values new-buffer new-cursor)))
-
-(defun %sexp-move-list-delimiter (state list-expression to delimiter)
-  (multiple-value-bind (buffer cursor)
-      (%sexp-move-delimiter (input-state-buffer state)
-                            (if (char= delimiter #\()
-                                (%sexp-structural-expression-open-start
-                                 list-expression)
-                                (%sexp-structural-expression-close-start
-                                 list-expression))
-                            to
-                            delimiter
-                            (input-state-cursor-pos state))
-    (%sexp-change-buffer state buffer cursor)))
-
-(defun %sexp-sibling-after (expressions expression)
-  (let* ((siblings (%sexp-expression-siblings expressions expression))
-         (position (position expression siblings :test #'eq)))
-    (and position (nth (1+ position) siblings))))
-
-(defun %sexp-sibling-before (expressions expression)
-  (let* ((siblings (%sexp-expression-siblings expressions expression))
-         (position (position expression siblings :test #'eq)))
-    (and position (plusp position) (nth (1- position) siblings))))
-
-(defun %sexp-current-list (expressions tokens position)
-  (let* ((token (%sexp-token-at-position tokens position))
-         (from-delimiter
-          (and token
-               (member (nshell.domain.parsing:scan-token-kind token)
-                       '(:delimiter-open :delimiter-close)
-                       :test
-                       #'eq)
-               (%sexp-list-at-delimiter-token expressions token))))
-    (or from-delimiter (%sexp-innermost-list-containing expressions position))))
 
 (defun %sexp-navigation-action (state expressions tokens action)
   (let* ((position (input-state-cursor-pos state))

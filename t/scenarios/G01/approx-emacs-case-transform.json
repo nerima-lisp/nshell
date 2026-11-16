@@ -18,7 +18,12 @@
     }
   },
   "preconditions": {
-    "files": []
+    "files": [
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "bind alt-u upcase-word\n"
+      }
+    ]
   },
   "expected": {
     "stream": {
@@ -28,6 +33,7 @@
     },
     "exit_code": 0
   },
+  "load_config": true,
   "steps": [
     {
       "type": "keys",

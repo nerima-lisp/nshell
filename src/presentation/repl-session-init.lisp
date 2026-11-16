@@ -224,7 +224,6 @@ skipped, while history still follows HISTORY-P."
         *last-command-duration-ms* nil
         *last-command-output* nil
         *last-command-text* nil
-        *capture-command-output-p* nil
         *failure-explain-available-p* nil
         *history-persistence-enabled-p* (and history-p (not private-p))
         *history-seen-command-texts* (make-hash-table :test #'equal)
@@ -257,9 +256,6 @@ skipped, while history still follows HISTORY-P."
         *prompt-rendered-cursor-row* 0
         *prompt-rendered-terminal-width* +default-terminal-width+
         *prompt-rendered-prompt-width* 0
-        *prompt-rendered-origin-row* 1
-        *prompt-rendered-origin-column* 1
-        *prompt-rendered-origin-known-p* nil
         *prompt-hook-pending-p* t
         *interactive-terminal-installed-p* nil
         *environment* (nshell.application:seed-shell-status-environment

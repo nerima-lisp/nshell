@@ -16,9 +16,14 @@
       {
         "path": "work/checker.sh",
         "content": "if [ \"$1\" = first ] && [ \"$2\" = second ]; then printf '%s\\n' 'G01_WORD_TRANSPOSE_OK'; fi\n"
+      },
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "bind alt-t transpose-words\n"
       }
     ]
   },
+  "load_config": true,
   "steps": [
     {"type": "keys", "text": "sh checker.sh second first"},
     {"type": "key", "key": "M-b"},

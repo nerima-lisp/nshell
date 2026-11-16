@@ -24,7 +24,6 @@ nshell's own output has no color. The interactive shell never reads it.")
         *last-command-text* nil
         *history* (history-kit:make-history)
         *history-persistence-enabled-p* nil
-        *capture-command-output-p* nil
         *failure-explain-available-p* nil
         *agent-session* nil
         *assistant-session-id* nil
@@ -41,9 +40,6 @@ nshell's own output has no color. The interactive shell never reads it.")
         nshell.application:*prompt-preview-handler* (function preview-prompt-format)
         *prompt-rendered-terminal-width* +default-terminal-width+
         *prompt-rendered-prompt-width* 0
-        *prompt-rendered-origin-row* 1
-        *prompt-rendered-origin-column* 1
-        *prompt-rendered-origin-known-p* t
         *interactive-terminal-installed-p* nil
         *config* (nshell.domain.configuration:default-config)
         *kb* (seed-repl-completion-knowledge-base

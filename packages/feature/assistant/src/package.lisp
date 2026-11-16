@@ -21,7 +21,6 @@ depend on one stable feature package.")
      #:classify-pipeline
      #:classify-ast
      #:command-effects
-     #:assistant-command-after-wrappers
      #:+assistant-redacted-token+
      #:+assistant-default-denylist-paths+
      #:+assistant-default-denylist-commands+

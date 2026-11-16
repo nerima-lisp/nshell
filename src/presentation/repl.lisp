@@ -276,7 +276,7 @@ remains available in private mode.
 INSTALL-INTERACTIVE-TERMINAL runs inside the UNWIND-PROTECT because it changes
 the process group, signal handlers, terminal mode, and ANSI modes. If setup
 fails part-way through, the cleanup must still restore that state; otherwise
-the next shell could start with SGR mouse reporting still on.
+a later shell can inherit SGR mouse reporting left enabled by a child process.
 
 Setup is not guarded by crash recovery: a failure there ends the session as
 before. Every later trampoline step is. A --safe restart the user accepted after

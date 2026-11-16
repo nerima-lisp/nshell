@@ -16,9 +16,14 @@
       {
         "path": "work/checker.sh",
         "content": "case \"$1\" in\n  UPCASE) printf '%s\\n' 'G01_UPCASE_OK' ;;\n  lower) printf '%s\\n' 'G01_DOWNCASE_OK' ;;\n  Title) printf '%s\\n' 'G01_CAPITALIZE_OK' ;;\nesac\n"
+      },
+      {
+        "path": "home/.config/nshell/init.lisp",
+        "content": "bind alt-u upcase-word\nbind alt-l downcase-word\nbind alt-c capitalize-word\n"
       }
     ]
   },
+  "load_config": true,
   "steps": [
     {"type": "keys", "text": "sh checker.sh upcase"},
     {"type": "key", "key": "M-b"},

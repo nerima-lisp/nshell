@@ -445,11 +445,8 @@ only changes bindings this session owns."
         t)
   (%ncall "NSHELL.PRESENTATION" "INITIALIZE-REPL-STATE"
           :load-config-p t :history-p t :private-p nil)
-  ;; What INSTALL-INTERACTIVE-TERMINAL and the first prompt establish; with
-  ;; these set, per-key snapshot export and terminal integration run as in a
-  ;; real session.
-  (setf (symbol-value (%pres "*INTERACTIVE-TERMINAL-INSTALLED-P*")) t
-        (symbol-value (%pres "*PROMPT-RENDERED-ORIGIN-KNOWN-P*")) t)
+  ;; Simulate the installed interactive terminal without a real tty.
+  (setf (symbol-value (%pres "*INTERACTIVE-TERMINAL-INSTALLED-P*")) t)
   (unless (symbol-value (%pres "*ASSISTANT-SESSION-ID*"))
     (error "key-cost: the session has no assistant session id"))
   (%run-to-next-key (lambda () (%ncall "NSHELL.PRESENTATION" "RENDER-PROMPT-CONT")))

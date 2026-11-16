@@ -13,7 +13,6 @@
          (nshell.presentation::*last-command-duration-ms* nil)
          (nshell.presentation::*last-command-output* nil)
          (nshell.presentation::*last-command-text* nil)
-         (nshell.presentation::*capture-command-output-p* nil)
          (nshell.presentation::*history-persistence-enabled-p* t)
          (nshell.presentation::*failure-explain-available-p* nil)
          (nshell.presentation::*history* (history-kit:make-history))
@@ -49,9 +48,6 @@
          (nshell.presentation::*prompt-rendered-cursor-row* 0)
          (nshell.presentation::*prompt-rendered-terminal-width* 80)
          (nshell.presentation::*prompt-rendered-prompt-width* 0)
-         (nshell.presentation::*prompt-rendered-origin-row* 1)
-         (nshell.presentation::*prompt-rendered-origin-column* 1)
-         (nshell.presentation::*prompt-rendered-origin-known-p* t)
          (nshell.presentation::*interactive-terminal-installed-p* nil)
          (nshell.presentation::*environment* (nshell.domain.environment:make-environment)))
      (nshell.presentation::with-fresh-repl-state-tables

@@ -181,7 +181,104 @@
      '(("df a b" :safe) ("df -h a" :safe) ("df -k a" :safe)
        ("df -l a" :safe) ("df -i a" :safe)
        ("df -P a" :safe) ("df -T a" :confirm))))
-)
+
+  (it "matches builtin pwd against its spec row"
+    (%closed-world-expect-levels
+     '(("pwd" :safe) ("pwd -L" :confirm) ("pwd -P" :confirm)
+       ("pwd extra" :confirm))))
+
+  (it "matches builtin which against its spec row"
+    (%closed-world-expect-levels
+     '(("which ls git" :safe) ("which -a ls" :confirm)
+       ("which -- -a" :safe))))
+
+  (it "matches builtin type against its spec row"
+    (%closed-world-expect-levels
+     '(("type ls git" :safe) ("type -a ls" :confirm)
+       ("type -- -a" :safe))))
+
+  (it "matches command query options against its spec row"
+    (%closed-world-expect-levels
+     '(("command -v ls" :safe) ("command -V ls git" :safe)
+       ("command ls" :confirm) ("command -p ls" :confirm)
+       ("command -v --unknown ls" :confirm))))
+
+  (it "confirms each excluded ls option in the policy row"
+    (%closed-world-expect-levels
+     '(("ls --hyperlink" :confirm) ("ls -@" :confirm) ("ls -G" :confirm))))
+
+  (it "confirms each excluded file option in the policy row"
+    (%closed-world-expect-levels
+     '(("file -C x" :confirm) ("file --compile x" :confirm)
+       ("file -m magic x" :confirm) ("file -M magic x" :confirm)
+       ("file -z x" :confirm) ("file -i x" :confirm))))
+
+  (it "confirms each excluded find primary in the policy row"
+    (%closed-world-expect-levels
+     '(("find . -exec echo x \\;" :confirm)
+       ("find . -execdir echo x \\;" :confirm)
+       ("find . -ok echo x \\;" :confirm)
+       ("find . -okdir echo x \\;" :confirm)
+       ("find . -delete" :confirm) ("find . -fprint out" :confirm)
+       ("find . -fprint0 out" :confirm) ("find . -fprintf out %p" :confirm)
+       ("find . -fls out" :confirm)
+       ("find -- . -unknown-primary" :confirm))))
+
+  (it "confirms signing and output options for both git log and git show"
+    (dolist (subcommand '("log" "show"))
+      (%closed-world-expect-levels
+       (loop for option in '("--format=%G?" "--pretty=format:%GS"
+                             "--show-signature" "--output=out")
+             collect (list (format nil "git ~a ~a" subcommand option) :confirm)))))
+
+  (it "matches git diff and git show against their spec rows"
+    (%closed-world-expect-levels
+     '(("git diff --stat HEAD -- src" :safe)
+       ("git show --stat HEAD" :safe)))
+    (dolist (subcommand '("diff" "show"))
+      (%closed-world-expect-levels
+       (loop for option in '("--output=out" "--ext-diff" "--textconv")
+             collect (list (format nil "git ~a ~a" subcommand option) :confirm)))))
+
+  (it "confirms each branch mutation in the policy row"
+    (%closed-world-expect-levels
+     '(("git branch topic" :confirm)
+       ("git branch -d topic" :confirm) ("git branch -D topic" :confirm)
+       ("git branch -m old new" :confirm) ("git branch -M old new" :confirm)
+       ("git branch -c old new" :confirm) ("git branch -C old new" :confirm)
+       ("git branch -f topic" :confirm) ("git branch -u origin/topic" :confirm))))
+
+  (it "confirms each git global option in the policy row"
+    (%closed-world-expect-levels
+     '(("git -c core.pager=x log" :confirm) ("git -C repo status" :confirm)
+       ("git --config-env=core.pager=V log" :confirm)
+       ("git --exec-path=bin log" :confirm) ("git --git-dir=repo status" :confirm)
+       ("git --work-tree=tree status" :confirm) ("git -p log" :confirm))))
+
+  (it "keeps commands without a spec in the confirm policy row"
+    (%closed-world-expect-levels
+     '(("sed -n p a" :confirm) ("awk 1 a" :confirm) ("less a" :confirm)
+       ("man ls" :confirm) ("tee out" :confirm) ("sort a" :confirm)
+       ("uniq a" :confirm))))
+
+  (it "keeps every opaque wrapper in the confirm policy row"
+    (%closed-world-expect-levels
+     '(("env -i ls" :confirm) ("xargs ls" :confirm) ("sudo ls" :confirm)
+       ("doas ls" :confirm) ("nohup ls" :confirm) ("exec ls" :confirm)
+       ("eval ls" :confirm) ("sh -c ls" :confirm))))
+
+  (it "confirms non-root recursive deletes in the D-78 policy row"
+    (%closed-world-expect-levels
+     '(("rm -r target/" :confirm) ("rm -rf build" :confirm))))
+
+  (it "keeps forced pwd, which, type, and command outside builtin specs"
+    (dolist (source '("(^pwd)" "(^which ls)" "(^type ls)" "(^command -v ls)"))
+      (expect (list source
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     (%test-classify-ast
+                      (nshell.domain.parsing:read-submission
+                       source :reader-context :auto))))
+              :to-equal (list source :confirm)))))
 
 (describe "closed-world safety: redirects from the AST"
   (it "allows only /dev/null and the stdout/stderr duplications"

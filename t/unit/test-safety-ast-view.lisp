@@ -39,23 +39,20 @@
     (t nil)))
 
 (defun %safety-view-reader-nodes (source reader-context)
-  "Return the command nodes the reader path runs for SOURCE, or :UNREAD."
-  (handler-case
-      (mapcan
-       (lambda (result)
-         (let ((form (nshell.domain.parsing:reader-result-form result)))
-           (%safety-view-command-nodes
-            (if (consp form)
-                (nshell.domain.parsing:command-form->ast
-                 (nshell.domain.parsing:reader-result-source result)
-                 form
-                 (nshell.domain.parsing:reader-result-form-span-map result)
-                 (lambda (head-source)
-                   (declare (ignore head-source))
-                   :command-island))
-                form))))
-       (nshell.domain.parsing:read-submission source :reader-context reader-context))
-    (error () :unread)))
+  (mapcan
+   (lambda (result)
+     (let ((form (nshell.domain.parsing:reader-result-form result)))
+       (%safety-view-command-nodes
+        (if (consp form)
+            (nshell.domain.parsing:command-form->ast
+             (nshell.domain.parsing:reader-result-source result)
+             form
+             (nshell.domain.parsing:reader-result-form-span-map result)
+             (lambda (head-source)
+               (declare (ignore head-source))
+               :command-island))
+            form))))
+   (nshell.domain.parsing:read-submission source :reader-context reader-context)))
 
 (defun %safety-view-cases ()
   "Return (LABEL PATH NODE) for every command node of the inputs.  PATH is
@@ -70,9 +67,8 @@ nodes run as reader stages."
                    (push (list (list :bare source) :bare-line node) cases)))))
            (add-reader (source reader-context)
              (let ((nodes (%safety-view-reader-nodes source reader-context)))
-               (unless (eq nodes :unread)
-                 (dolist (node nodes)
-                   (push (list (list reader-context source) :reader node) cases))))))
+               (dolist (node nodes)
+                 (push (list (list reader-context source) :reader node) cases)))))
       (dolist (entry +safety-migration-corpus+)
         (destructuring-bind (reader source) entry
           (if (eq reader :bare)
@@ -560,6 +556,7 @@ the gate, and the executor see them."
             (destructuring-bind (reader source) input
               (destructuring-bind (enter gate executor)
                   (%safety-view-resolution-triple context reader source)
+                (expect (and enter gate executor) :to-be-truthy)
                 (incf compared)
                 (expect (list label reader source enter gate)
                         :to-equal (list label reader source executor executor)))))))
@@ -624,4 +621,35 @@ the gate, and the executor see them."
              context (nshell.domain.parsing:make-command-node "echo" nil))
             (expect nshell.application:*execution-gate-stopped-p* :to-be nil))
           (expect (and (probe-file marker) t) :to-be t)
-          (expect (%safety-view-registered-count context) :to-equal 1))))))))
+          (expect (%safety-view-registered-count context) :to-equal 1)))))))
+
+  (it "confirms command queries that would autoload a function without loading it"
+    (host-kit:with-temporary-directory (directory)
+      (let ((marker (merge-pathnames "loaded" directory)))
+        (%safety-view-write-function-file directory "foo" marker)
+        (let* ((context (%safety-view-autoload-context directory))
+               (resolve (nshell.application:assistant-command-resolver context)))
+          (dolist (source '("command -v foo" "command -V ls foo"
+                            "command -v foo ls"))
+            (expect (nshell.feature.assistant:assistant-safety-result-classification
+                     (nshell.feature.assistant:classify-ast
+                      (nshell.domain.parsing:parse-result-ast
+                       (nshell.domain.parsing:parse-command-line source))
+                      :resolve resolve))
+                    :to-be :confirm))
+          (dolist (source '("command -v ls" "command -V pwd"))
+            (expect (nshell.feature.assistant:assistant-safety-result-classification
+                     (nshell.feature.assistant:classify-ast
+                      (nshell.domain.parsing:parse-result-ast
+                       (nshell.domain.parsing:parse-command-line source))
+                      :resolve resolve))
+                    :to-be :safe))
+          (%safety-view-register-function context "foo" (list nil))
+          (expect (nshell.feature.assistant:assistant-safety-result-classification
+                   (nshell.feature.assistant:classify-ast
+                    (nshell.domain.parsing:parse-result-ast
+                     (nshell.domain.parsing:parse-command-line "command -v foo"))
+                    :resolve resolve))
+                  :to-be :safe)
+          (expect (probe-file marker) :to-be nil)
+          (expect (%safety-view-registered-count context) :to-equal 1))))))

@@ -41,6 +41,7 @@
     ;; not).  Keys: :flags (short options without a value), :value-flags,
     ;; :long, :value-long, :exact (whole words), :positionals (:any or a
     ;; maximum), :listing-options (options that allow any operands),
+    ;; :plus-options (reject + words as unsupported options before --),
     ;; :subcommands, and :grammar for find and echo/printf.  :resolution
     ;; :builtin marks a row that describes the nshell builtin of that name;
     ;; it applies only when the executor resolves the name to the builtin,
@@ -55,7 +56,8 @@
     ("type" :positionals :any :resolution :builtin)
     ("command" :flags "vV" :positionals :any :resolution :builtin)
     ("head" :value-flags (("n" :count) ("c" :count)) :positionals :any)
-    ("tail" :value-flags (("n" :count) ("c" :count)) :positionals :any)
+    ("tail" :value-flags (("n" :count) ("c" :count))
+            :plus-options t :positionals :any)
     ("wc" :flags "lwcm" :positionals :any)
     ("stat" :flags "L" :positionals :any)
     ("du" :flags "shkacx" :value-flags (("d" :count)) :positionals :any)
@@ -141,7 +143,7 @@
     ;; The exec builtin runs the external program; builtin runs a builtin.
     ("exec" :wrapper :opaque :skip-values "a" :resolution :builtin)
     ("builtin" :wrapper :opaque :resolution :builtin :runs :by-name)
-    ;; command -v and -V only look a name up (2.4 "query").
+    ;; Queries may autoload a function; the classifier checks each target first.
     ("command" :wrapper :opaque :query-options ("-v" "-V") :resolution :builtin
                :runs :by-name)
     ;; The command is source text: eval with one argument, or sh -c SCRIPT.

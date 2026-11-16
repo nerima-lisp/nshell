@@ -201,3 +201,52 @@ seconds the run took, and whether the sh process is gone afterwards."
         (expect (json-at envelope "status") :to-equal 0)
         (expect (json-at envelope "stdout" "text") :to-equal (format nil "red~%"))
         (expect seconds :to-be-less-than 5)))))
+
+(describe "machine full-screen option spellings"
+  (it "runs vim with -e and -s as separate words"
+    (with-noninteractive-test-state ()
+      (%full-screen-call-with-programs
+       '("vim")
+       (lambda (directory)
+         (declare (ignore directory))
+         (let ((envelope (json-command "vim -u NONE -i NONE -e -s -c 'qa!'")))
+           (expect (json-at envelope "status") :to-equal 0)
+           (expect (json-at envelope "stdout" "text") :to-equal (format nil "ran vim~%")))))))
+
+  (it "takes each noninteractive spelling of an option as noninteractive"
+    (dolist (command '(("vim" "-u" "NONE" "-e" "-s" "-c" "qa!")
+                       ("vi" "-E" "-s")
+                       ("nvim" "-e" "-c" "qa!" "-s")
+                       ("nvim" "-u" "NONE" "--headless")
+                       ("emacs" "-Q" "--batch" "--eval" "t")
+                       ("emacs" "--script=build.el")
+                       ("emacs" "-version")
+                       ("man" "-Pcat" "ls")
+                       ("man" "--pager=cat" "ls")
+                       ("man" "--pager" "cat" "ls")
+                       ("man" "--whatis" "ls")
+                       ("man" "--apropos" "ls")
+                       ("man" "--where" "ls")
+                       ("man" "--path" "ls")
+                       ("top" "-l1")
+                       ("top" "-l" "1")
+                       ("top" "-bn1")
+                       ("top" "-n" "1" "-b")
+                       ("top" "--batch-mode")
+                       ("less" "-V")))
+      (expect (cons command
+                    (nshell.feature.machine:full-screen-program-kind
+                     (first command) (rest command)))
+              :to-equal (list command))))
+
+  (it "still refuses the interactive spellings"
+    (dolist (command '(("vim" "-e" "NOTES.txt")
+                       ("vim" "-s" "keys.vim" "NOTES.txt")
+                       ("vim" "-s" "-e")
+                       ("emacs" "-nw" "NOTES.txt")
+                       ("emacs" "--batchless")
+                       ("man" "ls")
+                       ("top" "-o" "cpu")))
+      (expect (nshell.feature.machine:full-screen-program-kind
+               (first command) (rest command))
+              :to-be-truthy))))

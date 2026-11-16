@@ -48,13 +48,14 @@
       (:release
        (multiple-value-bind (start end) (%mouse-selection-range state)
          (if (and start end (< start end))
-             (values (copy-input-state-with
-                      state
-                      :kill-ring (cons (subseq (input-state-buffer state) start end)
-                                       (input-state-kill-ring state))
-                      :mouse-selection-anchor nil
-                      :mouse-selection-end nil)
-                     :copy)
+             (let ((selected (subseq (input-state-buffer state) start end)))
+               (values (copy-input-state-with
+                        state
+                        :kill-ring (cons selected (input-state-kill-ring state))
+                        :proposal-kills (proposal-kills-after-kill state selected)
+                        :mouse-selection-anchor nil
+                        :mouse-selection-end nil)
+                       :copy))
              (values (%clear-mouse-selection-state state) :redraw))))
       (otherwise (values state :redraw)))))
 

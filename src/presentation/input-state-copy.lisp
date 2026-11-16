@@ -47,7 +47,11 @@
                                       (search-index nil search-index-supplied-p)
                                       ask-original-buffer ask-original-cursor
                                       (undo-stack nil undo-stack-supplied-p)
-                                      (redo-stack nil redo-stack-supplied-p))
+                                      (redo-stack nil redo-stack-supplied-p)
+                                      (proposal-origin nil
+                                                       proposal-origin-supplied-p)
+                                      (proposal-kills nil
+                                                      proposal-kills-supplied-p))
   (let* ((old-buffer (input-state-buffer state))
          (old-cursor (input-state-cursor-pos state))
          (new-buffer (or buffer old-buffer))
@@ -62,6 +66,11 @@
            (append
             (list :buffer new-buffer :cursor-pos new-cursor
                   :preferred-visual-column preferred-column)
+            ;; Not last: APPEND copies every list but the last one.
+            (%copy-input-state-origin-initargs
+             state
+             proposal-origin-supplied-p proposal-origin
+             proposal-kills-supplied-p proposal-kills)
             (%copy-input-state-completion-initargs
              state
              completion-index-supplied-p completion-index

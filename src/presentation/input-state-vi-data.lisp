@@ -80,12 +80,15 @@
      :vi-session
      (apply (function %vi-session-plist-with) state overrides)))
   (defun %vi-snapshot (state)
-    (list :buffer (input-state-buffer state)
-          :cursor-pos (input-state-cursor-pos state)))
+    (list* :buffer (input-state-buffer state)
+           :cursor-pos (input-state-cursor-pos state)
+           (when (input-state-proposal-origin state)
+             (list :proposal-origin t))))
   (defun %vi-restore-snapshot (state snapshot)
     (copy-input-state-with state
                            :buffer (getf snapshot :buffer)
                            :cursor-pos (getf snapshot :cursor-pos)
+                           :proposal-origin (getf snapshot :proposal-origin)
                            :mode :vi-command
                            :vi-count nil
                            :vi-visual-anchor :clear

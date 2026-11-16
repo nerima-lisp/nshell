@@ -27,6 +27,16 @@
                  (subseq buffer 0 (kill-edit-plan-start plan))
                  (subseq buffer (kill-edit-plan-end plan)))))
 
+(defun proposal-kills-after-kill (state text)
+  "Return STATE's PROPOSAL-KILLS after TEXT is pushed onto its kill ring."
+  (if (input-state-proposal-origin state)
+      (cons text (input-state-proposal-kills state))
+      (input-state-proposal-kills state)))
+
+(defun kill-ring-text-proposal-p (state text)
+  "True when TEXT, an element of STATE's kill ring, was killed from a proposal."
+  (and (member text (input-state-proposal-kills state) :test #'eq) t))
+
 (defun commit-kill-edit (state edit)
   (if (kill-edit-empty-p edit)
       (values state :none)
@@ -37,7 +47,8 @@
                  state
                  :buffer (kill-edit-buffer edit buffer)
                  :cursor-pos (kill-edit-plan-cursor-pos plan)
-                 :kill-ring (cons killed (input-state-kill-ring state)))
+                 :kill-ring (cons killed (input-state-kill-ring state))
+                 :proposal-kills (proposal-kills-after-kill state killed))
                 :suggest-update))))
 
 (defun %kill-range (state start end cursor-pos)
@@ -112,7 +123,10 @@
              :cursor-pos (yank-edit-plan-cursor-pos plan)
              :last-yank-start (yank-edit-plan-start plan)
              :last-yank-end (yank-edit-plan-cursor-pos plan)
-             :last-yank-index 0)
+             :last-yank-index 0
+             :proposal-origin (or (input-state-proposal-origin state)
+                                  (kill-ring-text-proposal-p
+                                   state (yank-edit-plan-text plan))))
             :suggest-update)))
 
 (defun yank-last-kill (state)
@@ -175,7 +189,10 @@
              :cursor-pos new-end
              :last-yank-start (yank-pop-edit-plan-start plan)
              :last-yank-end new-end
-             :last-yank-index (yank-pop-edit-plan-next-index plan))
+             :last-yank-index (yank-pop-edit-plan-next-index plan)
+             :proposal-origin (or (input-state-proposal-origin state)
+                                  (kill-ring-text-proposal-p
+                                   state (yank-pop-edit-plan-replacement plan))))
             :suggest-update)))
 
 (defun cycle-last-yank (state)

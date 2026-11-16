@@ -18,7 +18,8 @@
                                       :vi-count
                                       (%buffer-clear-plan-vi-count plan)
                                       :vi-visual-anchor
-                                      (%buffer-clear-plan-vi-visual-anchor plan))))
+                                      (%buffer-clear-plan-vi-visual-anchor plan)
+                                      :proposal-origin nil)))
     (when (%buffer-clear-plan-clear-completion-p plan)
       (setf state (clear-completion-session-state state)))
     (if (%buffer-clear-plan-clear-history-search-p plan)

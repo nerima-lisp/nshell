@@ -153,6 +153,44 @@ schema accepts it."
           (%machine-parsed (%machine-explain text)))
         (expect (probe-file marker) :to-be nil)))))
 
+(describe "machine explain agrees with evaluation and Enter"
+  (it "reports the branch the evaluator takes when an alias has a special form's name"
+    (let ((context (make-test-shell-context)))
+      (setf (gethash "quote" (nshell.application:shell-context-alias-table context))
+            "echo aliased")
+      (expect (%machine-form-summaries
+               (%machine-parsed (%machine-explain "(quote x)" context)))
+              :to-equal '(("(quote x)" "lisp" t)))
+      ;; The evaluator returns the quoted value instead of running the alias.
+      (let ((value (nshell.application:evaluate-reader-result-in-context
+                    context
+                    (first (nshell.domain.parsing:read-submission "(quote x)")))))
+        (expect (symbolp value) :to-be-truthy)
+        (expect (symbol-name value) :to-equal "x"))))
+
+  (it "reads a line the way Enter does, leading whitespace included"
+    (let ((form-feed (format nil "~C(^ls)" #\Page)))
+      (expect (nshell.domain.parsing:submission-reader-context form-feed)
+              :to-be :bare-line)
+      (expect (nshell.domain.parsing:submission-reader-context " (^ls)")
+              :to-be :sexp)
+      (with-repl-test-state
+        (dolist (text (list form-feed
+                            " (^ls)"
+                            (format nil "~C(^ls)" #\Tab)
+                            (format nil "~%(^ls)")
+                            "(^ls)"))
+          (let ((parsed (%machine-parsed
+                         (%machine-explain
+                          text (nshell.presentation::%make-repl-shell-context)))))
+            (expect (list text (gethash "level" (gethash "safety" parsed)))
+                    :to-equal
+                    (list text
+                          (string-downcase
+                           (symbol-name
+                            (nshell.presentation::%assistant-proposal-level
+                             text)))))))))))
+
 (describe "machine explain loads no function file"
   (it "classifies a name a function file defines without evaluating the file"
     (host-kit:with-temporary-directory (directory)

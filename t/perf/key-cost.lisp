@@ -518,6 +518,12 @@ the terminal, and call THUNK inside it. Global state is restored afterwards."
     (when (and symbol (boundp symbol) (hash-table-p (symbol-value symbol)))
       (clrhash (symbol-value symbol)))))
 
+(defun %clear-presentation-variable (name)
+  "Set the presentation variable NAME to NIL when the loaded tree defines it."
+  (let ((symbol (find-symbol name "NSHELL.PRESENTATION")))
+    (when (and symbol (boundp symbol))
+      (setf (symbol-value symbol) nil))))
+
 (defun %clear-completion-caches ()
   ;; These caches expire on wall-clock TTLs or per-prompt stamps (directory
   ;; listing 5 s, PATH directory stamp recheck 1 s or 0.25 s after a recent
@@ -532,7 +538,10 @@ the terminal, and call THUNK inside it. Global state is restored afterwards."
   (clrhash (symbol-value (%pres "*HIGHLIGHT-PATH-PROBE-CACHE*")))
   (setf (symbol-value (%pres "*HIGHLIGHT-PATH-PROBE-CACHE-STAMP*")) nil)
   (%clear-presentation-table "*REPL-COMMAND-PATH-MEMO*")
-  (%clear-presentation-table "*REPL-HIGHLIGHT-PATH-CACHE*"))
+  (%clear-presentation-table "*REPL-HIGHLIGHT-PATH-CACHE*")
+  ;; Forget the history file stamp so a tree that rereads history on a key
+  ;; pays the full read, and one that does not is not credited with a skip.
+  (%clear-presentation-variable "*HISTORY-FILE-STAMP*"))
 
 (defun %set-buffer (text &key (cold-caches t))
   "Put TEXT in the editor with the suggestion a previous key would have left."

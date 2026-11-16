@@ -97,10 +97,10 @@ tests rebind these boundary functions when they need deterministic behavior.")
 (defpackage #:nshell.infrastructure.terminal
   (:documentation
    "Infrastructure: the terminal device. Puts the tty into raw mode and restores
-it, emits the ANSI sequences for cursor, colour, alternate screen, bracketed
-paste, and SGR mouse, and decodes incoming bytes -- including escape sequences --
-into the key events defined by nshell.domain.input, which it re-exports so the
-line editor has a single place to import them from.")
+it, emits ANSI sequences for cursor, colour, alternate screen, bracketed paste
+and optional SGR mouse reporting, and decodes incoming bytes -- including escape
+sequences -- into the key events defined by nshell.domain.input, which it
+re-exports so the line editor has a single place to import them from.")
   (:use #:cl)
   (:import-from #:nshell.domain.input
                 #:key-event #:key-event-p #:make-key-event
@@ -122,7 +122,7 @@ line editor has a single place to import them from.")
             #:ansi-save-cursor #:ansi-restore-cursor
             #:ansi-hide-cursor #:ansi-show-cursor
             #:ansi-enable-bracketed-paste #:ansi-disable-bracketed-paste
-            #:ansi-enable-sgr-mouse #:ansi-disable-sgr-mouse
+            #:ansi-disable-sgr-mouse
             #:ansi-enable-alternate-screen #:ansi-disable-alternate-screen
             #:ansi-set-vi-mode-cursor-shape
             #:ansi-request-cursor-position

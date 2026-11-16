@@ -28,8 +28,6 @@
    (mode :insert)
    (vi-count nil)
    (vi-visual-anchor nil)
-   (mouse-selection-anchor nil)
-   (mouse-selection-end nil)
    (abbreviation-expander nil)
    (kill-ring nil)
    (last-yank-start nil)

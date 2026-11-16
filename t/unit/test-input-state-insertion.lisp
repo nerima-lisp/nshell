@@ -39,15 +39,15 @@
             :to-throw 'type-error)
     (expect (lambda ()
               (let ((bad-value (read-from-string "\"7\"")))
-                (funcall #'nshell.domain.input:make-key-event :mouse nil bad-value)))
+                (funcall #'nshell.domain.input:make-key-event :paste nil bad-value)))
             :to-throw 'type-error))
 
   (it "key-event-preserves-structured-payload"
     (let ((event (nshell.domain.input:make-key-event
-                  :mouse nil 7 '(:button 1 :shift-p t))))
-      (expect :mouse :to-be (nshell.domain.input:key-event-type event))
+                  :paste nil 7 '(:text "pasted"))))
+      (expect :paste :to-be (nshell.domain.input:key-event-type event))
       (expect 7 :to-equal (nshell.domain.input:key-event-number event))
-      (expect '(:button 1 :shift-p t)
+      (expect '(:text "pasted")
               :to-equal
               (nshell.domain.input:key-event-data event))))
 

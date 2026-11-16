@@ -78,7 +78,4 @@
          (nshell.infrastructure.acl:run-external-exec
           (first argv) (append (rest argv) (list (namestring path)))))
     (ignore-errors (nshell.infrastructure.terminal:enable-raw-mode))
-    (ignore-errors (nshell.infrastructure.terminal:ansi-enable-bracketed-paste))
-    (when *mouse-reporting-enabled-p*
-      (ignore-errors
-        (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)))))
+    (ignore-errors (nshell.infrastructure.terminal:ansi-enable-bracketed-paste))))

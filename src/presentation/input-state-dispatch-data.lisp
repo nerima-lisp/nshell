@@ -63,7 +63,7 @@
 
 (defparameter +default-input-dispatch-bindings+
   ;; KEY-EVENT-TYPE -> ACTION-NAME, the bindings BIND --reset restores.
-  ;; :CHAR, :PASTE, and :MOUSE key-event types carry per-event data and are
+  ;; :CHAR and :PASTE key-event types carry per-event data and are
   ;; handled outside this table by INPUT-DISPATCH-ACTION-FOR-KEY-EVENT, so
   ;; they are not bindable keys.
   '((:enter . :enter)

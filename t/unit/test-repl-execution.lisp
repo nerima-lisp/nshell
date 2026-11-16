@@ -650,35 +650,27 @@
       (expect (list "vi") :to-equal (nshell.presentation::%editor-command-argv))))
 
   (it "repl-edit-command-replaces-input-from-external-editor"
-    "The external editor preserves disabled mouse reporting."
+    "The external editor replaces the input buffer with its saved contents."
     (with-repl-test-state
-      (let ((mouse-enabled nil)
-            (nshell.presentation::*mouse-reporting-enabled-p* nil))
-        (with-repl-input-state (:buffer "echo before" :cursor-pos 11)
+      (with-repl-input-state (:buffer "echo before" :cursor-pos 11)
+        (with-temporary-function
+            ((quote nshell.presentation::%editor-command-argv)
+             (lambda () (list "fake-editor")))
           (with-temporary-function
-              ('nshell.presentation::%editor-command-argv
-               (lambda () '("fake-editor")))
-            (with-temporary-function
-                ('nshell.infrastructure.terminal:ansi-enable-sgr-mouse
-                 (lambda (&optional stream)
-                   (declare (ignore stream))
-                   (setf mouse-enabled t)))
-              (with-temporary-function
-                  ('nshell.infrastructure.acl:run-external-exec
-                   (lambda (command args)
-                     (declare (ignore command))
-                     (let ((path (car (last args))))
-                       (with-open-file (stream path
-                                               :direction :output
-                                               :if-exists :supersede)
-                         (write-line "echo edited" stream)))
-                     0))
-                (capture-process-output-event :edit-command)
-                (expect "echo edited"
-                        :to-equal
-                        (nshell.presentation::input-state-buffer
-                         nshell.presentation::*input-state*))
-                (expect mouse-enabled :to-be-falsy))))))))
+              ((quote nshell.infrastructure.acl:run-external-exec)
+               (lambda (command args)
+                 (declare (ignore command))
+                 (let ((path (car (last args))))
+                   (with-open-file (stream path
+                                           :direction :output
+                                           :if-exists :supersede)
+                     (write-line "echo edited" stream)))
+                 0))
+            (capture-process-output-event :edit-command)
+            (expect "echo edited"
+                    :to-equal
+                    (nshell.presentation::input-state-buffer
+                     nshell.presentation::*input-state*)))))))
 
   (it "repl-edit-command-passes-string-argv-to-run-external-exec"
     "The exec boundary requires string argv elements, so the temporary buffer

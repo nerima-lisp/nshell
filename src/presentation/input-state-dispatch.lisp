@@ -119,7 +119,6 @@
                  (%make-input-dispatch-action :insert-char ch)
                  (%make-input-dispatch-action :none))))
     (:paste (%make-input-dispatch-action :paste key-event))
-    (:mouse (%mouse-input-dispatch-action key-event))
     (otherwise
      (%input-dispatch-action-for-name
       (input-dispatch-binding-action-name
@@ -248,9 +247,6 @@ presentation package."
       (:accept-suggestion-word (from (accept-suggestion-word-at-eol state)))
       (:forward-kill-word (from (forward-kill-word state)))
       (:toggle-sudo-prefix (from (toggle-sudo-prefix state)))
-      (:mouse-select (from (%mouse-selection-transition
-                           state
-                           (input-dispatch-action-value action))))
       (:redraw (from (%redraw-input-state state)))
       (:forward-sexp (from (%reduce-sexp-structural-edit state :forward-sexp)))
       (:backward-sexp (from (%reduce-sexp-structural-edit state :backward-sexp)))

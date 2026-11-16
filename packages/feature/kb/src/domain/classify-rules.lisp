@@ -40,7 +40,11 @@
     ;; not).  Keys: :flags (short options without a value), :value-flags,
     ;; :long, :value-long, :exact (whole words), :positionals (:any or a
     ;; maximum), :listing-options (options that allow any operands),
-    ;; :subcommands, and :grammar for find and echo/printf.
+    ;; :subcommands, and :grammar for find and echo/printf.  :resolution
+    ;; :builtin marks a row that describes the nshell builtin of that name;
+    ;; it applies only when the executor resolves the name to the builtin,
+    ;; never to a forced (^name) command.  Other rows describe external
+    ;; programs.
     ("ls" :flags "1aAlhdFRtSrin" :long ("--all" "--color")
           :exact ("--color=auto" "--color=never" "--color=always")
           :positionals :any)
@@ -68,8 +72,10 @@
             :value-primaries ("-name" "-iname" "-path" "-ipath" "-type"
                               "-maxdepth" "-mindepth" "-mtime" "-mmin" "-newer"
                               "-size" "-perm" "-user"))
-    ("echo" :grammar :echo)
-    ("printf" :grammar :echo)
+    ;; The echo and printf builtins (2.1 item 8); a forced (^echo) runs the
+    ;; external program, which no row describes.
+    ("echo" :grammar :echo :resolution :builtin)
+    ("printf" :grammar :echo :resolution :builtin)
     ("git" :subcommands
            (("status" :flags "sbv"
                       :exact ("-u" "-uno" "-unormal" "-uall"
@@ -104,6 +110,8 @@
     ;; is classified only to find a block.  :skip-values names the short
     ;; options whose value follows them when the wrapper's command is looked
     ;; for; :operands counts the wrapper's own operands before the command.
+    ;; :runs :by-name says the wrapper resolves its command like a typed
+    ;; one (builtin first); otherwise the command it runs is external.
     ("nice" :wrapper :transparent :value-flags (("n" :count)))
     ("timeout" :wrapper :transparent :value-flags (("s" :any) ("k" :any))
                :operands 1)
@@ -111,19 +119,22 @@
     ;; env with any option is opaque.
     ("env" :wrapper :transparent :assignments t :opaque-on-options t
            :skip-values "uCS")
-    ("and" :wrapper :transparent)
-    ("or" :wrapper :transparent)
-    ("not" :wrapper :transparent)
+    ;; Builtins that run their first argument by name, like a typed command.
+    ("and" :wrapper :transparent :resolution :builtin :runs :by-name)
+    ("or" :wrapper :transparent :resolution :builtin :runs :by-name)
+    ("not" :wrapper :transparent :resolution :builtin :runs :by-name)
     ("sudo" :wrapper :opaque :assignments t :skip-values "ugCDhpRrTUt")
     ("doas" :wrapper :opaque :skip-values "uC")
     ("xargs" :wrapper :opaque :skip-values "ILnPsdEa")
     ("nohup" :wrapper :opaque)
-    ("exec" :wrapper :opaque :skip-values "a")
-    ("builtin" :wrapper :opaque)
+    ;; The exec builtin runs the external program; builtin runs a builtin.
+    ("exec" :wrapper :opaque :skip-values "a" :resolution :builtin)
+    ("builtin" :wrapper :opaque :resolution :builtin :runs :by-name)
     ;; command -v and -V only look a name up (2.4 "query").
-    ("command" :wrapper :opaque :query-options ("-v" "-V"))
+    ("command" :wrapper :opaque :query-options ("-v" "-V") :resolution :builtin
+               :runs :by-name)
     ;; The command is source text: eval with one argument, or sh -c SCRIPT.
-    ("eval" :wrapper :opaque :source :eval)
+    ("eval" :wrapper :opaque :source :eval :resolution :builtin)
     ("sh" :wrapper :opaque :source :dash-c)
     ("bash" :wrapper :opaque :source :dash-c)
     ("zsh" :wrapper :opaque :source :dash-c)

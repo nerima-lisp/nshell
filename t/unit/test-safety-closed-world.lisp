@@ -211,4 +211,16 @@
                      (nshell.feature.assistant:classify-ast
                       (nshell.domain.parsing:read-submission
                        source :reader-context :auto))))
-              :to-equal (list source :confirm)))))
+              :to-equal (list source :confirm))))
+
+  (it "marks exactly the rows whose names the executors run as builtins"
+    ;; A row for a builtin name must say so, or a forced (^name) would match
+    ;; it; a row marked builtin must name one, or it would never apply.
+    (dolist (row nshell.feature.kb::+safe-command-specs+)
+      (dolist (path '(:bare-line :reader))
+        (expect (list (first row) path (getf (rest row) :resolution :external))
+                :to-equal (list (first row) path
+                                (if (nshell.application::%assistant-command-builtin-p
+                                     (first row) path)
+                                    :builtin
+                                    :external)))))))

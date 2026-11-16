@@ -62,15 +62,36 @@
 ;;; that runs it (D-P1-5 2.1 item 5): sh -c SCRIPT, eval with one argument,
 ;;; and the bodies of substitutions.
 
+(defvar *assistant-builtin-resolver* nil
+  "NIL, or a function of a command NAME and a PATH (:BARE-LINE or :READER)
+that is true when the executor on PATH runs NAME as an nshell builtin.  The
+application installs its own builtin lookup here, so the classifier and the
+executor decide by one registry.  Without it every command counts as
+external, which only keeps the rows written for builtins from applying.")
+
+(defun %assistant-resolution (name path &optional forced-p)
+  "Return :BUILTIN or :EXTERNAL: how the executor on PATH resolves NAME.  A
+forced (^name) command is always external."
+  (if (and (not forced-p)
+           *assistant-builtin-resolver*
+           (funcall *assistant-builtin-resolver* name path))
+      :builtin
+      :external))
+
 (defun assistant-command-after-wrappers (command args)
   "Return the effective command and arguments after known wrappers."
-  (loop
-    (multiple-value-bind (kind inner)
-        (nshell.feature.kb:command-wrapper command args)
-      (if (and kind inner)
-          (setf command (first inner)
-                args (rest inner))
-          (return (values (%assistant-command-basename command) args))))))
+  (let ((resolution (%assistant-resolution command :bare-line)))
+    (loop
+      (multiple-value-bind (kind inner mismatches names env-options source runs)
+          (nshell.feature.kb:command-wrapper command args resolution)
+        (declare (ignore mismatches names env-options source))
+        (if (and kind inner)
+            (setf command (first inner)
+                  args (rest inner)
+                  resolution (if (eq runs :by-name)
+                                 (%assistant-resolution command :bare-line)
+                                 :external))
+            (return (values (%assistant-command-basename command) args)))))))
 
 (defun %assistant-classify-command-line (text)
   "Classify TEXT as a bare command line: the reader of eval, sh -c, and
@@ -140,26 +161,34 @@ so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
                      '("rm" "mkfs" "dd" "chmod" "git" "curl" "wget"
                        "sh" "bash" "zsh" "fish")
                      :test #'string=)
-          return (%assistant-classify-argv tail)))
+          return (%assistant-classify-argv
+                  tail :resolution (%assistant-resolution (first tail) :bare-line))))
 
-(defun %assistant-classify-argv (words &key assignments nested writes
-                                           redirect-problems raw-words)
-  "Classify the command the argv WORDS run.  ASSIGNMENTS are the environment
-names assigned before it and NESTED the reasons of its substitutions.
-WRITES, REDIRECT-PROBLEMS, and RAW-WORDS describe the redirects and the
-written words of the outermost command."
+(defun %assistant-classify-argv (words &key resolution assignments nested
+                                           writes redirect-problems raw-words)
+  "Classify the command the argv WORDS run.  RESOLUTION is how the executor
+resolves its command word (:BUILTIN or :EXTERNAL).  ASSIGNMENTS are the
+environment names assigned before it and NESTED the reasons of its
+substitutions.  WRITES, REDIRECT-PROBLEMS, and RAW-WORDS describe the
+redirects and the written words of the outermost command."
   (let ((command (first words))
         (args (rest words)))
-    (multiple-value-bind (kind inner mismatches names env-options source)
-        (nshell.feature.kb:command-wrapper command args)
+    (multiple-value-bind (kind inner mismatches names env-options source runs)
+        (nshell.feature.kb:command-wrapper command args resolution)
       (let ((wrapped (cond
                        (source (%assistant-classify-command-line source))
-                       (inner (%assistant-classify-argv inner))))
+                       (inner (%assistant-classify-argv
+                               inner
+                               :resolution (if (eq runs :by-name)
+                                               (%assistant-resolution
+                                                (first inner) :bare-line)
+                                               :external)))))
             (embedded (unless kind (%assistant-embedded-command-result args))))
         (%assistant-subject-result
          command
          :command (%assistant-command-basename command)
          :invoked-as command
+         :resolution resolution
          :arguments args
          :wraps (and kind t)
          :opaque (eq kind :opaque)
@@ -255,8 +284,9 @@ as in %execute-plain-command-node-in-context.  Return the argv of that
 command without its redirects (NIL when the line runs no command), the
 assigned names, the words as written (redirect targets, here-document
 bodies, and assignments included), the output targets, the redirect
-problems, the results of its process substitution redirects, and the
-redirects used."
+problems, the results of its process substitution redirects, the
+redirects used, and the command's resolution (:BUILTIN or :EXTERNAL, by
+%assistant-resolution with the node's force-external-p)."
   (let* ((reader-p (eq path :reader))
          (reader-assignments
            (mapcar #'nshell.domain.parsing:arg-value
@@ -300,19 +330,28 @@ redirects used."
                         (append problems (list "process substitution >(...)"))
                         problems)
                     results
-                    (append split-redirects entries))))))))
+                    (append split-redirects entries)
+                    (and rest
+                         (%assistant-resolution
+                          (nshell.domain.parsing:command-node-command rest)
+                          path
+                          (nshell.domain.parsing:command-node-force-external-p
+                           node))))))))))
 
 (defun classify-command (node &key (path :bare-line))
   "Classify a command-node using its effective command and arguments.  PATH
 names the executor that runs NODE (see %assistant-command-parts)."
   (if (nshell.domain.parsing:command-node-p node)
-      (multiple-value-bind (argv assignments words writes problems results)
+      (multiple-value-bind (argv assignments words writes problems results
+                            redirects resolution)
           (%assistant-command-parts node path)
+        (declare (ignore redirects))
         (let ((nested (mapcan #'%assistant-result-reasons
                               (append results (%assistant-substitution-results words)))))
           (if argv
               (%assistant-classify-argv
                argv
+               :resolution resolution
                :assignments assignments
                :writes writes
                :redirect-problems problems

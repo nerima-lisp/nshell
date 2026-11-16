@@ -80,6 +80,14 @@
                  (:file "domain/options")
                  (:file "application/contract")
                  (:file "presentation/help")))
+   (:module "feature-kb"
+    :pathname "../packages/feature/kb/src"
+    :serial t
+    :components ((:file "package")
+                 (:file "domain/predicates")
+                 (:file "domain/classify-rules")
+                 (:file "domain/diagnose-rules")
+                 (:file "domain/evaluate")))
    (:module "feature-assistant"
     :pathname "../packages/feature/assistant/src"
     :serial t
@@ -466,6 +474,9 @@
                (:file "support/matchers")
    (:file "unit/test-package-by-feature")
    (:file "unit/test-assistant-safety")
+   (:file "unit/test-kb-rules")
+   (:file "unit/legacy-assistant-safety")
+   (:file "unit/test-safety-rule-migration")
    (:file "unit/test-assistant-redaction")
    (:file "unit/test-assistant-context")
    (:file "unit/test-assistant-audit")

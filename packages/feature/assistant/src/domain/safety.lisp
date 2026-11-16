@@ -1,164 +1,61 @@
 (in-package #:nshell.feature.assistant)
 
-(defstruct (assistant-safety-rule
-            (:constructor make-assistant-safety-rule
-                (&key name classification command condition reason)))
-  name
-  classification
-  command
-  condition
-  reason)
+;;; Safety classification of command ASTs.  This file only reads the AST: it
+;;; finds the command a wrapper, eval, or sh -c runs and the commands inside
+;;; substitutions, and describes each command to the knowledge base.  The
+;;; decision is the classify/4 rule data in packages/feature/kb.
 
 (defstruct (assistant-safety-result
             (:constructor make-assistant-safety-result
-                (&key classification reason command rule-name)))
+                (&key classification reason command rule-name reasons)))
   classification
   reason
   command
-  rule-name)
-
-;; These are data expressions, not model output. New static rules belong here so
-;; adding a safety decision does not require changing the classifier algorithm.
-(defparameter +assistant-safety-rules+
-  (list
-   (make-assistant-safety-rule
-    :name :root-recursive-delete
-    :classification :block
-    :command "rm"
-    :condition '(:all (:any (:arg-equals "/")
-                            (:arg-equals "/*")
-                            (:arg-equals "~")
-                            (:arg-equals "$HOME")
-                            (:arg-equals "."))
-                 (:any (:short-option-any "rR") (:option-equals "--recursive")))
-    :reason "recursive deletion of the filesystem root is blocked")
-   (make-assistant-safety-rule
-    :name :destructive-delete
-    :classification :confirm
-    :command "rm"
-    :condition :always
-    :reason "deletion requires confirmation")
-   (make-assistant-safety-rule
-    :name :force-git-push
-    :classification :confirm
-    :command "git"
-    :condition '(:all (:subcommand-equals "push")
-                 (:any (:arg-equals "-f") (:arg-prefix "--force")))
-    :reason "a force push can rewrite the remote history")
-   (make-assistant-safety-rule
-    :name :device-write
-    :classification :confirm
-    :command "dd"
-    :condition '(:arg-prefix "of=/dev/")
-    :reason "writing a device can destroy data")
-   (make-assistant-safety-rule
-    :name :network-to-shell
-    :classification :confirm
-    :command "curl"
-    :condition :always
-    :reason "network retrieval requires confirmation before it can feed a shell")
-   )
-  "Static AST safety rules, ordered from specific dangerous cases to safe cases.")
-
-(defparameter +assistant-safe-command-names+
-  '("ls" "pwd" "cat" "head" "tail" "wc" "stat" "file" "du" "df"
-    "which" "type" "grep" "rg" "find" "echo" "printf")
-  "Commands that may be classified safe when no output-producing escape hatch is present.")
-
-(defun %assistant-string-prefix-p (prefix string)
-  (and (stringp string)
-       (<= (length prefix) (length string))
-       (string= prefix string :end2 (length prefix))))
-
-(defun %assistant-condition-p (condition args)
-  (cond
-    ((eq condition :always) t)
-    ((and (consp condition) (eq (first condition) :all))
-     (every (lambda (part) (%assistant-condition-p part args)) (rest condition)))
-    ((and (consp condition) (eq (first condition) :any))
-     (some (lambda (part) (%assistant-condition-p part args)) (rest condition)))
-    ((and (consp condition) (eq (first condition) :arg-equals))
-     (member (second condition) args :test #'string=))
-    ((and (consp condition) (eq (first condition) :option-equals))
-     (loop for arg in args
-           until (string= arg "--")
-           thereis (string= (second condition) arg)))
-    ((and (consp condition) (eq (first condition) :arg-prefix))
-     (some (lambda (arg)
-             (%assistant-string-prefix-p (second condition) arg))
-           args))
-    ((and (consp condition) (eq (first condition) :short-option-any))
-     (loop for arg in args
-           until (string= arg "--")
-           thereis (and (> (length arg) 1)
-                        (char= (char arg 0) #\-)
-                        (not (char= (char arg 1) #\-))
-                        (find-if (lambda (character)
-                                   (find character (second condition)))
-                                 (subseq arg 1)))))
-    ((and (consp condition) (eq (first condition) :subcommand-equals))
-     (and (first args) (string= (second condition) (first args))))
-    (t nil)))
+  rule-name
+  ;; Every (RULE . TEXT) at CLASSIFICATION; RULE-NAME and REASON are the first.
+  reasons)
 
 (defun %assistant-command-basename (command)
   (let ((separator (position (code-char 47) command :from-end t)))
     (if separator (subseq command (1+ separator)) command)))
 
-(defun %assistant-rule-for (command args)
-  (find-if (lambda (rule)
-             (and (string= (%assistant-command-basename command)
-                           (assistant-safety-rule-command rule))
-                  (%assistant-condition-p
-                   (assistant-safety-rule-condition rule)
-                   args)))
-           +assistant-safety-rules+))
+(defun %assistant-subject-result (command &rest subject)
+  (multiple-value-bind (level reasons)
+      (apply #'nshell.feature.kb:classify-subject subject)
+    (make-assistant-safety-result
+     :classification level
+     :command command
+     :rule-name (car (first reasons))
+     :reason (cdr (first reasons))
+     :reasons reasons)))
 
-(defun %assistant-unsafe-argument-reason (command args)
-  (cond
-    ((or (search "`" command)
-         (some (lambda (arg) (search "`" arg)) args))
-     "backtick command substitution requires confirmation")
-    ((some (lambda (arg) (search ">" arg)) args)
-     "output redirection or process substitution requires confirmation")
-    ((and (string= command "find")
-          (some (lambda (arg)
-                  (or (member arg '("-delete" "-exec" "-ok" "-execdir" "-okdir")
-                              :test #'string=)
-                      (some (lambda (prefix)
-                              (%assistant-string-prefix-p prefix arg))
-                            '("-fprint" "-fprintf" "-fls"))))
-                args))
-     (if (some (lambda (arg)
-                 (member arg '("-exec" "-ok" "-execdir" "-okdir")
-                         :test #'string=))
-               args)
-         "find actions can execute commands and require confirmation"
-         "find actions can write files and require confirmation"))
-    ((and (string= command "rg")
-          (some (lambda (arg)
-                  (or (%assistant-string-prefix-p "--pre" arg)
-                      (string= arg "--search-zip")))
-                args))
-     "ripgrep can execute external preprocessors and requires confirmation")
-    (t nil)))
+(defun %assistant-unparsable-result (text)
+  (%assistant-subject-result nil :unparsable (list text)))
 
-(defun %assistant-unsafe-argument-p (command args)
-  (not (null (%assistant-unsafe-argument-reason command args))))
+(defun %assistant-unclassifiable-result (text)
+  (%assistant-subject-result nil :unclassifiable (list text)))
 
-(defun %assistant-command-substitution-result (command args)
-  (let ((results nil))
-    (dolist (arg (cons command args))
-      (dolist (marker '("$(" "<(" ">(" "("))
-        (dolist (text (nshell.domain.parsing:parenthesized-substitution-texts
-                       arg marker))
-          (push (if (eq text :incomplete)
-                    (make-assistant-safety-result
-                     :classification :block
-                     :reason "an incomplete command substitution cannot be classified safely")
-                    (%assistant-parse-and-classify-text text))
-                results))))
-    (when results
-      (%assistant-most-restrictive-result results))))
+(defun %assistant-result-reasons (result)
+  "Return RESULT's reasons as (LEVEL RULE TEXT) for an enclosing subject."
+  (mapcar (lambda (reason)
+            (list (assistant-safety-result-classification result)
+                  (car reason)
+                  (cdr reason)))
+          (assistant-safety-result-reasons result)))
+
+(defun %assistant-most-restrictive-result (results)
+  (if results
+      (let* ((merged (%assistant-subject-result
+                      nil
+                      :nested (mapcan #'%assistant-result-reasons results)))
+             (winner (find (assistant-safety-result-classification merged)
+                           results
+                           :key #'assistant-safety-result-classification)))
+        (setf (assistant-safety-result-command merged)
+              (and winner (assistant-safety-result-command winner)))
+        merged)
+      (%assistant-unparsable-result
+       "an empty compound command cannot be classified safely")))
 
 (defun %assistant-wrapper-index-and-kind (command args)
   (let* ((separator (position (code-char 47) command :from-end t))
@@ -199,173 +96,70 @@
                 args (nthcdr (1+ index) args))
           (return (values (%assistant-command-basename command) args))))))
 
-(defun %assistant-safe-git-command-p (args)
-  (let ((subcommand (first args))
-        (options (rest args)))
-    (cond
-      ((equal subcommand "branch")
-       ;; A bare name creates a branch; -l creates its reflog, not a listing.
-       (or (null options)
-           (and (equal (first options) "--list")
-                (loop with patterns-only = nil
-                      for arg in (rest options)
-                      always (cond
-                               (patterns-only t)
-                               ((string= arg "--") (setf patterns-only t))
-                               (t (not (%assistant-string-prefix-p "-" arg))))))))
-      ((equal subcommand "remote")
-       ;; Only the no-subcommand listing grammar is automatically approved.
-       (every (lambda (arg)
-                (member arg '("-v" "--verbose") :test #'string=))
-              options))
-      (t
-       (and (member subcommand '("log" "show") :test #'string=)
-         (every
-          (lambda (arg)
-            (or (not (%assistant-string-prefix-p "-" arg))
-                (member arg
-                        (cond
-                          ((string= subcommand "log")
-                           '("--oneline" "--decorate" "--stat" "--name-only"
-                             "--name-status" "--graph" "--all" "--follow"
-                             "--no-merges" "-p" "-n" "--"))
-                          ((string= subcommand "show")
-                           '("--stat" "--patch" "-p" "--name-only"
-                             "--name-status" "--pretty" "--format"
-                             "--no-patch" "--")))
-                        :test #'string=)
-                (some (lambda (prefix)
-                        (%assistant-string-prefix-p prefix arg))
-                      (cond
-                        ((string= subcommand "log") '("--pretty=" "--format="))
-                        ((string= subcommand "show") '("--pretty=" "--format="))
-                        (t nil)))))
-          options))))))
-
 (defun %assistant-parse-and-classify-text (text)
   (let ((parsed (nshell.domain.parsing:parse-command-line text)))
     (if (nshell.domain.parsing:parse-complete-p parsed)
         (classify-ast (nshell.domain.parsing:parse-result-ast parsed))
-        (make-assistant-safety-result
-         :classification :block
-         :reason "the wrapped command could not be parsed"))))
+        (%assistant-unparsable-result "the wrapped command could not be parsed"))))
 
-(defun %assistant-unknown-command-result (command)
-  (make-assistant-safety-result
-   :classification :confirm
-   :command command
-   :reason "no static safety rule matched; confirmation is required"))
+(defun %assistant-wrapped-result (command args)
+  "Classify the command that a wrapper, eval, or sh -c runs, or return NIL."
+  (cond
+    ((let ((index (%assistant-wrapper-index-and-kind command args)))
+       (when index
+         (%assistant-parse-and-classify-text
+          (format nil "~{~a~^ ~}" (nthcdr index args))))))
+    ((string= command "eval")
+     (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" args)))
+    ((member command '("sh" "bash" "zsh" "fish") :test #'string=)
+     (let ((index (position "-c" args :test #'string=)))
+       (when (and index (nth (1+ index) args))
+         (%assistant-parse-and-classify-text (nth (1+ index) args)))))
+    (t nil)))
 
-(defun %assistant-unknown-wrapper-result (command args)
-  (loop for index from 0 below (length args)
-        for candidate = (nth index args)
-        for name = (let ((separator (position (code-char 47) candidate :from-end t)))
-                     (if separator (subseq candidate (1+ separator)) candidate))
-        when (member name '("rm" "mkfs" "dd" "chmod" "git" "curl" "wget"
-                            "sh" "bash" "zsh" "fish")
-                      :test #'string=)
-          return
-            (let ((inner (%assistant-parse-and-classify-text
-                          (format nil "~{~a~^ ~}" (nthcdr index args)))))
-              (make-assistant-safety-result
-               :classification (if (eq :safe
-                                        (assistant-safety-result-classification inner))
-                                    :confirm
-                                    (assistant-safety-result-classification inner))
-               :command command
-               :reason "an unknown wrapper around a command requires fail-closed handling"))))
+(defun %assistant-embedded-command-result (args)
+  "Classify the operands from the first word that names a command able to
+change the system.  The rules use it only for commands they do not know,
+so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
+  (loop for tail on args
+        when (member (%assistant-command-basename (first tail))
+                     '("rm" "mkfs" "dd" "chmod" "git" "curl" "wget"
+                       "sh" "bash" "zsh" "fish")
+                     :test #'string=)
+          return (%assistant-parse-and-classify-text
+                  (format nil "~{~a~^ ~}" tail))))
+
+(defun %assistant-substitution-results (command args)
+  (let ((results nil))
+    (dolist (arg (cons command args) (nreverse results))
+      (dolist (marker '("$(" "<(" ">(" "("))
+        (dolist (text (nshell.domain.parsing:parenthesized-substitution-texts
+                       arg marker))
+          (push (if (eq text :incomplete)
+                    (%assistant-unparsable-result
+                     "an incomplete command substitution cannot be classified safely")
+                    (%assistant-parse-and-classify-text text))
+                results))))))
 
 (defun classify-command (node)
   "Classify a command-node using its effective command and arguments."
   (if (nshell.domain.parsing:command-node-p node)
       (let* ((command (nshell.domain.parsing:command-node-command node))
              (args (nshell.domain.parsing:command-node-arg-values node))
-             (rule (%assistant-rule-for command args))
-             (substitution-result (%assistant-command-substitution-result command args))
-             (unsafe-reason (%assistant-unsafe-argument-reason command args)))
-        ;; Redirects and substitutions add restrictions; they cannot relax a block.
-        (%assistant-most-restrictive-result
-         (remove nil
-          (list
-           (cond
-            ((and (string= command "git")
-                  (not (%assistant-safe-git-command-p args)))
-             (make-assistant-safety-result
-              :classification :confirm
-              :command command
-              :reason "writing, external command execution, or configuration injection requires confirmation"))
-            ((or (member command +assistant-safe-command-names+ :test #'string=)
-                 (and (string= command "git")
-                      (%assistant-safe-git-command-p args)))
-             (make-assistant-safety-result
-              :classification :safe
-              :command command
-              :rule-name :safe-allowlist
-              :reason "command is on the built-in read-only allowlist"))
-            ((multiple-value-bind (index kind)
-                 (%assistant-wrapper-index-and-kind command args)
-               (declare (ignore kind))
-               (when index
-                 (%assistant-parse-and-classify-text
-                  (format nil "~{~a~^ ~}" (nthcdr (1+ index) (cons command args)))))))
-            ((string= command "source")
-             ;; The arguments name a file; classifying them cannot vet its contents.
-             (make-assistant-safety-result
-              :classification :confirm
-              :command command
-              :reason "sourcing a file can execute commands and requires confirmation"))
-            ((string= command "eval")
-             (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" args)))
-            ((member command '("sh" "bash" "zsh" "fish") :test #'string=)
-             (let ((index (position "-c" args :test #'string=)))
-               (if (and index (nth (1+ index) args))
-                   (%assistant-parse-and-classify-text (nth (1+ index) args))
-                   (%assistant-unknown-command-result command))))
-            ((and rule
-                  (eq (assistant-safety-rule-classification rule) :block))
-             (make-assistant-safety-result
-              :classification :block
-              :command command
-              :rule-name (assistant-safety-rule-name rule)
-              :reason (assistant-safety-rule-reason rule)))
-            (rule
-             (make-assistant-safety-result
-              :classification (assistant-safety-rule-classification rule)
-              :command command
-              :rule-name (assistant-safety-rule-name rule)
-              :reason (assistant-safety-rule-reason rule)))
-            (t (or (%assistant-unknown-wrapper-result command args)
-                   (%assistant-unknown-command-result command))))
-           substitution-result
-           (when unsafe-reason
-             (make-assistant-safety-result
-              :classification :confirm
-              :command command
-              :reason unsafe-reason))))))
-      (make-assistant-safety-result
-       :classification :block
-       :reason "the value is not a command AST node")))
-
-(defun %assistant-classification-rank (classification)
-  (case classification
-    (:safe 0)
-    (:confirm 1)
-    (:block 2)
-    (otherwise 2)))
-
-(defun %assistant-most-restrictive-result (results)
-  (if results
-      (reduce (lambda (left right)
-                (if (> (%assistant-classification-rank
-                       (assistant-safety-result-classification right))
-                       (%assistant-classification-rank
-                        (assistant-safety-result-classification left)))
-                    right
-                    left))
-              results)
-      (make-assistant-safety-result
-       :classification :block
-       :reason "an empty compound command cannot be classified safely")))
+             (wrapped (%assistant-wrapped-result command args))
+             (embedded (unless wrapped
+                         (%assistant-embedded-command-result args))))
+        (%assistant-subject-result
+         command
+         :command (%assistant-command-basename command)
+         :invoked-as command
+         :arguments args
+         :wraps (and wrapped t)
+         :nested (mapcan #'%assistant-result-reasons
+                         (append (and wrapped (list wrapped))
+                                 (%assistant-substitution-results command args)))
+         :embedded (and embedded (%assistant-result-reasons embedded))))
+      (%assistant-unparsable-result "the value is not a command AST node")))
 
 (defun classify-pipeline (node)
   "Classify a pipeline by its most restrictive stage."
@@ -373,131 +167,78 @@
       (%assistant-most-restrictive-result
        (mapcar #'classify-ast
                (nshell.domain.parsing:pipeline-node-commands node)))
-      (make-assistant-safety-result
-       :classification :block
-       :reason "the value is not a pipeline AST node")))
+      (%assistant-unparsable-result "the value is not a pipeline AST node")))
 
 (defun %assistant-classify-sequence (node)
   (if (nshell.domain.parsing:sequence-node-p node)
       (%assistant-most-restrictive-result
        (mapcar #'classify-ast
                (nshell.domain.parsing:sequence-node-commands node)))
-      (make-assistant-safety-result
-       :classification :block
-       :reason "the value is not a sequence AST node")))
+      (%assistant-unparsable-result "the value is not a sequence AST node")))
+
+(defun %assistant-ast-has-redirect-p (node)
+  (cond
+    ((nshell.domain.parsing:command-node-p node)
+     (not (null (nshell.domain.parsing:command-node-redirects node))))
+    ((nshell.domain.parsing:pipeline-node-p node)
+     (some #'%assistant-ast-has-redirect-p
+           (nshell.domain.parsing:pipeline-node-commands node)))
+    ((nshell.domain.parsing:sequence-node-p node)
+     (some #'%assistant-ast-has-redirect-p
+           (nshell.domain.parsing:sequence-node-commands node)))
+    (t nil)))
+
+(defun %assistant-form-result (inner &rest form-facts)
+  (apply #'%assistant-subject-result
+         (assistant-safety-result-command inner)
+         :nested (%assistant-result-reasons inner)
+         form-facts))
+
+(defun %assistant-classify-reader-result (reader-result)
+  (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
+    (cond
+      ((or (nshell.domain.parsing:command-node-p form)
+           (nshell.domain.parsing:pipeline-node-p form)
+           (nshell.domain.parsing:sequence-node-p form))
+       (%assistant-form-result (classify-ast form)
+                               :form-redirect
+                               (%assistant-ast-has-redirect-p form)))
+      ((consp form)
+       (handler-case
+           (let ((ast (nshell.domain.parsing:command-form->ast
+                       (nshell.domain.parsing:reader-result-source reader-result)
+                       form
+                       (nshell.domain.parsing:reader-result-form-span-map
+                        reader-result)
+                       (lambda (head-source)
+                         (declare (ignore head-source))
+                         :command-island))))
+             (%assistant-form-result
+              (classify-ast ast)
+              :sexp-unforced
+              (not (and (nshell.domain.parsing:command-node-p ast)
+                        (nshell.domain.parsing:command-node-force-external-p ast)
+                        (not (%assistant-ast-has-redirect-p ast))
+                        (ignore-errors (every #'atom form))))))
+         (error ()
+           (%assistant-unclassifiable-result "unclassifiable S-expression form"))))
+      (t
+       (%assistant-unclassifiable-result "unclassifiable S-expression form")))))
 
 (defun classify-ast (node)
   "Classify shell AST and S-expression input without inspecting raw text."
-  (labels ((reader-ast-has-redirect-p (node)
-             (cond
-               ((nshell.domain.parsing:command-node-p node)
-                (not
-                 (null
-                  (nshell.domain.parsing:command-node-redirects node))))
-               ((nshell.domain.parsing:pipeline-node-p node)
-                (some (function reader-ast-has-redirect-p)
-                      (nshell.domain.parsing:pipeline-node-commands node)))
-               ((nshell.domain.parsing:sequence-node-p node)
-                (some (function reader-ast-has-redirect-p)
-                      (nshell.domain.parsing:sequence-node-commands node)))
-               (t nil)))
-           (reader-ast-has-recursive-delete-p (node)
-             (cond
-               ((nshell.domain.parsing:command-node-p node)
-                (and
-                 (string= "rm"
-                          (%assistant-command-basename
-                           (nshell.domain.parsing:command-node-command node)))
-                 (%assistant-condition-p
-                  (quote (:any (:short-option-any "rR")
-                               (:option-equals "--recursive")))
-                  (nshell.domain.parsing:command-node-arg-values node))))
-               ((nshell.domain.parsing:pipeline-node-p node)
-                (some (function reader-ast-has-recursive-delete-p)
-                      (nshell.domain.parsing:pipeline-node-commands node)))
-               ((nshell.domain.parsing:sequence-node-p node)
-                (some (function reader-ast-has-recursive-delete-p)
-                      (nshell.domain.parsing:sequence-node-commands node)))
-               (t nil)))
-           (classify-reader-result (reader-result)
-             (let ((form (nshell.domain.parsing:reader-result-form
-                          reader-result)))
-               (cond
-                 ((or (nshell.domain.parsing:command-node-p form)
-                      (nshell.domain.parsing:pipeline-node-p form)
-                      (nshell.domain.parsing:sequence-node-p form))
-                  (let ((result (classify-ast form)))
-                    (cond
-                      ((reader-ast-has-recursive-delete-p form)
-                       (make-assistant-safety-result
-                        :classification :block
-                        :reason "recursive deletion proposals are blocked"))
-                      ((and
-                        (eq :safe
-                            (assistant-safety-result-classification result))
-                        (reader-ast-has-redirect-p form))
-                       (make-assistant-safety-result
-                        :classification :confirm
-                        :reason "Reader-result redirects require confirmation"))
-                      (t result))))
-                 ((consp form)
-                  (handler-case
-                      (let* ((ast
-                               (nshell.domain.parsing:command-form->ast
-                                (nshell.domain.parsing:reader-result-source
-                                 reader-result)
-                                form
-                                (nshell.domain.parsing:reader-result-form-span-map
-                                 reader-result)
-                                (lambda (head-source)
-                                  (declare (ignore head-source))
-                                  :command-island)))
-                             (result (classify-ast ast)))
-                        (cond
-                          ((reader-ast-has-recursive-delete-p ast)
-                           (make-assistant-safety-result
-                            :classification :block
-                            :reason "recursive deletion proposals are blocked"))
-                          ((and
-                            (eq :safe
-                                (assistant-safety-result-classification
-                                 result))
-                            (not
-                             (and
-                              (nshell.domain.parsing:command-node-p ast)
-                              (nshell.domain.parsing:command-node-force-external-p
-                               ast)
-                              (not (reader-ast-has-redirect-p ast))
-                              (ignore-errors
-                                (every (function atom) form)))))
-                           (make-assistant-safety-result
-                            :classification :confirm
-                            :reason "S-expression command requires explicit force and has no redirects"))
-                          (t result)))
-                    (error ()
-                      (make-assistant-safety-result
-                       :classification :confirm
-                       :reason "unclassifiable S-expression form"))))
-                 (t
-                  (make-assistant-safety-result
-                   :classification :confirm
-                   :reason "unclassifiable S-expression form"))))))
-    (cond
-      ((nshell.domain.parsing:reader-result-p node)
-       (classify-reader-result node))
-      ((and (consp node)
-            (ignore-errors
-              (every (function nshell.domain.parsing:reader-result-p) node)))
-       (%assistant-most-restrictive-result
-        (mapcar (function classify-reader-result) node)))
-      ((nshell.domain.parsing:command-node-p node) (classify-command node))
-      ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node))
-      ((nshell.domain.parsing:sequence-node-p node)
-       (%assistant-classify-sequence node))
-      ((consp node)
-       (make-assistant-safety-result
-        :classification :confirm
-        :reason "unclassifiable S-expression form"))
-      (t (make-assistant-safety-result
-          :classification :block
-          :reason "unsupported AST node")))))
+  (cond
+    ((nshell.domain.parsing:reader-result-p node)
+     (%assistant-classify-reader-result node))
+    ((and (consp node)
+          (ignore-errors
+            (every #'nshell.domain.parsing:reader-result-p node)))
+     (%assistant-most-restrictive-result
+      (mapcar #'%assistant-classify-reader-result node)))
+    ((nshell.domain.parsing:command-node-p node) (classify-command node))
+    ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node))
+    ((nshell.domain.parsing:sequence-node-p node)
+     (%assistant-classify-sequence node))
+    ((consp node)
+     (%assistant-unclassifiable-result "unclassifiable S-expression form"))
+    (t (%assistant-unparsable-result "unsupported AST node"))))

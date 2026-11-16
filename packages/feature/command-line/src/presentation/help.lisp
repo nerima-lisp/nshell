@@ -24,6 +24,8 @@
   (format stream "  -l, --login        Load the login environment.~%")
   (format stream "  -c, --shell-command  Delegate COMMAND and ARGS to /bin/sh.~%")
   (format stream "      --command      Execute COMMAND in nshell batch mode.~%")
+  (format stream "      --json         With --command, print the result as one JSON envelope.~%")
+  (format stream "      --timeout SEC  With --json, stop the whole run after SEC seconds (default 120).~%")
   (format stream "      --safe         Run without startup files, AI, function autoloading,~%")
   (format stream "                     or NSHELL_PROMPT.~%")
   (format stream "                     NSHELL_SAFE=1 does the same.~%")

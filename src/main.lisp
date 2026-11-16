@@ -44,6 +44,12 @@ result representation."
     (cl-cli:make-option :key :private :name "private" :kind :flag
                         :description
                         "Read history without saving this session's commands.")
+    (cl-cli:make-option :key :json :name "json" :kind :flag
+                        :description
+                        "With --command, print one JSON response envelope.")
+    (cl-cli:make-option :key :timeout :name "timeout" :kind :value
+                        :description
+                        "With --json, the whole run's deadline in seconds.")
     (cl-cli:make-option :key :shell-command :name "shell-command" :short #\c
                         :kind :value :stop-parsing-p t
                         :description "Delegate COMMAND and ARGS to /bin/sh.")
@@ -179,6 +185,71 @@ read the same value as the thread that started them."
   (%print-usage *error-output*)
   1)
 
+(defun %env-boolean-p (name)
+  "Return true when environment variable NAME is set to a value other than
+empty, 0, false or no (case-insensitive)."
+  (let ((value (host-kit:getenv name)))
+    (and value
+         (not (member value
+                      (list "" "0" "false" "no")
+                      :test (function string-equal))))))
+
+(defun %parse-timeout-seconds (text)
+  "Return the positive number of seconds TEXT spells as digits with an
+optional decimal fraction, or NIL."
+  (let* ((dot (position #\. text))
+         (whole (subseq text 0 (or dot (length text))))
+         (fraction (if dot (subseq text (1+ dot)) "")))
+    (when (and (plusp (length whole))
+               (every #'digit-char-p whole)
+               (or (null dot)
+                   (and (plusp (length fraction))
+                        (every #'digit-char-p fraction))))
+      (let ((seconds (+ (parse-integer whole)
+                        (if dot
+                            (/ (parse-integer fraction)
+                               (expt 10 (length fraction)))
+                            0))))
+        (and (plusp seconds)
+             (nshell.infrastructure.acl::ensure-timeout-seconds
+              seconds "--timeout"))))))
+
+(defun %json-option-error (invocation)
+  "Return the startup error message for a misused --json or --timeout, or NIL."
+  (let ((json-p (cl-cli:option-value invocation :json))
+        (timeout (cl-cli:option-value invocation :timeout)))
+    (cond
+      ((and timeout (not json-p))
+       "--timeout requires --json")
+      ((not json-p) nil)
+      ((cl-cli:option-value invocation :mcp)
+       "--json cannot be combined with --mcp")
+      ((cl-cli:option-value invocation :shell-command)
+       "--json cannot be combined with -c/--shell-command")
+      ((cl-cli:option-value invocation :interactive)
+       "--json cannot be combined with --interactive")
+      ((null (cl-cli:option-value invocation :command))
+       "--json requires --command")
+      ((and timeout (null (%parse-timeout-seconds timeout)))
+       (format nil "--timeout must be a positive number of seconds, got ~s"
+               timeout)))))
+
+(defun %run-json-invocation (invocation)
+  "Print the envelope of the --command run and return its status."
+  (let ((timeout (cl-cli:option-value invocation :timeout)))
+    (multiple-value-bind (json status)
+        (nshell.feature.machine:run-json-command
+         (cl-cli:option-value invocation :command)
+         :timeout (if timeout
+                      (%parse-timeout-seconds timeout)
+                      nshell.feature.machine:+default-json-timeout-seconds+)
+         :private (not (null (cl-cli:option-value invocation :private)))
+         :environment-agent-p (%env-boolean-p "NSHELL_AGENT")
+         :script-args (cl-cli:positional-value invocation :command-args))
+      (write-line json *standard-output*)
+      (finish-output *standard-output*)
+      status)))
+
 (defun %run-parsed-invocation (invocation)
   "Dispatch a parsed CLI INVOCATION to the matching entry point."
   (cond
@@ -186,6 +257,8 @@ read the same value as the thread that started them."
      (%print-usage) 0)
     ((cl-cli:option-value invocation :show-version)
      (%print-version) 0)
+    ((%json-option-error invocation)
+     (%print-startup-option-error (%json-option-error invocation)))
     ((cl-cli:option-value invocation :mcp)
      (nshell.feature.assistant:run-assistant-mcp-server))
     (t
@@ -221,6 +294,8 @@ read the same value as the thread that started them."
                 (nshell.infrastructure.acl:run-shell-command
                  shell-command command-args
                  (nshell.infrastructure.acl:current-environment-entries))))
+           ((cl-cli:option-value invocation :json)
+            (%run-json-invocation invocation))
            ((cl-cli:option-value invocation :command)
             ;; --command executes nshell syntax; -c is reserved for /bin/sh.
             (nshell.presentation:run-repl-batch

@@ -132,7 +132,10 @@
   (sb-thread:with-mutex ((native-process-status-lock process))
     (setf (native-process-%exit-code process) exit-code)))
 
-(defvar *native-process-registry* (make-hash-table))
+(defvar *native-process-registry* (make-hash-table :synchronized t)
+  "Unreaped native processes by pid. Synchronized so REGISTERED-PROCESSES can
+copy it without *NATIVE-PROCESS-REGISTRY-LOCK*, which a thread suspended in an
+interrupt may hold.")
 (defvar *native-process-registry-lock*
   (sb-thread:make-mutex :name "native process registry"))
 (defvar *native-process-waitpid-lock*
@@ -790,24 +793,28 @@
                           (pid-storage (sb-alien:make-alien sb-alien:int)))
                       (unwind-protect
                            (progn
-                             (%spawn-check-result
-                              "posix_spawn"
-                              (%posix-spawn
-                               (sb-alien:alien-sap pid-storage) program
-                               (sb-alien:alien-sap actions)
-                               (sb-alien:alien-sap attributes)
-                               (sb-alien:alien-sap argv)
-                               (sb-alien:alien-sap envp)))
-                             (setf pid (sb-alien:deref pid-storage)
-                                   process
-                                   (%make-native-process
-                                    pid
-                                    (cond
-                                      ((eq process-group :new) pid)
-                                      ((integerp process-group) process-group)
-                                      (t (ignore-errors
-                                           (sb-posix:getpgid pid))))))
-                             (%register-native-process process)
+                             ;; No interrupt between the spawn and the
+                             ;; registration: the --json deadline stops only
+                             ;; registered processes.
+                             (sb-sys:without-interrupts
+                               (%spawn-check-result
+                                "posix_spawn"
+                                (%posix-spawn
+                                 (sb-alien:alien-sap pid-storage) program
+                                 (sb-alien:alien-sap actions)
+                                 (sb-alien:alien-sap attributes)
+                                 (sb-alien:alien-sap argv)
+                                 (sb-alien:alien-sap envp)))
+                               (setf pid (sb-alien:deref pid-storage)
+                                     process
+                                     (%make-native-process
+                                      pid
+                                      (cond
+                                        ((eq process-group :new) pid)
+                                        ((integerp process-group) process-group)
+                                        (t (ignore-errors
+                                             (sb-posix:getpgid pid))))))
+                               (%register-native-process process))
                              (let ((input-copier-threads nil)
                                    (output-copier-threads nil))
                                (multiple-value-bind (stream thread remaining-fds)

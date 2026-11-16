@@ -168,6 +168,42 @@ schema accepts it."
         (expect (symbolp value) :to-be-truthy)
         (expect (symbol-name value) :to-equal "x"))))
 
+  (it "interns no name it explains and picks the branch evaluation picks"
+    ;; D-81: explain leaves no state behind.  Evaluation interns an unknown
+    ;; operator name in NSHELL.USER; explain resolves it without interning, and
+    ;; the branch is the same either way.
+    (let ((context (make-test-shell-context))
+          (cases '(("(r3-probe-never-defined-a)" "r3-probe-never-defined-a")
+                   ("(|R3-Probe-Escaped-B| x)" "R3-Probe-Escaped-B")
+                   ("(nshell.user::r3-probe-qualified-c 1)" "r3-probe-qualified-c")))
+          (user (find-package "NSHELL.USER")))
+      (flet ((user-symbols (name)
+               (remove nil (list (find-symbol name user)
+                                 (find-symbol (string-upcase name) user)))))
+        (unwind-protect
+             (loop for (text name) in cases
+                   do (expect (user-symbols name) :to-be-null)
+                      (let* ((parsed (%machine-parsed (%machine-explain text context)))
+                             (kind (second (first (%machine-form-summaries parsed)))))
+                        (expect (list text (user-symbols name)) :to-equal (list text nil))
+                        (let* ((reader-result
+                                 (first (nshell.domain.parsing:read-submission text)))
+                               (explained (nshell.application::%reader-result-branch
+                                           context reader-result))
+                               (evaluated (nshell.application::%reader-result-branch
+                                           context reader-result :intern t)))
+                          (expect (list text explained) :to-equal (list text evaluated))
+                          (expect (list text kind)
+                                  :to-equal
+                                  (list text
+                                        (case evaluated
+                                          ((:pipeline) "syntax")
+                                          ((:command-island) "command")
+                                          (t "lisp")))))))
+          (loop for (nil name) in cases
+                do (dolist (symbol (user-symbols name))
+                     (unintern symbol user)))))))
+
   (it "reads a line the way Enter does, leading whitespace included"
     (let ((form-feed (format nil "~C(^ls)" #\Page)))
       (expect (nshell.domain.parsing:submission-reader-context form-feed)

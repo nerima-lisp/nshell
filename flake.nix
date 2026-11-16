@@ -976,9 +976,7 @@
               ];
               NSHELL_BIN = "${delivery}/bin/nshell";
               postCheck =
-                (ctx.pkgs.lib.optionalString
-                  ((previous.postCheck or null) != null)
-                  "${previous.postCheck}\n")
+                (ctx.pkgs.lib.optionalString ((previous.postCheck or null) != null) "${previous.postCheck}\n")
                 + ''
                   export PATH="${specBinEnv}/bin"
                   printf 'NSHELL_CHECK_PATH=%s\n' "$PATH"

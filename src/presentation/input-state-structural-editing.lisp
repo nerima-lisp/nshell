@@ -365,53 +365,6 @@
                (%sexp-list-at-delimiter-token expressions token))))
     (or from-delimiter (%sexp-innermost-list-containing expressions position))))
 
-(defun %sexp-slurp (state expressions tokens direction)
-  (let* ((position (input-state-cursor-pos state))
-         (list-expression (%sexp-current-list expressions tokens position))
-         (sibling
-          (and list-expression
-               (if (eq direction :forward)
-                   (%sexp-sibling-after expressions list-expression)
-                   (%sexp-sibling-before expressions list-expression)))))
-    (if (null sibling)
-        (values state :none)
-        (%sexp-move-list-delimiter state
-                                   list-expression
-                                   (if (eq direction :forward)
-                                       (%sexp-structural-expression-end sibling)
-                                       (%sexp-structural-expression-start
-                                        sibling))
-                                   (if (eq direction :forward)
-                                       #\)
-                                       #\()))))
-
-(defun %sexp-barf (state expressions tokens direction)
-  (let* ((position (input-state-cursor-pos state))
-         (list-expression (%sexp-current-list expressions tokens position))
-         (children
-          (and list-expression
-               (%sexp-list-children expressions list-expression))))
-    (if (or (null list-expression) (null children))
-        (values state :none)
-        (let* ((destination
-                (if (eq direction :forward)
-                    (if (rest children)
-                        (%sexp-structural-expression-end
-                         (first (last children 2)))
-                        (%sexp-structural-expression-open-end list-expression))
-                    (if (rest children)
-                        (%sexp-structural-expression-start (second children))
-                        (%sexp-structural-expression-close-start
-                         list-expression))))
-               (delimiter
-                (if (eq direction :forward)
-                    #\)
-                    #\()))
-          (%sexp-move-list-delimiter state
-                                     list-expression
-                                     destination
-                                     delimiter)))))
-
 (defun %sexp-navigation-action (state expressions tokens action)
   (let* ((position (input-state-cursor-pos state))
          (target
@@ -489,10 +442,6 @@
                (%sexp-delete-action state expressions tokens :forward))
               (:delete-backward-sexp
                (%sexp-delete-action state expressions tokens :backward))
-              (:slurp-forward (%sexp-slurp state expressions tokens :forward))
-              (:slurp-backward (%sexp-slurp state expressions tokens :backward))
-              (:barf-forward (%sexp-barf state expressions tokens :forward))
-              (:barf-backward (%sexp-barf state expressions tokens :backward))
               (otherwise (values state :none)))))))
 
 (defun %reduce-sexp-structural-edit (state action)

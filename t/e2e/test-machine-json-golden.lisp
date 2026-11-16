@@ -143,6 +143,19 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
     (%json-golden-with-writer-members example)))
 
 (describe "machine json golden examples"
+  (it "BUG-3 exits JSON CLI normally when an earlier pipeline command is missing"
+    (cl-weave:expect-assertions 7)
+    (host-kit:with-temporary-directory (work)
+      (multiple-value-bind (envelope stdout status stderr)
+          (%json-golden-run "gti status | cat" work)
+        (expect 0 :to-equal status)
+        (expect 1 :to-equal (count #\Newline stdout))
+        (expect "" :to-equal stderr)
+        (expect nil :to-equal (machine-envelope-failures envelope))
+        (expect 0 :to-equal (json-at envelope "status"))
+        (expect nil :to-equal (json-at envelope "error"))
+        (expect (format nil "nshell: gti: command not found~%")
+                :to-equal (json-at envelope "stderr" "text")))))
   (it "matches proposal/02's --json pipeline example"
     (expect (%json-golden-normalize (%json-golden-run-pipeline-example))
             :to-equal

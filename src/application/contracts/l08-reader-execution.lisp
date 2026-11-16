@@ -1252,6 +1252,7 @@ full-screen check together. Return the refusal (MESSAGE STATUS), or NIL."
            (refusal
              (%reader-gate-evaluated-stages context evaluated-stages gate-parent-kind))
            (command-line (nshell.domain.parsing:ast-node->command-line ast))
+           (stage-results nil)
            (processes
              (cond
                (refusal
@@ -1266,12 +1267,17 @@ full-screen check together. Return the refusal (MESSAGE STATUS), or NIL."
                            command))))
                   process))
                (t
-                (nshell.infrastructure.acl:spawn-pipeline-async
-                 background-commands)))))
+                (multiple-value-bind (processes results)
+                    (nshell.infrastructure.acl:spawn-pipeline-async
+                     background-commands)
+                  (setf stage-results results)
+                  processes)))))
       (unless processes
         (return-from %reader-spawn-background-node-in-context
-          (values nil 127
-                  (make-pipeline-execution-result 127 nil nil))))
-      (%register-background-job context processes command-line)
+          (let ((statuses (or stage-results (list 127))))
+            (values nil 127
+                    (make-pipeline-execution-result
+                     127 statuses (make-list (length statuses) :initial-element nil))))))
+      (%register-background-job context processes command-line stage-results)
       (values nil 0 (make-pipeline-execution-result 0 nil nil)))))
 

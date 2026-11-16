@@ -61,48 +61,79 @@
 ;;; Only text that is itself a command line is read again, with the reader
 ;;; that runs it (D-P1-5 2.1 item 5): sh -c SCRIPT, eval with one argument,
 ;;; and the bodies of substitutions.
+;;;
+;;; PATH names the executor that runs a node:
+;;;   :BARE-LINE  the AST executor on a node it has not expanded yet: it
+;;;               splits the NAME=value prefix, expands an alias, then
+;;;               resolves the name (execute-command-node-in-context);
+;;;   :STAGE      the AST executor on a node it dispatches now by name
+;;;               (%execute-command-by-name-in-context): no prefix, no alias;
+;;;   :READER     a reader stage (evaluate-command-stage-in-context).
+;;; RESOLVE is NIL or a function of a command node and PATH that returns how
+;;; the executor resolves the command and the node it then runs (different
+;;; after an alias expansion).  The caller builds it from the shell context
+;;; the command runs in, with the executor's own resolution functions.  The
+;;; kinds are the executor's: :BUILTIN, :EXTERNAL, and anything else (a shell
+;;; function, a source function, a sexp alias) runs code the line does not
+;;; show.  Without RESOLVE every command counts as external.
 
-(defvar *assistant-builtin-resolver* nil
-  "NIL, or a function of a command NAME and a PATH (:BARE-LINE or :READER)
-that is true when the executor on PATH runs NAME as an nshell builtin.  The
-application installs its own builtin lookup here, so the classifier and the
-executor decide by one registry.  Without it every command counts as
-external, which only keeps the rows written for builtins from applying.")
+(defun %assistant-resolution-kind (kind)
+  "Map an executor dispatch kind to the classifier's :BUILTIN, :EXTERNAL, or
+:FUNCTION."
+  (case kind
+    ((:builtin :external) kind)
+    (t :function)))
 
-(defun %assistant-resolution (name path &optional forced-p)
-  "Return :BUILTIN or :EXTERNAL: how the executor on PATH resolves NAME.  A
-forced (^name) command is always external."
-  (if (and (not forced-p)
-           *assistant-builtin-resolver*
-           (funcall *assistant-builtin-resolver* name path))
-      :builtin
-      :external))
+(defun %assistant-resolve (node path resolve)
+  "Return the classifier's resolution of NODE's command on PATH and the node
+the executor runs instead of NODE, or NIL when it runs NODE itself."
+  (if resolve
+      (multiple-value-bind (kind run-node) (funcall resolve node path)
+        (values (%assistant-resolution-kind kind)
+                (and run-node
+                     (not (eq run-node node))
+                     (not (and (equal (nshell.domain.parsing:command-node-command run-node)
+                                      (nshell.domain.parsing:command-node-command node))
+                               (equal (nshell.domain.parsing:command-node-arg-values
+                                       run-node)
+                                      (nshell.domain.parsing:command-node-arg-values
+                                       node))))
+                     run-node)))
+      (values :external nil)))
+
+(defun %assistant-name-resolution (words resolve)
+  "The resolution of the command argv WORDS names when a builtin runs it by
+name (and, or, not, command, builtin)."
+  (values (%assistant-resolve (nshell.domain.parsing:make-command-node
+                               (first words) (rest words))
+                              :stage resolve)))
 
 (defun assistant-command-after-wrappers (command args)
-  "Return the effective command and arguments after known wrappers."
-  (let ((resolution (%assistant-resolution command :bare-line)))
-    (loop
-      (multiple-value-bind (kind inner mismatches names env-options source runs)
-          (nshell.feature.kb:command-wrapper command args resolution)
-        (declare (ignore mismatches names env-options source))
-        (if (and kind inner)
-            (setf command (first inner)
-                  args (rest inner)
-                  resolution (if (eq runs :by-name)
-                                 (%assistant-resolution command :bare-line)
-                                 :external))
-            (return (values (%assistant-command-basename command) args)))))))
+  "Return the effective command and arguments after known wrappers.  This
+serves the rerun display, not a safety decision, so a wrapper row of
+either resolution is unwrapped."
+  (loop
+    (multiple-value-bind (kind inner)
+        (let ((builtin (multiple-value-list
+                        (nshell.feature.kb:command-wrapper command args :builtin))))
+          (if (first builtin)
+              (values-list builtin)
+              (nshell.feature.kb:command-wrapper command args :external)))
+      (if (and kind inner)
+          (setf command (first inner)
+                args (rest inner))
+          (return (values (%assistant-command-basename command) args))))))
 
-(defun %assistant-classify-command-line (text)
+(defun %assistant-classify-command-line (text resolve)
   "Classify TEXT as a bare command line: the reader of eval, sh -c, and
 process substitutions."
   (let ((parsed (nshell.domain.parsing:parse-command-line text)))
     (if (nshell.domain.parsing:parse-complete-p parsed)
         (%assistant-classify-node (nshell.domain.parsing:parse-result-ast parsed)
-                                  :bare-line)
+                                  :bare-line resolve)
         (%assistant-unparsable-result "the wrapped command could not be parsed"))))
 
-(defun %assistant-classify-substitution-text (text)
+(defun %assistant-classify-substitution-text (text resolve)
   "Classify TEXT as a command substitution runs it: one bare line is parsed
 as a command line, anything else goes through the auto reader
 (execute-command-substitution.lisp)."
@@ -122,12 +153,12 @@ as a command line, anything else goes through the auto reader
             (not (find #\Newline text))
             (eq (nshell.domain.parsing:scan-token-reader-context first-token)
                 :bare-line))
-       (%assistant-classify-command-line text))
+       (%assistant-classify-command-line text resolve))
       (t
        (handler-case
            (%assistant-classify-node (nshell.domain.parsing:read-submission
                                       text :reader-context :auto)
-                                     :reader)
+                                     :reader resolve)
          (error ()
            (%assistant-unparsable-result
             "the command substitution could not be read")))))))
@@ -137,7 +168,7 @@ as a command line, anything else goes through the auto reader
     ("<(" . :command-line) (">(" . :command-line))
   "Substitution openers and the reader their body runs with.")
 
-(defun %assistant-substitution-results (words)
+(defun %assistant-substitution-results (words resolve)
   (loop for word in words
         nconc (loop for (marker . reader) in +assistant-substitution-markers+
                     nconc (mapcar
@@ -147,12 +178,12 @@ as a command line, anything else goes through the auto reader
                                 (%assistant-unparsable-result
                                  "an incomplete command substitution cannot be classified safely"))
                                ((eq reader :command-line)
-                                (%assistant-classify-command-line text))
-                               (t (%assistant-classify-substitution-text text))))
+                                (%assistant-classify-command-line text resolve))
+                               (t (%assistant-classify-substitution-text text resolve))))
                            (nshell.domain.parsing:parenthesized-substitution-texts
                             word marker)))))
 
-(defun %assistant-embedded-command-result (args)
+(defun %assistant-embedded-command-result (args resolve)
   "Classify the operands from the first word that names a command able to
 change the system.  The rules use it only for commands they do not know,
 so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
@@ -162,13 +193,15 @@ so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
                        "sh" "bash" "zsh" "fish")
                      :test #'string=)
           return (%assistant-classify-argv
-                  tail :resolution (%assistant-resolution (first tail) :bare-line))))
+                  tail
+                  :resolve resolve
+                  :resolution (%assistant-name-resolution tail resolve))))
 
-(defun %assistant-classify-argv (words &key resolution assignments nested
+(defun %assistant-classify-argv (words &key resolution resolve assignments nested
                                            writes redirect-problems raw-words)
   "Classify the command the argv WORDS run.  RESOLUTION is how the executor
-resolves its command word (:BUILTIN or :EXTERNAL).  ASSIGNMENTS are the
-environment names assigned before it and NESTED the reasons of its
+resolves its command word (:BUILTIN, :EXTERNAL, or :FUNCTION).  ASSIGNMENTS
+are the environment names assigned before it and NESTED the reasons of its
 substitutions.  WRITES, REDIRECT-PROBLEMS, and RAW-WORDS describe the
 redirects and the written words of the outermost command."
   (let ((command (first words))
@@ -176,14 +209,14 @@ redirects and the written words of the outermost command."
     (multiple-value-bind (kind inner mismatches names env-options source runs)
         (nshell.feature.kb:command-wrapper command args resolution)
       (let ((wrapped (cond
-                       (source (%assistant-classify-command-line source))
+                       (source (%assistant-classify-command-line source resolve))
                        (inner (%assistant-classify-argv
                                inner
+                               :resolve resolve
                                :resolution (if (eq runs :by-name)
-                                               (%assistant-resolution
-                                                (first inner) :bare-line)
+                                               (%assistant-name-resolution inner resolve)
                                                :external)))))
-            (embedded (unless kind (%assistant-embedded-command-result args))))
+            (embedded (unless kind (%assistant-embedded-command-result args resolve))))
         (%assistant-subject-result
          command
          :command (%assistant-command-basename command)
@@ -208,7 +241,7 @@ redirects and the written words of the outermost command."
   "Redirect kinds that write a file: bare-line kinds from ast-redirect-split
 and reader kinds from ast-redirect-entry.")
 
-(defun %assistant-redirects (split-redirects entries path)
+(defun %assistant-redirects (split-redirects entries path resolve)
   "Describe the redirects of one command (D-P1-5 2.5).  SPLIT-REDIRECTS are
 the (KIND . TARGET) pairs of ast-redirect-split and ENTRIES the reader's
 ast-redirect-entry values.  Return the output targets, a text for each
@@ -249,7 +282,7 @@ process substitutions, read on PATH."
             ((nshell.domain.parsing:redirect-procsub-target-p target)
              (push (%assistant-classify-node
                     (nshell.domain.parsing:redirect-procsub-target-form target)
-                    path)
+                    path resolve)
                    results)
              (when (eq (nshell.domain.parsing:redirect-procsub-target-direction target)
                        :output)
@@ -271,22 +304,20 @@ process substitutions, read on PATH."
       (values (nreverse writes) (nreverse problems) (nreverse texts)
               (nreverse results)))))
 
-(defun %assistant-command-parts (node path)
-  "Split a command NODE the way the executor on PATH splits it.  PATH is
-:BARE-LINE for a node execute-command-node-in-context runs and :READER for
-a reader stage, which keeps its assignments and redirects in their own slots
-and passes every word as an argument.  Assignments come from
-command-node-assignment-words (a line that runs no command) or, on the
-bare-line path, split-command-node-assignments (a prefix), plus the node's
-own assignment slot.  Redirects come from the node's redirect entries and,
-on the bare-line path, from ast-redirect-split of the command that remains,
-as in %execute-plain-command-node-in-context.  Return the argv of that
-command without its redirects (NIL when the line runs no command), the
-assigned names, the words as written (redirect targets, here-document
-bodies, and assignments included), the output targets, the redirect
-problems, the results of its process substitution redirects, the
-redirects used, and the command's resolution (:BUILTIN or :EXTERNAL, by
-%assistant-resolution with the node's force-external-p)."
+(defun %assistant-command-parts (node path resolve)
+  "Split a command NODE the way the executor on PATH splits it (see PATH
+above).  Assignments come from command-node-assignment-words (a line that
+runs no command) or, on the :BARE-LINE path, split-command-node-assignments
+(a prefix), plus the node's own assignment slot.  Redirects come from the
+node's redirect entries and, off the :READER path, from ast-redirect-split
+of the command that remains, as in %execute-plain-command-node-in-context.
+Return the argv of that command without its redirects (NIL when the line
+runs no command), the assigned names, the words as written (redirect
+targets, here-document bodies, and assignments included), the output
+targets, the redirect problems, the results of its process substitution
+redirects, the redirects used, the command's resolution by RESOLVE
+(:BUILTIN, :EXTERNAL, or :FUNCTION), and the node the executor runs
+instead (after an alias), or NIL."
   (let* ((reader-p (eq path :reader))
          (reader-assignments
            (mapcar #'nshell.domain.parsing:arg-value
@@ -295,8 +326,9 @@ redirects used, and the command's resolution (:BUILTIN or :EXTERNAL, by
     (multiple-value-bind (prefix rest)
         (cond
           (assignment-only (values assignment-only nil))
-          (reader-p (values nil node))
-          (t (nshell.domain.parsing:split-command-node-assignments node)))
+          ((eq path :bare-line)
+           (nshell.domain.parsing:split-command-node-assignments node))
+          (t (values nil node)))
       (let* ((split (and rest
                          (not reader-p)
                          (nshell.domain.parsing:split-command-node-redirects rest)))
@@ -305,72 +337,95 @@ redirects used, and the command's resolution (:BUILTIN or :EXTERNAL, by
                     (nshell.domain.parsing:command-redirect-split-result-redirects split)))
              (entries (nshell.domain.parsing:command-node-redirects node)))
         (multiple-value-bind (writes problems texts results)
-            (%assistant-redirects split-redirects entries path)
-          (let ((words (append (list (nshell.domain.parsing:command-node-command node))
-                               (nshell.domain.parsing:command-node-arg-values node)
-                               reader-assignments
-                               texts)))
-            (values (and rest
-                         (cons (nshell.domain.parsing:command-node-command rest)
-                               (nshell.domain.parsing:command-node-arg-values
-                                (if split
-                                    (nshell.domain.parsing:command-redirect-split-result-clean-command
-                                     split)
-                                    rest))))
-                    (mapcar #'nshell.feature.kb:assignment-name
-                            (if assignment-only
-                                assignment-only
-                                (append reader-assignments prefix)))
-                    words
-                    writes
-                    (if (some (lambda (word)
-                                (nshell.domain.parsing:parenthesized-substitution-texts
-                                 word ">("))
-                              words)
-                        (append problems (list "process substitution >(...)"))
-                        problems)
-                    results
-                    (append split-redirects entries)
-                    (and rest
-                         (%assistant-resolution
-                          (nshell.domain.parsing:command-node-command rest)
-                          path
-                          (nshell.domain.parsing:command-node-force-external-p
-                           node))))))))))
+            (%assistant-redirects split-redirects entries path resolve)
+          (multiple-value-bind (resolution run-node)
+              (if rest (%assistant-resolve rest path resolve) (values nil nil))
+            (let ((words (append (list (nshell.domain.parsing:command-node-command node))
+                                 (nshell.domain.parsing:command-node-arg-values node)
+                                 reader-assignments
+                                 texts)))
+              (values (and rest
+                           (cons (nshell.domain.parsing:command-node-command rest)
+                                 (nshell.domain.parsing:command-node-arg-values
+                                  (if split
+                                      (nshell.domain.parsing:command-redirect-split-result-clean-command
+                                       split)
+                                      rest))))
+                      (mapcar #'nshell.feature.kb:assignment-name
+                              (if assignment-only
+                                  assignment-only
+                                  (append reader-assignments prefix)))
+                      words
+                      writes
+                      (if (some (lambda (word)
+                                  (nshell.domain.parsing:parenthesized-substitution-texts
+                                   word ">("))
+                                words)
+                          (append problems (list "process substitution >(...)"))
+                          problems)
+                      results
+                      (append split-redirects entries)
+                      resolution
+                      run-node))))))))
 
-(defun classify-command (node &key (path :bare-line))
+(defun classify-command (node &key (path :bare-line) resolve)
   "Classify a command-node using its effective command and arguments.  PATH
-names the executor that runs NODE (see %assistant-command-parts)."
+and RESOLVE are as for classify-ast."
   (if (nshell.domain.parsing:command-node-p node)
       (multiple-value-bind (argv assignments words writes problems results
-                            redirects resolution)
-          (%assistant-command-parts node path)
+                            redirects resolution run-node)
+          (%assistant-command-parts node path resolve)
         (declare (ignore redirects))
         (let ((nested (mapcan #'%assistant-result-reasons
-                              (append results (%assistant-substitution-results words)))))
-          (if argv
-              (%assistant-classify-argv
-               argv
-               :resolution resolution
-               :assignments assignments
-               :writes writes
-               :redirect-problems problems
-               :raw-words words
-               :nested nested)
-              (%assistant-subject-result
-               nil
-               :assignments assignments
-               :writes writes
-               :redirect-problems problems
-               :words words
-               :nested nested))))
+                              (append results
+                                      (%assistant-substitution-results words resolve)))))
+          (cond
+            ((null argv)
+             (%assistant-subject-result
+              nil
+              :assignments assignments
+              :writes writes
+              :redirect-problems problems
+              :words words
+              :nested nested))
+            (run-node
+             ;; The executor runs RUN-NODE, the alias expansion, as a stage it
+             ;; has resolved already; NODE contributes its own assignments,
+             ;; redirects, and substitutions.
+             (let ((ran (classify-command
+                         run-node
+                         :path (if (eq path :reader) :reader :stage)
+                         :resolve (lambda (command-node command-path)
+                                    (if (eq command-node run-node)
+                                        (values resolution nil)
+                                        (funcall resolve command-node command-path))))))
+               (%assistant-subject-result
+                (first argv)
+                :command (%assistant-command-basename (first argv))
+                :invoked-as (first argv)
+                :wraps t
+                :assignments assignments
+                :writes writes
+                :redirect-problems problems
+                :words words
+                :nested (append (%assistant-result-reasons ran) nested))))
+            (t
+             (%assistant-classify-argv
+              argv
+              :resolution resolution
+              :resolve resolve
+              :assignments assignments
+              :writes writes
+              :redirect-problems problems
+              :raw-words words
+              :nested nested)))))
       (%assistant-unparsable-result "the value is not a command AST node")))
 
 (defun command-effects (node)
   "Return the effects of the command NODE runs: (DELETES PATH), (WRITES PATH),
 and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
   (multiple-value-bind (argv assignments words writes)
-      (%assistant-command-parts node :bare-line)
+      (%assistant-command-parts node :bare-line nil)
     (declare (ignore assignments words))
     (nshell.feature.kb:subject-effects
      :command (and argv (%assistant-command-basename (first argv)))
@@ -378,18 +433,18 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
      :arguments (rest argv)
      :writes writes)))
 
-(defun classify-pipeline (node &key (path :bare-line))
+(defun classify-pipeline (node &key (path :bare-line) resolve)
   "Classify a pipeline by its most restrictive stage."
   (if (nshell.domain.parsing:pipeline-node-p node)
       (%assistant-most-restrictive-result
-       (mapcar (lambda (stage) (%assistant-classify-node stage path))
+       (mapcar (lambda (stage) (%assistant-classify-node stage path resolve))
                (nshell.domain.parsing:pipeline-node-commands node)))
       (%assistant-unparsable-result "the value is not a pipeline AST node")))
 
-(defun %assistant-classify-sequence (node path)
+(defun %assistant-classify-sequence (node path resolve)
   (if (nshell.domain.parsing:sequence-node-p node)
       (%assistant-most-restrictive-result
-       (mapcar (lambda (item) (%assistant-classify-node item path))
+       (mapcar (lambda (item) (%assistant-classify-node item path resolve))
                (nshell.domain.parsing:sequence-node-commands node)))
       (%assistant-unparsable-result "the value is not a sequence AST node")))
 
@@ -411,13 +466,13 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
          :nested (%assistant-result-reasons inner)
          form-facts))
 
-(defun %assistant-classify-reader-result (reader-result)
+(defun %assistant-classify-reader-result (reader-result resolve)
   (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
     (cond
       ((or (nshell.domain.parsing:command-node-p form)
            (nshell.domain.parsing:pipeline-node-p form)
            (nshell.domain.parsing:sequence-node-p form))
-       (%assistant-form-result (%assistant-classify-node form :reader)
+       (%assistant-form-result (%assistant-classify-node form :reader resolve)
                                :form-redirect
                                (%assistant-ast-has-redirect-p form)))
       ((consp form)
@@ -431,7 +486,7 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
                          (declare (ignore head-source))
                          :command-island))))
              (%assistant-form-result
-              (%assistant-classify-node ast :reader)
+              (%assistant-classify-node ast :reader resolve)
               :sexp-unforced
               (not (and (nshell.domain.parsing:command-node-p ast)
                         (nshell.domain.parsing:command-node-force-external-p ast)
@@ -442,26 +497,31 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
       (t
        (%assistant-unclassifiable-result "unclassifiable S-expression form")))))
 
-(defun %assistant-classify-node (node path)
+(defun %assistant-classify-node (node path resolve)
   (cond
     ((nshell.domain.parsing:reader-result-p node)
-     (%assistant-classify-reader-result node))
+     (%assistant-classify-reader-result node resolve))
     ((and (consp node)
           (ignore-errors
             (every #'nshell.domain.parsing:reader-result-p node)))
      (%assistant-most-restrictive-result
-      (mapcar #'%assistant-classify-reader-result node)))
-    ((nshell.domain.parsing:command-node-p node) (classify-command node :path path))
-    ((nshell.domain.parsing:pipeline-node-p node) (classify-pipeline node :path path))
+      (mapcar (lambda (result) (%assistant-classify-reader-result result resolve))
+              node)))
+    ((nshell.domain.parsing:command-node-p node)
+     (classify-command node :path path :resolve resolve))
+    ((nshell.domain.parsing:pipeline-node-p node)
+     (classify-pipeline node :path path :resolve resolve))
     ((nshell.domain.parsing:sequence-node-p node)
-     (%assistant-classify-sequence node path))
+     (%assistant-classify-sequence node path resolve))
     ((consp node)
      (%assistant-unclassifiable-result "unclassifiable S-expression form"))
     (t (%assistant-unparsable-result "unsupported AST node"))))
 
-(defun classify-ast (node &key (path :bare-line))
+(defun classify-ast (node &key (path :bare-line) resolve)
   "Classify shell AST and S-expression input without inspecting raw text.
-PATH names the executor that runs a command, pipeline, or sequence node:
-:BARE-LINE for execute-ast-in-context, :READER for a reader stage.  Reader
-results always run as reader stages."
-  (%assistant-classify-node node path))
+PATH names the executor that runs a command, pipeline, or sequence node
+(:BARE-LINE, :STAGE, or :READER, described above); reader results always
+run as reader stages.  RESOLVE gives the executor's resolution of a
+command in the shell context it runs in; without it every command is
+external."
+  (%assistant-classify-node node path resolve))

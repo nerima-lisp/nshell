@@ -221,7 +221,12 @@ wrapped line's other rows on screen as stale duplicates."
               reader-results))
             (values
              :classified
-             (nshell.feature.assistant:classify-ast reader-results)
+             ;; The context the line will run in, so the classifier resolves
+             ;; aliases and functions as the gate and the executor do.
+             (nshell.feature.assistant:classify-ast
+              reader-results
+              :resolve (nshell.application:assistant-command-resolver
+                        (%make-repl-shell-context)))
              nil)
             (values :parse-error nil
                     (format nil "解釈できない提案: ~a" text))))
@@ -1022,7 +1027,11 @@ TEXT itself still classifies as safe (D-P1-5 3.1)."
   (let ((result (nshell.domain.parsing:parse-command-line text)))
     (if (nshell.domain.parsing:parse-complete-p result)
         (let* ((ast (nshell.domain.parsing:parse-result-ast result))
-               (classification (nshell.feature.assistant:classify-ast ast))
+               (classification
+                 (nshell.feature.assistant:classify-ast
+                  ast
+                  :resolve (nshell.application:assistant-command-resolver
+                            (%make-repl-shell-context))))
                (details (%rerun-command-details ast))
                (dynamic-reason
                  (some (lambda (detail)

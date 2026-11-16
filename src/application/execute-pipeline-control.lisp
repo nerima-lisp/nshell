@@ -104,48 +104,58 @@ so it is marked quoted and never read as an assignment or a prefix of one."
       (nshell.domain.parsing:command-node-environment-assignments node)))
     (t node)))
 
-(defun %assistant-effective-ast-for-gate (context ast)
-  (cond
-    ((nshell.domain.parsing:command-node-p ast)
-     (multiple-value-bind (function-body function-p)
-         (gethash (nshell.domain.parsing:command-node-command ast)
-                  (shell-context-function-table context))
-       (cond
-         (function-p
-          (let ((results nil))
-            (dolist (line function-body)
-              (let ((parsed (nshell.domain.parsing:parse-command-line line)))
-                (if (nshell.domain.parsing:parse-complete-p parsed)
-                    (push (nshell.feature.assistant:classify-ast
-                           (nshell.domain.parsing:parse-result-ast parsed))
-                          results)
-                    (return-from %assistant-effective-ast-for-gate nil))))
-            (or (find-if (lambda (result)
-                           (eq :block
-                               (nshell.feature.assistant:assistant-safety-result-classification
-                                result)))
-                         results)
-                (find-if (lambda (result)
-                           (eq :confirm
-                               (nshell.feature.assistant:assistant-safety-result-classification
-                                result)))
-                         results)
-                (first results))))
-         ((gethash (nshell.domain.parsing:command-node-command ast)
-                   (shell-context-alias-table context))
-          (%assistant-command-stage-node
-           (nshell.application:expand-command-alias-node
-            ast (shell-context-alias-table context))))
-         (t ast))))
-    (t ast)))
+(defun assistant-command-resolver (context &key stage-kinds)
+  "Return the function the AI safety classifier calls to learn how the
+executor resolves a command node in CONTEXT: it takes the node and the path
+the node runs on and returns the executor's dispatch kind and the node it
+runs.  Each path asks the executor's own resolution:
+:BARE-LINE expands an alias with expand-command-alias-node, as
+%expand-command-node-in-context does, and resolves the name of the result;
+:STAGE resolves the name with %resolve-command-by-name, as
+%execute-command-by-name-in-context does; :READER uses
+%resolve-command-stage-binding, as evaluate-command-stage-in-context does.
+STAGE-KINDS maps nodes whose resolution the executor already made (an
+evaluated reader stage, the program exec runs) to their dispatch kind."
+  (lambda (node path)
+    (let ((known (assoc node stage-kinds :test #'eq)))
+      (cond
+        (known (values (cdr known) node))
+        ((eq path :reader)
+         (handler-case
+             (multiple-value-bind (kind binding run-node)
+                 (%resolve-command-stage-binding context node)
+               (declare (ignore binding))
+               (values kind run-node))
+           (error () (values :unresolved node))))
+        (t
+         (let ((expanded (if (eq path :bare-line)
+                             (ignore-errors
+                              (expand-command-alias-node
+                               node (shell-context-alias-table context)))
+                             node)))
+           (cond
+             ;; An alias that does not expand to a command runs nothing the
+             ;; classifier can see.
+             ((not (nshell.domain.parsing:command-node-p expanded))
+              (values :unresolved node))
+             ((eq expanded node)
+              (values (%resolve-command-by-name
+                       context (nshell.domain.parsing:command-node-command node))
+                      node))
+             (t
+              (let ((run-node (%assistant-command-stage-node expanded)))
+                (values (%resolve-command-by-name
+                         context (nshell.domain.parsing:command-node-command run-node))
+                        run-node))))))))))
 
 (defun %assistant-gate-active-p ()
   "True while executing a line that came from an AI proposal or agent step."
   (member *execution-origin* '(:proposal :agent) :test #'eq))
 
-(defun %assistant-execution-gate (context ast &key (path :bare-line))
-  "PATH names the executor that runs AST, as for classify-ast: :READER for a
-reader stage, whose words carry no redirects and no assignment prefix."
+(defun %assistant-execution-gate (context ast &key (path :bare-line) resolve)
+  "PATH names the executor that runs AST, as for classify-ast.  RESOLVE is
+the classifier's resolver, by default assistant-command-resolver of
+CONTEXT."
   (when (%assistant-gate-active-p)
     (labels ((rank (value)
                (case (nshell.feature.assistant:assistant-safety-result-classification value)
@@ -162,12 +172,10 @@ reader stage, whose words carry no redirects and no assignment prefix."
                                    (if (nshell.domain.parsing:pipeline-node-p value)
                                        (nshell.domain.parsing:pipeline-node-commands value)
                                        (nshell.domain.parsing:sequence-node-commands value))))
-                   (let ((effective (%assistant-effective-ast-for-gate context value)))
-                     (if (nshell.feature.assistant:assistant-safety-result-p effective)
-                         effective
-                         ;; An alias expansion is a parsed command line.
-                         (nshell.feature.assistant:classify-ast
-                          effective :path (if (eq effective value) path :bare-line)))))))
+                   (nshell.feature.assistant:classify-ast
+                    value
+                    :path path
+                    :resolve (or resolve (assistant-command-resolver context))))))
       (let* ((classification (classify-effective ast))
              (agent-p (eq *execution-origin* :agent))
              (approval (and (or (null *execution-gate-parent-kind*)
@@ -201,10 +209,12 @@ reader stage, whose words carry no redirects and no assignment prefix."
         stop))))
 
 (defun %assistant-gated-command-dispatch (context command args thunk)
+  ;; and, or, not, command, and builtin run COMMAND by name.
   (let ((gate (%assistant-execution-gate
                context
                (%assistant-command-stage-node
-                (nshell.domain.parsing:make-command-node command args)))))
+                (nshell.domain.parsing:make-command-node command args))
+               :path :stage)))
     (if gate
         (values (first gate) (second gate))
         (funcall thunk))))

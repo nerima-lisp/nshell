@@ -8,7 +8,7 @@
   (let ((parsed (nshell.domain.parsing:parse-command-line line)))
     (unless (nshell.domain.parsing:parse-complete-p parsed)
       (error "test input does not parse: ~S" line))
-    (nshell.feature.assistant:classify-ast
+    (%test-classify-ast
      (nshell.domain.parsing:parse-result-ast parsed))))
 
 (defun %closed-world-level (line)
@@ -180,7 +180,7 @@
                       (nshell.feature.assistant:assistant-safety-result-classification
                        (if (eq reader :bare)
                            (%closed-world-classify source)
-                           (nshell.feature.assistant:classify-ast
+                           (%test-classify-ast
                             (nshell.domain.parsing:read-submission
                              source :reader-context :auto)))))
                 :to-equal (list source :confirm)))))
@@ -208,7 +208,7 @@
     (dolist (source '("(^and ls)" "(^or ls)" "(^not ls)"))
       (expect (list source
                     (nshell.feature.assistant:assistant-safety-result-classification
-                     (nshell.feature.assistant:classify-ast
+                     (%test-classify-ast
                       (nshell.domain.parsing:read-submission
                        source :reader-context :auto))))
               :to-equal (list source :confirm))))
@@ -216,11 +216,15 @@
   (it "marks exactly the rows whose names the executors run as builtins"
     ;; A row for a builtin name must say so, or a forced (^name) would match
     ;; it; a row marked builtin must name one, or it would never apply.
-    (dolist (row nshell.feature.kb::+safe-command-specs+)
-      (dolist (path '(:bare-line :reader))
-        (expect (list (first row) path (getf (rest row) :resolution :external))
-                :to-equal (list (first row) path
-                                (if (nshell.application::%assistant-command-builtin-p
-                                     (first row) path)
-                                    :builtin
-                                    :external)))))))
+    ;; The executor's own resolution decides, in a context with no functions
+    ;; or aliases.
+    (let ((context (make-test-shell-context)))
+      (dolist (row nshell.feature.kb::+safe-command-specs+)
+        (let ((node (nshell.domain.parsing:make-command-node (first row) nil)))
+          (dolist (kind (list (nshell.application::%resolve-command-by-name
+                               context (first row))
+                              (nth-value 0 (nshell.application::%resolve-command-stage-binding
+                                            context node))))
+            (expect (list (first row) (getf (rest row) :resolution :external))
+                    :to-equal (list (first row)
+                                    (if (eq kind :builtin) :builtin :external)))))))))

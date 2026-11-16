@@ -18,6 +18,7 @@
   (special *foreground-terminal-runner*)
   (special *function-call-depth*)
   (special *command-evaluation-position*)
+  (special *execution-gate-parent-kind*)
   (ftype
    (function (t t function &optional function)
     (values t integer pipeline-execution-result))
@@ -988,6 +989,53 @@
         (setf (%reader-process-substitution-handle substitution) nil))))
   nil)
 
+(defun %reader-gate-command-node (context evaluated-stage)
+  "Return EVALUATED-STAGE as the expanded command node the AI gate classifies."
+  (let* ((command (evaluated-command-stage-command-node evaluated-stage))
+         (arguments
+           (mapcar #'nshell.domain.parsing:make-command-arg
+                   (command-argv-strings
+                    context
+                    (evaluated-command-stage-arguments evaluated-stage)))))
+    (nshell.domain.parsing:make-command-node
+     (nshell.domain.parsing:command-node-command command)
+     arguments
+     (nshell.domain.parsing:ast-node-span command)
+     nil
+     nil
+     (nshell.domain.parsing:command-node-redirects command)
+     (nshell.domain.parsing:command-node-force-external-p command)
+     arguments
+     (nshell.domain.parsing:command-node-environment-assignments command))))
+
+(defun %reader-assistant-gate (context command-nodes parent-kind)
+  "Apply the AI execution gate to the expanded COMMAND-NODES, judged as if
+running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
+  (let ((*execution-gate-parent-kind* parent-kind))
+    (%assistant-execution-gate
+     context
+     (if (rest command-nodes)
+         (nshell.domain.parsing:make-pipeline-node command-nodes)
+         (first command-nodes)))))
+
+(defun %reader-gate-evaluated-stages (context evaluated-stages parent-kind)
+  (when (%assistant-gate-active-p)
+    (%reader-assistant-gate
+     context
+     (mapcar (lambda (stage) (%reader-gate-command-node context stage))
+             evaluated-stages)
+     parent-kind)))
+
+(defun %reader-gate-refusal (context refusal stage-count)
+  "Report REFUSAL as the result of a line with STAGE-COUNT stages, none run."
+  (destructuring-bind (message status) refusal
+    (let ((statuses (make-list stage-count :initial-element status)))
+      (write-string message *error-output*)
+      (%record-pipeline-statuses context statuses)
+      (values nil status
+              (make-pipeline-execution-result
+               status statuses (make-list stage-count :initial-element nil))))))
+
 (defun %reader-execute-foreground-in-context
     (context ast stage-evaluator)
   (when (and (nshell.domain.parsing:command-node-p ast)
@@ -1005,7 +1053,12 @@
       (%record-last-exit-code context 0)
       (return-from %reader-execute-foreground-in-context
         (values nil 0 (make-pipeline-execution-result 0 '(0) '(nil))))))
-  (let ((state (%make-reader-execution-state)))
+  ;; Everything this line runs while its stages are evaluated or dispatched
+  ;; (substitutions, function bodies) is nested: the line's own approval does
+  ;; not cover it (D-P1-5 3.1, item 5).
+  (let ((state (%make-reader-execution-state))
+        (gate-parent-kind *execution-gate-parent-kind*)
+        (*execution-gate-parent-kind* :command))
     (unwind-protect
          (let* ((commands (%reader-command-stages ast))
                 (span (nshell.domain.parsing:ast-node-span ast)))
@@ -1019,18 +1072,38 @@
                   (evaluated-stages
                     (%reader-evaluate-stages
                      context commands stage-evaluator))
+                  (refusal
+                    (%reader-gate-evaluated-stages
+                     context evaluated-stages gate-parent-kind))
                   (evaluated-substitutions
-                    (multiple-value-bind (terminal-p output status result)
-                        (%reader-terminal-external-dispatch
-                         context ast plans evaluated-stages)
-                      (when terminal-p
-                        (%record-pipeline-statuses
-                         context
-                         (pipeline-execution-result-stage-statuses result))
+                    (progn
+                      (when refusal
                         (return-from %reader-execute-foreground-in-context
-                          (values output status result)))
-                      (%reader-evaluate-process-substitutions
-                       context plans stage-evaluator)))
+                          (%reader-gate-refusal
+                           context refusal (length evaluated-stages))))
+                      (multiple-value-bind (terminal-p output status result)
+                          (%reader-terminal-external-dispatch
+                           context ast plans evaluated-stages)
+                        (when terminal-p
+                          (%record-pipeline-statuses
+                           context
+                           (pipeline-execution-result-stage-statuses result))
+                          (return-from %reader-execute-foreground-in-context
+                            (values output status result)))
+                        (let ((substitutions
+                                (%reader-evaluate-process-substitutions
+                                 context plans stage-evaluator)))
+                          ;; A process substitution is nested like $(...).
+                          (dolist (substitution substitutions)
+                            (let ((inner-refusal
+                                    (%reader-gate-evaluated-stages
+                                     context (fourth substitution) :command)))
+                              (when inner-refusal
+                                (return-from %reader-execute-foreground-in-context
+                                  (%reader-gate-refusal
+                                   context inner-refusal
+                                   (length evaluated-stages))))))
+                          substitutions))))
                   (substitutions
                     (%reader-allocate-process-substitutions
                      state commands evaluated-substitutions))
@@ -1146,7 +1219,9 @@
       (unless (command-node-external-p context command)
         (%reader-background-unsupported
          ast "Background execution requires external command stages.")))
-    (let* ((evaluated-stages
+    (let* ((gate-parent-kind *execution-gate-parent-kind*)
+           (*execution-gate-parent-kind* :command)
+           (evaluated-stages
              (%reader-evaluate-stages context commands stage-evaluator))
            (background-commands
              (loop for stage in evaluated-stages
@@ -1158,18 +1233,27 @@
                          ast "Background execution requires external command stages."
                          (nshell.domain.parsing:ast-node-span command))
                    collect (%reader-background-command context stage)))
+           (refusal
+             (when (%assistant-gate-active-p)
+               (%reader-assistant-gate
+                context background-commands gate-parent-kind)))
            (command-line (nshell.domain.parsing:ast-node->command-line ast))
            (processes
-             (if (= (length background-commands) 1)
-                 (let* ((command (first background-commands))
-                        (process
-                          (nshell.infrastructure.acl:spawn-async
-                           (nshell.domain.parsing:command-node-command command)
-                           (nshell.domain.parsing:command-node-arg-values
-                            command))))
-                   process)
-                 (nshell.infrastructure.acl:spawn-pipeline-async
-                  background-commands))))
+             (cond
+               (refusal
+                (return-from %reader-spawn-background-node-in-context
+                  (%reader-gate-refusal context refusal 0)))
+               ((= (length background-commands) 1)
+                (let* ((command (first background-commands))
+                       (process
+                         (nshell.infrastructure.acl:spawn-async
+                          (nshell.domain.parsing:command-node-command command)
+                          (nshell.domain.parsing:command-node-arg-values
+                           command))))
+                  process))
+               (t
+                (nshell.infrastructure.acl:spawn-pipeline-async
+                 background-commands)))))
       (unless processes
         (return-from %reader-spawn-background-node-in-context
           (values nil 127

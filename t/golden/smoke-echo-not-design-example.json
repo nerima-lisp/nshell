@@ -1,0 +1,33 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "safe",
+      "reasons": []
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 3,
+      "lines": 1,
+      "text": "hi\n",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": "echo hi"
+}

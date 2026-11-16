@@ -1,5 +1,14 @@
 (in-package #:nshell/test)
 
+(defun %test-classify-ast (node &rest options)
+  "Classify NODE as it would run in a fresh shell context, with no shell
+functions or aliases: the executor's resolution of that context decides
+which commands are builtins."
+  (apply #'nshell.feature.assistant:classify-ast node
+         :resolve (nshell.application:assistant-command-resolver
+                   (make-test-shell-context))
+         options))
+
 (describe "assistant-safety-classifier-contracts"
   (it "P1 preserves block across redirects wrappers and recursive short options"
     (let ((cases '("rm -rf / > out" "rm -fr /" "rm -R /" "rm -fR /"
@@ -16,7 +25,7 @@
           (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
           (expect :block :to-be
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast
+                   (%test-classify-ast
                     (nshell.domain.parsing:parse-result-ast parsed))))))))
 
   (it "P1 keeps safe and confirm controls without treating operands as options"
@@ -30,7 +39,7 @@
           (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
           (expect (second case) :to-be
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast
+                   (%test-classify-ast
                     (nshell.domain.parsing:parse-result-ast parsed))))))))
 
   (it "classifies the required command AST cases"
@@ -38,7 +47,7 @@
              (nshell.domain.parsing:make-command-node name args))
            (classification (node)
              (nshell.feature.assistant:assistant-safety-result-classification
-              (nshell.feature.assistant:classify-ast node))))
+              (%test-classify-ast node))))
       (expect :block :to-be
               (classification (command "rm" "-rf" "/")))
       (expect :block :to-be
@@ -64,11 +73,11 @@
       (with-complete-ast (ast (first case))
         (expect (second case) :to-be
                 (nshell.feature.assistant:assistant-safety-result-classification
-                 (nshell.feature.assistant:classify-ast ast))))))
+                 (%test-classify-ast ast))))))
 
   (it "keeps root-recursive delete ahead of generic delete"
     (let ((result
-            (nshell.feature.assistant:classify-ast
+            (%test-classify-ast
              (nshell.domain.parsing:make-command-node "rm" '("-rf" "/")))))
       (expect :block :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
@@ -90,25 +99,25 @@
               :to-be-truthy)
       (expect :safe :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
-               (nshell.feature.assistant:classify-ast safe-ast))))
+               (%test-classify-ast safe-ast))))
     (with-complete-ast (blocked-ast "ls && rm -rf /")
       (expect :block :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
-               (nshell.feature.assistant:classify-ast blocked-ast))))
+               (%test-classify-ast blocked-ast))))
     (with-complete-ast (confirmed-ast "git status; curl http://example.com")
       (expect :confirm :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
-               (nshell.feature.assistant:classify-ast confirmed-ast)))))
+               (%test-classify-ast confirmed-ast)))))
 
   (it "returns block as a value for unsupported AST input"
-    (let ((result (nshell.feature.assistant:classify-ast nil)))
+    (let ((result (%test-classify-ast nil)))
       (expect :block :to-be
                (nshell.feature.assistant:assistant-safety-result-classification
                result))))
   (it "classifies S-expression command forms before execution"
     (labels ((classification (source)
                (nshell.feature.assistant:assistant-safety-result-classification
-                (nshell.feature.assistant:classify-ast
+                (%test-classify-ast
                  (first
                   (nshell.domain.parsing:read-submission
                    source :reader-context :sexp)))))
@@ -118,10 +127,10 @@
                  source :reader-context :auto)))
              (reader-result-classification (reader-result)
                (nshell.feature.assistant:assistant-safety-result-classification
-                (nshell.feature.assistant:classify-ast reader-result)))
+                (%test-classify-ast reader-result)))
              (legacy-classification (source)
                (nshell.feature.assistant:assistant-safety-result-classification
-                (nshell.feature.assistant:classify-ast
+                (%test-classify-ast
                  (nshell.domain.parsing:parse-result-ast
                   (nshell.domain.parsing:parse-command-line source))))))
       (cl-weave:expect-assertions 25)
@@ -144,11 +153,11 @@
       (expect :confirm :to-be (classification "(unknown-form value)"))
       (expect :block :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
-               (nshell.feature.assistant:classify-ast
+               (%test-classify-ast
                 (nshell.domain.parsing:read-submission
                  "(^ls) (^rm -rf /)" :reader-context :sexp))))
       (expect :confirm :to-be (legacy-classification "ls > /tmp/marker"))
-      (expect :confirm :to-be (nshell.feature.assistant:assistant-safety-result-classification (nshell.feature.assistant:classify-ast (list :unknown "form"))))
+      (expect :confirm :to-be (nshell.feature.assistant:assistant-safety-result-classification (%test-classify-ast (list :unknown "form"))))
       (let* ((result (reader-result "ls"))
              (form (nshell.domain.parsing:reader-result-form result)))
         (expect (nshell.domain.parsing:command-node-p form) :to-be-truthy)
@@ -182,12 +191,12 @@
              (funcall original-reader source :reader-context reader-context)))
         (with-temporary-function
             ('nshell.feature.assistant:classify-ast
-             (lambda (input)
+             (lambda (input &rest options)
                (when (zerop classification-depth)
                  (push input classified-inputs))
                (incf classification-depth)
                (unwind-protect
-                    (funcall original-classifier input)
+                    (apply original-classifier input options)
                  (decf classification-depth))))
           (cl-weave:expect-assertions 19)
           (multiple-value-bind (status classification reason)
@@ -264,7 +273,7 @@
       (with-complete-ast (ast (first case))
         (expect (second case) :to-be
                  (nshell.feature.assistant:assistant-safety-result-classification
-                 (nshell.feature.assistant:classify-ast ast))))))
+                 (%test-classify-ast ast))))))
 
   (it "keeps git read-only safety as an argument allowlist"
     (dolist (case '( ("git status" :safe)
@@ -283,7 +292,7 @@
       (with-complete-ast (ast (first case))
         (expect (second case) :to-be
                 (nshell.feature.assistant:assistant-safety-result-classification
-                 (nshell.feature.assistant:classify-ast ast))))))
+                 (%test-classify-ast ast))))))
 
   (it "limits git branch safety to an explicit listing grammar"
     (let ((cases '(("git branch" :safe)
@@ -304,7 +313,7 @@
           (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
           (expect (second case) :to-be
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast
+                   (%test-classify-ast
                     (nshell.domain.parsing:parse-result-ast parsed))))))))
 
   (it "limits git remote safety to listing without a subcommand"
@@ -325,7 +334,7 @@
           (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
           (expect (second case) :to-be
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast
+                   (%test-classify-ast
                     (nshell.domain.parsing:parse-result-ast parsed))))))))
 
   (it "requires confirmation for source without treating filenames as commands"
@@ -345,7 +354,7 @@
           (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
           (expect (second case) :to-be
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast
+                   (%test-classify-ast
                     (nshell.domain.parsing:parse-result-ast parsed))))))))
 
   (it "preserves the existing safe git log and show argument grammar"
@@ -360,7 +369,7 @@
           (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
           (expect :safe :to-be
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast
+                   (%test-classify-ast
                     (nshell.domain.parsing:parse-result-ast parsed))))))))
 
   (it "blocks find output actions and command substitutions in command position"
@@ -370,37 +379,37 @@
       (with-complete-ast (ast text)
         (expect :confirm :to-be
                 (nshell.feature.assistant:assistant-safety-result-classification
-                 (nshell.feature.assistant:classify-ast ast)))))
+                 (%test-classify-ast ast)))))
     (with-complete-ast (ast "$(echo rm) -rf /")
       (expect :confirm :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
-               (nshell.feature.assistant:classify-ast ast))))
+               (%test-classify-ast ast))))
     (dolist (text '("`echo rm` -rf /" "echo `rm -rf /`"))
       (with-complete-ast (ast text)
         (expect :confirm :to-be
                 (nshell.feature.assistant:assistant-safety-result-classification
-                 (nshell.feature.assistant:classify-ast ast))))))
+                 (%test-classify-ast ast))))))
 
   (it "classifies dangerous command substitutions by their inner command"
     (with-complete-ast (ast "echo $(ls)")
       (unless (eq :safe
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast ast)))
+                   (%test-classify-ast ast)))
         (error "safe command substitution was not classified as safe")))
     (with-complete-ast (ast "echo $(rm -rf /)")
       (unless (eq :block
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast ast)))
+                   (%test-classify-ast ast)))
         (error "destructive command substitution was not blocked")))
     (with-complete-ast (ast "echo (rm -rf /)")
       (unless (eq :block
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast ast)))
+                   (%test-classify-ast ast)))
         (error "destructive fish-style command substitution was not blocked")))
     (with-complete-ast (ast "echo $(git push --force)")
       (unless (eq :confirm
                   (nshell.feature.assistant:assistant-safety-result-classification
-                   (nshell.feature.assistant:classify-ast ast)))
+                   (%test-classify-ast ast)))
         (error "confirmable command substitution was not classified as confirm"))))
 
   (it "blocks destructive commands through option-bearing wrappers"
@@ -408,7 +417,7 @@
              (with-complete-ast (ast command)
                (unless (eq :block
                            (nshell.feature.assistant:assistant-safety-result-classification
-                            (nshell.feature.assistant:classify-ast ast)))
+                            (%test-classify-ast ast)))
                  (error "destructive wrapper was not blocked: ~a" command)))))
       (expect-blocked "sudo -u root rm -rf /")
       (expect-blocked "nice -n 10 rm -rf /")
@@ -421,7 +430,7 @@
     (with-complete-ast (ast "cat <(rm -rf /)")
       (expect :block :to-be
               (nshell.feature.assistant:assistant-safety-result-classification
-               (nshell.feature.assistant:classify-ast ast)))))
+               (%test-classify-ast ast)))))
 
   (it "classifies aliases by the command they expand to at the execution gate"
     (let ((context (nshell.application:make-shell-context))

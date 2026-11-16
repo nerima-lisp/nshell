@@ -23,7 +23,8 @@ rules.pl into it; until then only tests set it.")
     (unparsable :none "") (form-redirect :none) (sexp-unforced :none)
     (unclassifiable :none "") (assignment :none "") (wrapper-option :none "")
     (spec-command :none) (spec-match :none) (argument-not-allowed :none "")
-    (opaque-wrapper :none) (redirect-not-allowed :none "") (word :none ""))
+    (opaque-wrapper :none) (redirect-not-allowed :none "") (word :none "")
+    (shell-function :none))
   "One clause per input predicate about the atom :NONE, which never names a
 subject.  A rule that asks about an input the evaluator did not supply then
 fails instead of raising existence_error, while a misspelled predicate in
@@ -221,6 +222,7 @@ command is resolved: :BY-NAME like a typed command, else :EXTERNAL."
       (dolist (text redirect-problems) (add 'redirect-not-allowed 'subject text))
       (dolist (word words) (add 'word 'subject word))
       (when wraps (add 'wraps 'subject))
+      (when (eq resolution :function) (add 'shell-function 'subject))
       (when opaque (add 'opaque-wrapper 'subject))
       (when wrapper-mismatches
         (add 'argument-not-allowed 'subject (%mismatch-text wrapper-mismatches)))
@@ -293,8 +295,9 @@ command is resolved: :BY-NAME like a typed command, else :EXTERNAL."
   "Classify one subject with the built-in and user rules.
 
 COMMAND is the basename and INVOKED-AS the command word as written;
-RESOLUTION is :BUILTIN when the executor runs it as the nshell builtin and
-:EXTERNAL (the default) otherwise, which selects the spec row;
+RESOLUTION is how the executor resolves it: :BUILTIN (the nshell builtin),
+:EXTERNAL (the default), or :FUNCTION (a shell function or alias whose body
+the line does not show); it selects the spec row;
 ARGUMENTS are the argument words; a command that is not a wrapper is matched
 against its spec row.  NESTED and EMBEDDED are (LEVEL RULE TEXT) results of
 classifying embedded command text.  WRAPS says the command runs another one,

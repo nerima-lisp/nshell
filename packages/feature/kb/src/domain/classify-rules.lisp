@@ -26,6 +26,7 @@
 ;;; and the results it obtained by classifying embedded command text:
 ;;;   wraps(S)                       S runs another command (2.4)
 ;;;   opaque-wrapper(S)              ... and what that command sees is opaque
+;;;   shell-function(S)              the executor resolves S to a function
 ;;;   nested(S, Level, Rule, Text)   from that command or a substitution
 ;;;   embedded(S, Level, Rule, Text) from a known command name in the operands
 ;;;   unparsable(S, Text)            text that could not be read as a command
@@ -167,6 +168,7 @@ changes no other command.")
     ((read-only-command ?c) (spec-match ?c))
     ((known-command ?c) (wraps ?c))
     ((known-command ?c) (spec-command ?c))
+    ((known-command ?c) (shell-function ?c))
     ((known-command ?c) (invoked-as ?c ?n) (known-command-name ?n))
     ((known-command ?c) (command ?c ?n) (covered-command ?n))
 
@@ -191,6 +193,11 @@ changes no other command.")
      (invoked-as ?c "git") (not (read-only-command ?c)))
     ((classify ?c :confirm "classify/argument-not-allowed" ?text)
      (argument-not-allowed ?c ?text) (not (invoked-as ?c "git")))
+    ;; A shell function's body runs under its own gate and cannot use the
+    ;; line's approval (D-P1-5 3.1 item 5); the call itself is opaque.
+    ((classify ?c :confirm "classify/shell-function"
+               "a shell function runs commands this line does not show")
+     (shell-function ?c))
     ((classify ?c :confirm "classify/opaque-wrapper"
                "the command this wrapper runs cannot be checked")
      (opaque-wrapper ?c))

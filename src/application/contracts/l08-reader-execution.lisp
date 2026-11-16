@@ -1009,16 +1009,19 @@
       arguments
       (nshell.domain.parsing:command-node-environment-assignments command)))))
 
-(defun %reader-assistant-gate (context command-nodes parent-kind)
+(defun %reader-assistant-gate (context command-nodes parent-kind dispatch-kinds)
   "Apply the AI execution gate to the expanded COMMAND-NODES, judged as if
-running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
+running under PARENT-KIND, each resolved as the executor resolved it
+(DISPATCH-KINDS). Return the refusal (MESSAGE STATUS), or NIL."
   (let ((*execution-gate-parent-kind* parent-kind))
     (%assistant-execution-gate
      context
      (if (rest command-nodes)
          (nshell.domain.parsing:make-pipeline-node command-nodes)
          (first command-nodes))
-     :path :reader)))
+     :path :reader
+     :resolve (assistant-command-resolver
+               context :stage-kinds (mapcar #'cons command-nodes dispatch-kinds)))))
 
 (defun %reader-gate-evaluated-stages (context evaluated-stages parent-kind)
   (when (%assistant-gate-active-p)
@@ -1026,7 +1029,9 @@ running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
      context
      (mapcar (lambda (stage) (%reader-gate-command-node context stage))
              evaluated-stages)
-     parent-kind)))
+     parent-kind
+     (mapcar #'nshell.application:evaluated-command-stage-dispatch-kind
+             evaluated-stages))))
 
 (defun %reader-gate-refusal (context refusal stage-count)
   "Report REFUSAL as the result of a line with STAGE-COUNT stages, none run."
@@ -1239,8 +1244,10 @@ running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
                    collect (%reader-background-command context stage)))
            (refusal
              (when (%assistant-gate-active-p)
+               ;; Only :external stages reach this point.
                (%reader-assistant-gate
-                context background-commands gate-parent-kind)))
+                context background-commands gate-parent-kind
+                (mapcar (constantly :external) background-commands))))
            (command-line (nshell.domain.parsing:ast-node->command-line ast))
            (processes
              (cond

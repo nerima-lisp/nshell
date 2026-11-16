@@ -201,7 +201,7 @@ above.")
                    #'nshell/test-legacy-safety:assistant-safety-result-classification)
         for new = (%safety-migration-classify
                    (first entry) (second entry)
-                   #'nshell.feature.assistant:classify-ast
+                   #'%test-classify-ast
                    #'nshell.feature.assistant:assistant-safety-result-classification)
         unless (eq old new)
           collect (list entry old new)))
@@ -232,6 +232,6 @@ above.")
                      "rm -rf /."))
       (expect (%safety-migration-classify
                :bare input
-               #'nshell.feature.assistant:classify-ast
+               #'%test-classify-ast
                #'nshell.feature.assistant:assistant-safety-result-classification)
               :to-be :block))))

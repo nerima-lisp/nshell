@@ -371,8 +371,7 @@
                  transposition)))
     (expect (nshell.presentation::word-transposition-at-cursor "one" 3) :to-be-null))
 
-  (it "input-state-alt-t-transposes-last-two-words-at-eol"
-    (let ((state (completion-session-state
+  (it "input-state-alt-t-transposes-last-two-words-at-eol" (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-t" "transpose-words")) (let ((state (completion-session-state
                   :buffer "echo one two"
                   :cursor-pos 12
                   :completion-index 3
@@ -384,7 +383,7 @@
           (:buffer "echo two one"
            :cursor-pos 12
            :completion-index -1
-           :suggestion nil))))
+           :suggestion nil)))))
 
   ;; Every case here transposes the two words around $cursor-pos via :alt-t and
   ;; checks the resulting buffer/cursor; only what counts as a "word" boundary
@@ -404,16 +403,19 @@
       "input-state-alt-t transposes ~A"
       (description buffer cursor expected-buffer expected-cursor)
     (declare (ignore description))
-    (let ((state (input-state :buffer buffer :cursor-pos cursor)))
-      (with-expected-input-state-reduction (new-state output)
-          state
-          (reduce-once state :alt-t)
-          :suggest-update
-          (:buffer expected-buffer :cursor-pos expected-cursor))))
+    (with-fresh-input-dispatch-bindings
+      (expect :ok :to-be
+              (nshell.presentation::input-dispatch-set-binding
+               "alt-t" "transpose-words"))
+      (let ((state (input-state :buffer buffer :cursor-pos cursor)))
+        (with-expected-input-state-reduction (new-state output)
+            state
+            (reduce-once state :alt-t)
+            :suggest-update
+            (:buffer expected-buffer :cursor-pos expected-cursor)))))
 
-  (it "input-state-alt-t-noops-without-two-words"
-    (with-expected-noop-input-state-reductions (new-state output)
+  (it "input-state-alt-t-noops-without-two-words" (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-t" "transpose-words")) (with-expected-noop-input-state-reductions (new-state output)
         :alt-t
         (list (input-state :buffer "" :cursor-pos 0)
               (input-state :buffer "one" :cursor-pos 3)
-              (input-state :buffer "one " :cursor-pos 4))))
+              (input-state :buffer "one " :cursor-pos 4)))))

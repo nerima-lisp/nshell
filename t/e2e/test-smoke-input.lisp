@@ -98,28 +98,34 @@
         (expect '("status") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))))
 
   (it "e2e-alt-t-input-cycle"
-    (let* ((events (read-key-events-from-string
-                    (concatenate 'string "echo world hello" (esc-sequence "t"))))
-           (state (apply-key-events-to-input-state
-                   (input-state)
-                   events))
-           (line (nshell.presentation:input-state-buffer state)))
-      (expect "echo hello world" :to-equal line)
-      (with-complete-command-line (result ast line)
-        (expect "echo" :to-equal (nshell.domain.parsing:command-node-command ast))
-        (expect '("hello" "world") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))))
+    (with-fresh-input-dispatch-bindings
+      (expect :ok :to-be
+              (nshell.presentation::input-dispatch-set-binding "alt-t" "transpose-words"))
+      (let* ((events (read-key-events-from-string
+                      (concatenate 'string "echo world hello" (esc-sequence "t"))))
+             (state (apply-key-events-to-input-state
+                     (input-state)
+                     events))
+             (line (nshell.presentation:input-state-buffer state)))
+        (expect "echo hello world" :to-equal line)
+        (with-complete-command-line (result ast line)
+          (expect "echo" :to-equal (nshell.domain.parsing:command-node-command ast))
+          (expect '("hello" "world") :to-equal (nshell.domain.parsing:command-node-arg-values ast))))))
 
   (it "e2e-alt-u-input-cycle"
-    (let* ((events (read-key-events-from-string
-                    (concatenate 'string "echo hello" (esc-sequence "u"))))
-           (state (apply-key-events-to-input-state
-                   (input-state)
-                   events))
-           (line (nshell.presentation:input-state-buffer state)))
-      (expect "echo HELLO" :to-equal line)
-      (with-complete-command-line (result ast line)
-        (expect "echo" :to-equal (nshell.domain.parsing:command-node-command ast))
-        (expect '("HELLO") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))))
+    (with-fresh-input-dispatch-bindings
+      (expect :ok :to-be
+              (nshell.presentation::input-dispatch-set-binding "alt-u" "upcase-word"))
+      (let* ((events (read-key-events-from-string
+                      (concatenate 'string "echo hello" (esc-sequence "u"))))
+             (state (apply-key-events-to-input-state
+                     (input-state)
+                     events))
+             (line (nshell.presentation:input-state-buffer state)))
+        (expect "echo HELLO" :to-equal line)
+        (with-complete-command-line (result ast line)
+          (expect "echo" :to-equal (nshell.domain.parsing:command-node-command ast))
+          (expect '("HELLO") :to-equal (nshell.domain.parsing:command-node-arg-values ast))))))
 
   (it "e2e-bracketed-paste-normalizes-newlines-and-undos-once"
     (let* ((raw-paste (format nil "echo one~C~Cecho two~C"
@@ -142,18 +148,21 @@
         (expect :suggest-update :to-be output))))
 
   (it "e2e-alt-t-preserves-quoted-word-cycle"
-    (let* ((events (read-key-events-from-string
-                    (concatenate 'string
-                                 "echo tail \"hello world\""
-                                 (esc-sequence "t"))))
-           (state (apply-key-events-to-input-state
-                   (input-state)
-                   events))
-           (line (nshell.presentation:input-state-buffer state)))
-      (expect "echo \"hello world\" tail" :to-equal line)
-      (with-complete-command-line (result ast line)
-        (expect "echo" :to-equal (nshell.domain.parsing:command-node-command ast))
-        (expect '("hello world" "tail") :to-equal (nshell.domain.parsing:command-node-arg-values ast)))))
+    (with-fresh-input-dispatch-bindings
+      (expect :ok :to-be
+              (nshell.presentation::input-dispatch-set-binding "alt-t" "transpose-words"))
+      (let* ((events (read-key-events-from-string
+                      (concatenate 'string
+                                   "echo tail \"hello world\""
+                                   (esc-sequence "t"))))
+             (state (apply-key-events-to-input-state
+                     (input-state)
+                     events))
+             (line (nshell.presentation:input-state-buffer state)))
+        (expect "echo \"hello world\" tail" :to-equal line)
+        (with-complete-command-line (result ast line)
+          (expect "echo" :to-equal (nshell.domain.parsing:command-node-command ast))
+          (expect '("hello world" "tail") :to-equal (nshell.domain.parsing:command-node-arg-values ast))))))
 
   (it "e2e-alt-d-preserves-quoted-word-cycle"
     (let* ((events (read-key-events-from-string (esc-sequence "d")))

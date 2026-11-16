@@ -24,6 +24,8 @@
 ;;;   spec-match(S)                     every argument matched it
 ;;;   spec-operand(S, Word)             ... and the row read Word as an operand
 ;;;   argument-not-allowed(S, Text)     the words that did not match
+;;; and from the argument words that hold a substitution
+;;;   substituted-argument(S, Word)     what Word names the line does not show
 ;;; and the results it obtained by classifying embedded command text:
 ;;;   wraps(S)                       S runs another command (2.4)
 ;;;   opaque-wrapper(S)              ... and what that command sees is opaque
@@ -176,7 +178,9 @@ changes no other command.")
     ((path-operand-reader "tail"))
     ;; Commands that read the working directory when given no operand.
     ((working-directory-reader "ls"))
-    ;; The operand that names standard input, which is no path.
+    ;; The operand that names standard input, which is no path.  An operand
+    ;; that holds a substitution names a path the line does not show, so it
+    ;; gets no reads effect either (substituted-argument).
     ((standard-input-operand "-"))
 
     ;; --- effect model (B) ---------------------------------------------------
@@ -185,7 +189,7 @@ changes no other command.")
     ((effect ?c :network) (command ?c ?n) (network-command ?n))
     ((effect ?c (reads ?p))
      (command ?c ?n) (path-operand-reader ?n) (spec-operand ?c ?p)
-     (not (standard-input-operand ?p)))
+     (not (standard-input-operand ?p)) (not (substituted-argument ?c ?p)))
     ((effect ?c (reads "."))
      (command ?c ?n) (working-directory-reader ?n) (spec-match ?c)
      (not (spec-operand ?c ?p)))

@@ -25,17 +25,6 @@ it, because every name it resolves goes through lookups that do not autoload."
   (round (* 1000 (- (get-internal-real-time) started))
          internal-time-units-per-second))
 
-(defun %command-nodes (ast)
-  "Return the command nodes AST runs at its top level: itself, or the stages
-of a pipeline and the items of a sequence."
-  (cond
-    ((nshell.domain.parsing:command-node-p ast) (list ast))
-    ((nshell.domain.parsing:pipeline-node-p ast)
-     (mapcan #'%command-nodes (nshell.domain.parsing:pipeline-node-commands ast)))
-    ((nshell.domain.parsing:sequence-node-p ast)
-     (mapcan #'%command-nodes (nshell.domain.parsing:sequence-node-commands ast)))
-    (t nil)))
-
 (defun %command-ast (context reader-result)
   (ignore-errors (nshell.application:reader-result-command-ast context reader-result)))
 
@@ -64,14 +53,15 @@ resolves it to a builtin, a function, or an alias."
 
 (defun reader-results-effects (context reader-results)
   "Return the ENVELOPE-EFFECTs of the commands READER-RESULTS run in CONTEXT,
-from the effect model, each once in the order the commands appear.  explain
-and --json both report these."
-  (knowledge-base-effects
-   (remove-duplicates
-    (loop for reader-result in reader-results
-          append (loop for node in (%command-nodes (%command-ast context reader-result))
-                       append (nshell.feature.assistant:command-effects node)))
-    :test #'equal :from-end t)))
+and as a second value the classifier's result.  Both come from one walk of
+the classifier with the resolver of CONTEXT, so the effects are those of the
+commands it judges, substitutions and alias expansions included.  explain
+and --json both report these effects."
+  (multiple-value-bind (effects result)
+      (nshell.feature.assistant:command-effects
+       reader-results
+       :resolve (nshell.application:assistant-command-resolver context))
+    (values (knowledge-base-effects effects) result)))
 
 (defun %explain-parse-error (text start end message started cwd)
   ;; Without an AST the classifier gives its verdict on unparsable input.
@@ -102,15 +92,16 @@ be read, or that holds no form, is E_PARSE."
           (if (null reader-results)
               (%explain-parse-error text 0 (length text) "nothing to explain"
                                     started cwd)
-              (let ((resolve (nshell.application:assistant-command-resolver context)))
+              (multiple-value-bind (effects verdict)
+                  (reader-results-effects context reader-results)
                 (explain-envelope
-                 :forms (mapcar (lambda (reader-result)
-                                  (%explain-form context reader-result text resolve))
-                                reader-results)
-                 :effects (reader-results-effects context reader-results)
-                 :safety (classification-safety
-                          (nshell.feature.assistant:classify-ast
-                           reader-results :resolve resolve))
+                 :forms (let ((resolve (nshell.application:assistant-command-resolver
+                                        context)))
+                          (mapcar (lambda (reader-result)
+                                    (%explain-form context reader-result text resolve))
+                                  reader-results))
+                 :effects effects
+                 :safety (classification-safety verdict)
                  :state (make-envelope-state :cwd cwd)
                  :duration-ms (%elapsed-ms started)))))
       (nshell.domain.parsing:sexp-reader-error (condition)

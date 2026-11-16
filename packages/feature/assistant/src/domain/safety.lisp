@@ -19,7 +19,17 @@
   (let ((separator (position (code-char 47) command :from-end t)))
     (if separator (subseq command (1+ separator)) command)))
 
+(defvar *assistant-subject-visitor* nil
+  "NIL, or a function the walk calls with each subject it describes to the
+knowledge base and whether the subject is a command the line runs.")
+
+(defvar *assistant-subject-runs-p* t
+  "False while the walk describes a subject the line does not run: a query
+target of command -v, or a command named in the operands of an unknown one.")
+
 (defun %assistant-subject-result (command &rest subject)
+  (when *assistant-subject-visitor*
+    (funcall *assistant-subject-visitor* subject *assistant-subject-runs-p*))
   (multiple-value-bind (level reasons)
       (apply #'nshell.feature.kb:classify-subject subject)
     (make-assistant-safety-result
@@ -168,6 +178,12 @@ as a command line, anything else goes through the auto reader
     ("<(" . :command-line) (">(" . :command-line))
   "Substitution openers and the reader their body runs with.")
 
+(defun %assistant-substituted-word-p (word)
+  "True when WORD holds a substitution the walk reads as a command."
+  (some (lambda (entry)
+          (nshell.domain.parsing:parenthesized-substitution-texts word (car entry)))
+        +assistant-substitution-markers+))
+
 (defun %assistant-substitution-results (words resolve)
   (loop for word in words
         nconc (loop for (marker . reader) in +assistant-substitution-markers+
@@ -251,39 +267,43 @@ redirects and the written words of the outermost command."
                               :resolution (if (eq runs :by-name)
                                               (%assistant-name-resolution inner resolve)
                                               :external)))))
-            (embedded (unless kind (%assistant-embedded-command-result args resolve)))
+            (embedded (unless kind
+                        (let ((*assistant-subject-runs-p* nil))
+                          (%assistant-embedded-command-result args resolve))))
             (queries
              (when query-options
-               (if (some #'nshell.domain.parsing:command-value-form-p argument-forms)
-                   (list (%assistant-subject-result
-                          command :command command
-                          :wrapper-mismatches (list "query target requires expansion")))
-                   (let ((targets args)
-                         (target-nodes argument-nodes))
-                     (loop while (member (first targets) query-options :test #'equal)
-                           do (pop targets) (pop target-nodes))
-                     (when (equal (first targets) "--")
-                       (pop targets) (pop target-nodes))
-                     (loop for name in targets
-                           for argument = (pop target-nodes)
-                           when (%assistant-query-argument-expands-p argument source-arguments-p resolve)
-                           collect (%assistant-subject-result
-                                    name :command name
-                                    :wrapper-mismatches
-                                    (list (format nil "query target requires expansion: ~a" name)))
-                           else when (nth-value 2
-                                     (funcall resolve
-                                              (nshell.domain.parsing:make-command-node name nil)
-                                              :query))
-                           collect (%assistant-subject-result
-                                    name :command name :invoked-as name
-                                    :resolution :function)))))))
+               (let ((*assistant-subject-runs-p* nil))
+                 (if (some #'nshell.domain.parsing:command-value-form-p argument-forms)
+                     (list (%assistant-subject-result
+                            command :command command
+                            :wrapper-mismatches (list "query target requires expansion")))
+                     (let ((targets args)
+                           (target-nodes argument-nodes))
+                       (loop while (member (first targets) query-options :test #'equal)
+                             do (pop targets) (pop target-nodes))
+                       (when (equal (first targets) "--")
+                         (pop targets) (pop target-nodes))
+                       (loop for name in targets
+                             for argument = (pop target-nodes)
+                             when (%assistant-query-argument-expands-p argument source-arguments-p resolve)
+                             collect (%assistant-subject-result
+                                      name :command name
+                                      :wrapper-mismatches
+                                      (list (format nil "query target requires expansion: ~a" name)))
+                             else when (nth-value 2
+                                       (funcall resolve
+                                                (nshell.domain.parsing:make-command-node name nil)
+                                                :query))
+                             collect (%assistant-subject-result
+                                      name :command name :invoked-as name
+                                      :resolution :function))))))))
         (%assistant-subject-result
          command
          :command (%assistant-command-basename command)
          :invoked-as command
          :resolution resolution
          :arguments args
+         :substituted-arguments (remove-if-not #'%assistant-substituted-word-p args)
          :wraps (and kind t)
          :opaque (eq kind :opaque)
          :wrapper-mismatches mismatches
@@ -500,18 +520,32 @@ and RESOLVE are as for classify-ast."
               :nested nested)))))
       (%assistant-unparsable-result "the value is not a command AST node")))
 
-(defun command-effects (node)
-  "Return the effects of the command NODE runs: (DELETES PATH), (WRITES PATH),
-:NETWORK, and (READS PATH).  Writes come from the redirects in the AST
-(D-P1-5 2.5)."
-  (multiple-value-bind (argv assignments words writes)
-      (%assistant-command-parts node :bare-line nil)
-    (declare (ignore assignments words))
-    (nshell.feature.kb:subject-effects
-     :command (and argv (%assistant-command-basename (first argv)))
-     :invoked-as (first argv)
-     :arguments (rest argv)
-     :writes writes)))
+(defun command-effects (node &key (path :bare-line) resolve)
+  "Return the effects of the commands NODE runs: (DELETES PATH), (WRITES PATH),
+:NETWORK, and (READS PATH), each once in the order the walk meets them.  The
+second value is the classify-ast result of NODE.  Both come from one walk, so
+the effects are those of exactly the commands the classifier judges: the
+commands in substitutions, the command a wrapper, sh -c, or eval runs, and
+the node the executor runs after an alias.  A query target and a command
+named in an unknown command's operands are judged but not run, so they have
+no effects.  NODE, PATH, and RESOLVE are as for classify-ast; writes come from
+the redirects in the AST (D-P1-5 2.5).  A visitor already bound still sees
+every subject."
+  (let* ((effects '())
+         (outer *assistant-subject-visitor*)
+         (result
+           (let ((*assistant-subject-visitor*
+                   (lambda (subject runs-p)
+                     (when outer (funcall outer subject runs-p))
+                     (when (and runs-p
+                                (or (getf subject :command) (getf subject :writes)))
+                       (setf effects
+                             (revappend (apply #'nshell.feature.kb:subject-effects
+                                               subject)
+                                        effects))))))
+             (classify-ast node :path path :resolve resolve))))
+    (values (remove-duplicates (nreverse effects) :test #'equal :from-end t)
+            result)))
 
 (defun classify-pipeline (node &key (path :bare-line) resolve)
   "Classify a pipeline by its most restrictive stage."

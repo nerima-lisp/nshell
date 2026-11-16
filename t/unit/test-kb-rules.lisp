@@ -240,3 +240,104 @@
              :input "gti status" :status 127 :command-start 0 :command-end 3
              :known-commands nil)
             :to-equal nil)))
+
+(defun %kb-read-line (line)
+  (nshell.domain.parsing:read-submission
+   line :reader-context (nshell.domain.parsing:submission-reader-context line)))
+
+(defun %kb-walk-subjects (thunk)
+  "Call THUNK with a subject visitor bound; return THUNK's values and, after
+them, the (SUBJECT . RUNS-P) pairs the walk described, in order."
+  (let ((seen '()))
+    (let ((values (let ((nshell.feature.assistant::*assistant-subject-visitor*
+                          (lambda (subject runs-p)
+                            (push (cons (copy-list subject) runs-p) seen))))
+                    (multiple-value-list (funcall thunk)))))
+      (values-list (append values (list (nreverse seen)))))))
+
+(defun %kb-alias-context ()
+  (let ((context (make-test-shell-context)))
+    (setf (gethash "del" (nshell.application:shell-context-alias-table context))
+          "rm -f")
+    context))
+
+(describe "knowledge-base effects follow the classifier's walk"
+  (it "collects the effects of the commands in substitutions"
+    (flet ((effects (line)
+             (nshell.feature.assistant:command-effects (%kb-read-line line))))
+      (expect (effects "echo $(rm victim)")
+              :to-equal '((nshell.feature.kb::deletes "victim")))
+      (expect (effects "echo $(cat fixture)")
+              :to-equal '((nshell.feature.kb::reads "fixture")))
+      (expect (effects "cat <(cat f) > out")
+              :to-equal '((nshell.feature.kb::reads "f")
+                          (nshell.feature.kb::writes "out")))))
+
+  (it "follows an alias of the context to the command it runs"
+    (let ((resolve (nshell.application:assistant-command-resolver (%kb-alias-context))))
+      (multiple-value-bind (effects result)
+          (nshell.feature.assistant:command-effects (%kb-read-line "del victim")
+                                                    :resolve resolve)
+        (expect effects :to-equal '((nshell.feature.kb::deletes "victim")))
+        (expect (%kb-rule-names result) :to-equal '("classify/delete")))
+      ;; An alias the same input defines has not run when the line is
+      ;; judged: neither the verdict nor the effects see its expansion.
+      (multiple-value-bind (effects result)
+          (nshell.feature.assistant:command-effects
+           (%kb-read-line "alias del2='rm -f'; del2 victim")
+           :resolve (nshell.application:assistant-command-resolver
+                     (make-test-shell-context)))
+        (expect effects :to-equal nil)
+        (expect (%kb-rule-names result) :to-equal '("classify/unknown-command")))))
+
+  (it "collects effects from exactly the subjects the classifier judges"
+    (let ((context (%kb-alias-context)))
+      (dolist (line '("echo $(rm victim)" "cat a | wc -l > out" "ls; rm -r build"
+                      "(| (git status --short) (wc -l))" "(rm -rf build)"
+                      "env FOO=1 rm x" "sh -c 'cat f'" "sudo rm x" "timeout 5 cat f"
+                      "del victim" "cat <(cat f)" "command -v ls" "foo rm -rf x"))
+        (let ((resolve (nshell.application:assistant-command-resolver context))
+              (input (%kb-read-line line)))
+          (multiple-value-bind (verdict judged)
+              (%kb-walk-subjects
+               (lambda () (nshell.feature.assistant:classify-ast input :resolve resolve)))
+            (multiple-value-bind (effects result walked)
+                (%kb-walk-subjects
+                 (lambda ()
+                   (nshell.feature.assistant:command-effects input :resolve resolve)))
+              ;; The effect walk is the classifier's walk ...
+              (expect (list line walked) :to-equal (list line judged))
+              (expect (list line
+                            (nshell.feature.assistant:assistant-safety-result-classification
+                             result)
+                            (nshell.feature.assistant:assistant-safety-result-reasons result))
+                      :to-equal
+                      (list line
+                            (nshell.feature.assistant:assistant-safety-result-classification
+                             verdict)
+                            (nshell.feature.assistant:assistant-safety-result-reasons verdict)))
+              ;; ... and the effects are those of the subjects it runs.
+              (expect (list line effects)
+                      :to-equal
+                      (list line
+                            (remove-duplicates
+                             (loop for (subject . runs-p) in judged
+                                   when runs-p
+                                     append (apply #'nshell.feature.kb:subject-effects
+                                                   subject))
+                             :test #'equal :from-end t)))))))))
+
+  (it "gives no effects to commands it judges but the line does not run"
+    ;; The walk judges the command named in the operands as if it ran:
+    ;; echo prints it, and what foo does with it is unknown.
+    (dolist (line '("echo rm x" "foo rm -rf x"))
+      (multiple-value-bind (effects result judged)
+          (%kb-walk-subjects
+           (lambda ()
+             (nshell.feature.assistant:command-effects
+              (%kb-read-line line)
+              :resolve (nshell.application:assistant-command-resolver
+                        (make-test-shell-context)))))
+        (declare (ignore result))
+        (expect (list line (notevery #'cdr judged)) :to-equal (list line t))
+        (expect (list line effects) :to-equal (list line nil))))))

@@ -24,7 +24,8 @@ rules.pl into it; until then only tests set it.")
     (unclassifiable :none "") (assignment :none "") (wrapper-option :none "")
     (spec-command :none) (spec-match :none) (argument-not-allowed :none "")
     (opaque-wrapper :none) (redirect-not-allowed :none "") (word :none "")
-    (shell-function :none) (spec-operand :none ""))
+    (shell-function :none) (spec-operand :none "")
+    (substituted-argument :none ""))
   "One clause per input predicate about the atom :NONE, which never names a
 subject.  A rule that asks about an input the evaluator did not supply then
 fails instead of raising existence_error, while a misspelled predicate in
@@ -195,7 +196,7 @@ For a query, an eighth value gives the row's :QUERY-OPTIONS."
                          embedded wraps
                          opaque wrapper-mismatches unparsable unclassifiable
                          form-redirect sexp-unforced assignments wrapper-options
-                         writes redirect-problems words)
+                         writes redirect-problems words substituted-arguments)
   (let ((facts (copy-list +subject-fact-schema+)))
     (flet ((add (&rest fact) (push fact facts)))
       (when command
@@ -227,6 +228,7 @@ For a query, an eighth value gives the row's :QUERY-OPTIONS."
       (dolist (target writes) (add 'redirect 'subject target))
       (dolist (text redirect-problems) (add 'redirect-not-allowed 'subject text))
       (dolist (word words) (add 'word 'subject word))
+      (dolist (word substituted-arguments) (add 'substituted-argument 'subject word))
       (when wraps (add 'wraps 'subject))
       (when (eq resolution :function) (add 'shell-function 'subject))
       (when opaque (add 'opaque-wrapper 'subject))
@@ -297,7 +299,8 @@ For a query, an eighth value gives the row's :QUERY-OPTIONS."
                                          embedded wraps opaque wrapper-mismatches
                                          unparsable unclassifiable form-redirect
                                          sexp-unforced assignments wrapper-options
-                                         writes redirect-problems words)
+                                         writes redirect-problems words
+                                         substituted-arguments)
   "Classify one subject with the built-in and user rules.
 
 COMMAND is the basename and INVOKED-AS the command word as written;
@@ -313,27 +316,27 @@ ASSIGNMENTS are the environment names the command is run with and
 WRAPPER-OPTIONS the options given to env.  WRITES are the output redirect
 targets and REDIRECT-PROBLEMS a text per redirect outside the safe forms,
 both taken from the AST; WORDS are the words as written.
+SUBSTITUTED-ARGUMENTS are the argument words that hold a substitution, whose
+value the line does not show.
 Returns the level and the (RULE . TEXT) reasons at that level."
   (declare (ignore command invoked-as resolution arguments nested embedded
                    wraps opaque
                    wrapper-mismatches unparsable unclassifiable form-redirect
                    sexp-unforced assignments wrapper-options writes
-                   redirect-problems words))
+                   redirect-problems words substituted-arguments))
   (let ((facts (apply #'%subject-facts subject)))
     (%top-level-reasons
      (append (%builtin-solutions facts) (%user-solutions facts)))))
 
-(defun subject-effects (&key command invoked-as arguments writes)
+(defun subject-effects (&rest subject)
   "Return the effects of one command: (DELETES PATH), (WRITES PATH), :NETWORK,
-and (READS PATH).
-WRITES are the output redirect targets the caller read from the AST."
+and (READS PATH).  SUBJECT is described with the keys of classify-subject,
+so the effect rules see the facts the classify rules see; WRITES are the
+output redirect targets the caller read from the AST."
   (remove-duplicates
    (copy-tree
     (%query-findall *builtin-classify-rulebase*
-                    (%subject-facts :command command
-                                    :invoked-as invoked-as
-                                    :arguments arguments
-                                    :writes writes)
+                    (apply #'%subject-facts subject)
                     '?effect
                     '(effect subject ?effect)))
    :test #'equal :from-end t))

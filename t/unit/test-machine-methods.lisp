@@ -68,6 +68,13 @@ schema accepts it."
       (expect (gethash "level" (gethash "safety" parsed)) :to-equal "confirm")
       (expect (%machine-reason-rules parsed) :to-equal '("classify/delete-dir"))))
 
+  (it "reports the effects of the commands in substitutions"
+    (expect (%machine-effect-summaries (%machine-parsed (%machine-explain "echo $(rm victim)")))
+            :to-equal '(("deletes" "victim")))
+    (expect (%machine-effect-summaries
+             (%machine-parsed (%machine-explain "echo $(cat fixture)")))
+            :to-equal '(("reads" "fixture"))))
+
   (it "reports the effects of S-expression command forms"
     (let ((parsed (%machine-parsed (%machine-explain "(curl -o page http://x)"))))
       (expect (%machine-effect-summaries parsed) :to-equal '(("network" nil)))))

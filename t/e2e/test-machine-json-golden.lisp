@@ -68,22 +68,32 @@ compares two documents regardless of member order."
                                (t value))))
   object)
 
-(defun %json-golden-run (input directory &key extra-environment)
-  "Run `nshell --json --command INPUT` with DIRECTORY as its working
-directory and return the decoded envelope, its stdout text and exit status."
+(defun %json-golden-run (input directory &key extra-environment binary)
+  "Run nshell in JSON command mode and return the decoded envelope, stdout,
+exit status, and stderr. BINARY selects the built executable; without it the
+legacy e2e helper starts the current source through SBCL."
   (let* ((root (asdf:system-source-directory :nshell))
-         (program (append (list (current-sbcl-executable) "--noinform")
-                          (%asdf-bootstrap-forms (namestring root))
-                          (list "--eval"
-                                (%nshell-main-form (list "--json" "--command" input)))))
-         (overridden (mapcar (lambda (entry) (subseq entry 0 (position #\= entry)))
+         (program (if binary
+                      (list binary "--json" "--command" input)
+                      (append (list (current-sbcl-executable) "--noinform")
+                              (%asdf-bootstrap-forms (namestring root))
+                              (list "--eval"
+                                    (%nshell-main-form
+                                     (list "--json" "--command" input))))))
+         (overridden (mapcar #'%json-golden-case-environment-name
                              extra-environment))
-         (environment (append extra-environment
-                              (list "NSHELL_AI_COMMAND=/nonexistent")
-                              (remove-if (lambda (entry)
-                                           (member (subseq entry 0 (position #\= entry))
-                                                   overridden :test #'string=))
-                                         (%e2e-child-environment))))
+         (filtered-names (adjoin "NSHELL_AI_COMMAND" overridden
+                                 :test #'string=))
+         (defaults (unless (member "NSHELL_AI_COMMAND" overridden :test #'string=)
+                     (list "NSHELL_AI_COMMAND=/nonexistent")))
+         (environment (append defaults
+                              extra-environment
+                              (remove-if
+                               (lambda (entry)
+                                 (member
+                                  (%json-golden-case-environment-name entry)
+                                  filtered-names :test #'string=))
+                               (%e2e-child-environment))))
          (result (host-kit:run-program (first program) (rest program)
                                        :directory directory
                                        :environment environment
@@ -397,3 +407,490 @@ EXPECTED-STDOUT and an empty stderr."
        (expect (probe-file (merge-pathnames "marker" work)) :to-be-truthy)
        (expect status :to-equal 5)
        (expect (%json-golden-stdout-text envelope) :to-equal "")))))
+
+;;; The t/golden/<id>.json runner (D-84): each case runs NSHELL_BIN in a fresh
+;;; work directory and compares the normalized envelope with its expected.
+
+(defun %machine-json-replace-text
+    (text old new &key path-prefix-p (path-boundaries '(#\/)))
+  (if (zerop (length old))
+      text
+      (with-output-to-string (out)
+        (loop with start = 0
+              for position = (search old text :start2 start)
+              while position
+              do (write-string text out :start start :end position)
+                 (let ((end (+ position (length old))))
+                   (if (or (not path-prefix-p)
+                           (and (or (zerop position)
+                                    (%machine-json-path-delimiter-p
+                                     (char text (1- position))))
+                                (or (= end (length text))
+                                    (find (char text end) path-boundaries))))
+                       (write-string new out)
+                       (write-string text out :start position :end end))
+                   (setf start end))
+              finally (write-string text out :start start)))))
+(defun %machine-json-path-delimiter-p (character)
+  (find character
+        (list #\Space #\Tab #\Newline #\: #\, #\; #\" #\'
+              #\( #\[ #\{ #\= #\) #\] #\})))
+(defun %machine-json-normalize-tool-paths (text)
+  (labels ((tool-path-p (token)
+             (let ((bin (search "/bin/" token)))
+               (and bin
+                    (> (length token) (+ bin 5))
+                    (not (find #\/ token :start (+ bin 5)))
+                    (or (nshell.util:string-prefix-p "/nix/store/" token)
+                        (nshell.util:string-prefix-p "/usr/bin/" token)
+                        (nshell.util:string-prefix-p "/usr/local/bin/" token)
+                        (nshell.util:string-prefix-p "/opt/homebrew/bin/" token)
+                        (nshell.util:string-prefix-p "/opt/local/bin/" token)
+                        (nshell.util:string-prefix-p "/bin/" token)))))
+           (absolute-path-start-p (text position)
+             (or (zerop position)
+                 (%machine-json-path-delimiter-p
+                  (char text (1- position)))))
+           (path-end (text start)
+             (or (position-if #'%machine-json-path-delimiter-p text :start start)
+                 (length text))))
+    (with-output-to-string (out)
+      (loop with start = 0
+            with length = (length text)
+            for slash = (position #\/ text :start start)
+            while slash
+            for end = (path-end text slash)
+            for token = (subseq text slash end)
+            do (write-string text out :start start :end slash)
+               (write-string (if (and (absolute-path-start-p text slash)
+                                      (tool-path-p token))
+                                 "<tool>"
+                                 token)
+                             out)
+               (setf start end)
+            finally (write-string text out :start start)))))
+(defun %json-golden-case-normalize (value &key work environment)
+  (let ((path-prefixes
+          (append
+           (loop for name in (list "HOME" "XDG_CONFIG_HOME" "XDG_DATA_HOME"
+                                   "XDG_STATE_HOME" "XDG_CACHE_HOME")
+                 for prefix = (format nil "~A=" name)
+                 for entry = (find-if
+                              (lambda (candidate)
+                                (and (>= (length candidate) (length prefix))
+                                     (string= prefix candidate
+                                              :end2 (length prefix))))
+                              environment)
+                 when entry
+                   collect (cons (subseq entry (length prefix))
+                                 (format nil "$~A" name)))
+           (when work (list (cons work "$WORK"))))))
+    (labels ((normalize-string (text)
+               (let* ((ordered-path-prefixes
+                        (sort (copy-list path-prefixes) #'>
+                              :key (lambda (entry) (length (car entry)))))
+                      (normalized text))
+                 (dolist (prefix ordered-path-prefixes)
+                   (setf normalized
+                         (%machine-json-replace-text normalized
+                                                      (car prefix)
+                                                      (cdr prefix)
+                                                      :path-prefix-p t)))
+                 (setf normalized
+                       (%machine-json-replace-text normalized
+                                                    "/private/tmp"
+                                                    "/tmp"
+                                                    :path-prefix-p t))
+                 (%machine-json-normalize-tool-paths normalized)))
+             (normalize-value (item path)
+               (cond
+                 ((hash-table-p item)
+                  (sort (loop for name being the hash-keys of item
+                              using (hash-value value)
+                              collect
+                              (cons name
+                                    (cond
+                                      ((and (null path)
+                                            (string= name "duration_ms"))
+                                       0)
+                                      ((and (null path)
+                                            (string= name "session"))
+                                       "s_golden")
+                                      ((and (null path)
+                                            (string= name "version")
+                                            (stringp value))
+                                       "<VERSION>")
+                                      ((and (string= name "pid")
+                                            (equal path '("state" "jobs")))
+                                       0)
+                                      (t (normalize-value value
+                                                          (append path
+                                                                  (list name)))))))
+                        #'string< :key #'car))
+                 ((and (vectorp item) (not (stringp item)))
+                  (cons :array
+                        (map 'list (lambda (element)
+                                     (normalize-value element path))
+                             item)))
+                 ((json-kit:json-null-p item) :null)
+                 ((stringp item) (normalize-string item))
+                 (t item))))
+      (normalize-value value nil))))
+
+(defun %json-golden-json-value (value)
+  (cond
+    ((eq value :null) json-kit:+json-null+)
+    ((and (consp value) (eq (car value) :array))
+     (map 'vector (lambda (item) (%json-golden-json-value item)) (cdr value)))
+    ((and (listp value)
+          (every (lambda (entry)
+                   (and (consp entry) (stringp (car entry))))
+                 value))
+     (json-kit:alist->json-object
+      (mapcar (lambda (entry)
+                (cons (car entry) (%json-golden-json-value (cdr entry))))
+              (sort (copy-list value) #'string< :key #'car))))
+    (t value)))
+
+(defun %json-golden-comparison-value (value &key work environment)
+  (let* ((normalized (%json-golden-case-normalize value :work work
+                                             :environment environment))
+         (error-entry (assoc "error" normalized :test #'string=)))
+    (when (and error-entry (listp (cdr error-entry)))
+      (setf (cdr error-entry)
+            (remove "message" (cdr error-entry) :key #'car :test #'string=)))
+    normalized))
+
+(defun %json-golden-case-files ()
+  (let* ((root (asdf:system-source-directory :nshell))
+         (directory (merge-pathnames "t/golden/" root)))
+    (sort (directory (merge-pathnames "*.json" directory))
+          #'string< :key #'namestring)))
+
+(defun %json-golden-case-environment-name (entry)
+  (let ((separator (position #\= entry)))
+    (unless separator
+      (error "golden: invalid environment entry ~S" entry))
+    (subseq entry 0 separator)))
+
+(defun %json-golden-case-environment-entries (object)
+  (unless (hash-table-p object)
+    (error "golden: env must be a JSON object"))
+  (sort (loop for name being the hash-keys of object using (hash-value value)
+              collect
+              (progn
+                (unless (stringp value)
+                  (error "golden: env value for ~A must be a string" name))
+                (format nil "~A=~A" name value)))
+        #'string< :key #'%json-golden-case-environment-name))
+
+(defun %json-golden-case-environment (work object)
+  (labels ((temporary-directory (name)
+             (let* ((directory (merge-pathnames (format nil "~A/" name) work))
+                    (placeholder (merge-pathnames ".golden-placeholder" directory)))
+               (ensure-directories-exist placeholder)
+               (%json-golden-native directory))))
+    (let* ((work-path (%json-golden-native work))
+           (fixture-entries (%json-golden-case-environment-entries object))
+           (fixture-path-entry (find "PATH" fixture-entries
+                                     :key #'%json-golden-case-environment-name
+                                     :test #'string=))
+           (path-value
+             (if fixture-path-entry
+                 (%machine-json-replace-text
+                  (subseq fixture-path-entry
+                          (1+ (position #\= fixture-path-entry)))
+                  "$WORK" work-path
+                  :path-prefix-p t
+                  :path-boundaries '(#\/ #\:))
+                 (let ((fixed-bin (uiop:getenv "NSHELL_SPEC_BIN_DIR")))
+                   (unless (and fixed-bin (uiop:directory-exists-p fixed-bin))
+                     (error "golden PATH must use the t/spec fixed bin directory"))
+                   (format nil "~A/bin:~A" work-path fixed-bin))))
+           (path-entry (format nil "PATH=~A" path-value))
+           (defaults (list (format nil "HOME=~A" (temporary-directory "home"))
+                           (format nil "XDG_CONFIG_HOME=~A"
+                                   (temporary-directory "config"))
+                           (format nil "XDG_DATA_HOME=~A"
+                                   (temporary-directory "data"))
+                           (format nil "XDG_STATE_HOME=~A"
+                                   (temporary-directory "state"))
+                           (format nil "XDG_CACHE_HOME=~A"
+                                   (temporary-directory "cache"))))
+           (fixture-overrides
+             (remove-if (lambda (entry)
+                          (string= "PATH"
+                                   (%json-golden-case-environment-name entry)))
+                        fixture-entries))
+           (fixture-names (mapcar #'%json-golden-case-environment-name
+                                  fixture-overrides)))
+      (ensure-directories-exist
+       (merge-pathnames "bin/.golden-placeholder" work))
+      (append (remove-if (lambda (entry)
+                           (member (%json-golden-case-environment-name entry)
+                                   fixture-names :test #'string=))
+                         defaults)
+              fixture-overrides
+              (list path-entry)))))
+
+(defun %json-golden-safe-relative-file-p (path)
+  (labels ((safe-components-p (start)
+             (let* ((separator (position #\/ path :start start))
+                    (end (or separator (length path)))
+                    (component (subseq path start end)))
+               (and (plusp (length component))
+                    (not (string= component "."))
+                    (not (string= component ".."))
+                    (or (null separator)
+                        (safe-components-p (1+ end)))))))
+    (and (stringp path)
+         (plusp (length path))
+         (not (char= #\/ (char path 0)))
+         (safe-components-p 0))))
+
+(defun %json-golden-materialize-files (directory files)
+  (unless (hash-table-p files)
+    (error "golden: files must be a JSON object"))
+  (maphash
+   (lambda (name contents)
+     (unless (and (stringp name)
+                  (stringp contents)
+                  (%json-golden-safe-relative-file-p name))
+       (error "golden: invalid fixture file ~S" name))
+     (let ((target (merge-pathnames name directory)))
+       (ensure-directories-exist target)
+       (with-open-file (out target :direction :output :if-exists :supersede
+                            :if-does-not-exist :create :external-format :utf-8)
+         (write-string contents out))
+       (when (and (>= (length name) 4)
+                  (string= "bin/" name :end2 4))
+         (sb-posix:chmod (namestring target) #o755))))
+   files))
+
+(defun %json-golden-read-case (path)
+  (json-kit:parse (uiop:read-file-string path :external-format :utf-8)))
+
+(defun %json-golden-write-case (path case expected)
+  (setf (gethash "expected" case) (%json-golden-json-value expected))
+  (with-open-file (out path :direction :output :if-exists :supersede
+                       :if-does-not-exist :create :external-format :utf-8)
+    (json-kit:write-json case out :pretty t :indent 2 :sort-keys t)
+    (terpri out)))
+
+(defun %json-golden-update-mode-p (ci update)
+  (let ((update-p (string= (or update "") "1")))
+    (when (and ci update-p)
+      (error "golden: expectation updates are disabled when CI is set"))
+    update-p))
+
+(defun %json-golden-update-case (case-path case expected)
+  (%json-golden-write-case case-path case expected)
+  t)
+
+(defun %json-golden-run-case (case-path binary update-p &optional (ci (uiop:getenv "CI")))
+  (let* ((update-p (%json-golden-update-mode-p
+                    ci
+                    (if update-p "1" "")))
+         (case (%json-golden-read-case case-path))
+         (input (gethash "input" case))
+         (env (gethash "env" case))
+         (files (gethash "files" case))
+         (expected (gethash "expected" case))
+         (keys (sort (loop for key being the hash-keys of case collect key)
+                     #'string<))
+         (envelope nil)
+         (work-path nil)
+         (environment nil)
+         (status nil))
+    (unless (and binary (plusp (length binary)))
+      (error "golden: NSHELL_BIN must name the built nshell executable"))
+    (expect keys :to-equal (list "env" "expected" "files" "input"))
+    (expect (stringp input) :to-be-truthy)
+    (expect (hash-table-p env) :to-be-truthy)
+    (expect (hash-table-p files) :to-be-truthy)
+    (expect (hash-table-p expected) :to-be-truthy)
+    (host-kit:with-temporary-directory (work)
+      (setf work-path (%json-golden-native work)
+            environment (%json-golden-case-environment work env))
+      (%json-golden-materialize-files work files)
+      (multiple-value-bind (result stdout exit-status stderr)
+          (%json-golden-run input work :extra-environment environment
+                                         :binary binary)
+        (declare (ignore stdout stderr))
+        (setf envelope result
+              status exit-status)))
+    (expect status :to-equal (gethash "status" envelope))
+    (if update-p
+        (progn
+          (%json-golden-update-case
+           case-path case
+           (%json-golden-case-normalize envelope :work work-path
+                                  :environment environment))
+          (fail "期待値を更新した。比べるモードでもう一度流す"))
+        (expect (%json-golden-comparison-value
+                 envelope :work work-path :environment environment)
+                :to-equal
+                (%json-golden-comparison-value
+                 expected :work work-path :environment environment)))))
+
+(defun %json-golden-register-cases ()
+  (let ((binary (uiop:getenv "NSHELL_BIN"))
+        (update-p (string= (or (uiop:getenv "NSHELL_GOLDEN_UPDATE") "") "1")))
+    (dolist (case-path (%json-golden-case-files))
+      (eval (list 'it
+                  (format nil "case ~A" (pathname-name case-path))
+                  (list '%json-golden-run-case
+                        (namestring case-path) binary update-p))))))
+
+(describe "golden runner"
+  (%json-golden-register-cases)
+
+  (it "registers every case id as a separate test"
+    (let ((planned-tests
+            (with-output-to-string (stream)
+              (cl-weave:list-tests :reporter :sexp
+                                   :stream stream
+                                   :name-filter "case"))))
+      (expect (%json-golden-case-files) :to-be-truthy)
+      (dolist (case-path (%json-golden-case-files))
+        (expect (search (pathname-name case-path) planned-tests)
+                :to-be-truthy))))
+
+  (it "normalizes short tool paths and preserves unrelated absolute paths"
+    (expect (%json-golden-case-normalize
+             (json-kit:parse "{\"stderr\":{\"text\":\"/bin/sh: x: not found\"}}"))
+            :to-equal
+            (list (cons "stderr"
+                        (list (cons "text" "<tool>: x: not found")))))
+    (expect (%json-golden-case-normalize
+             (json-kit:parse "{\"path\":\"/usr/share/doc/bin/README\"}"))
+            :to-equal
+            (list (cons "path" "/usr/share/doc/bin/README"))))
+
+  (it "keeps WORK paths and unrelated prefixes intact"
+    (expect (%json-golden-case-normalize
+             (json-kit:parse "{\"state\":{\"cwd\":\"/tmp/golden-work\",\"embedded\":\"prefix/tmp/golden-work/file\",\"lookalike\":\"/tmp/golden-workshop/file\",\"private\":\"/private/tmp/external\",\"private-embedded\":\"prefix/private/tmp/file\",\"tool\":\"/tmp/golden-work/bin/longtoolname\"}}")
+             :work "/tmp/golden-work")
+            :to-equal
+            (list (cons "state"
+                        (list (cons "cwd" "$WORK")
+                              (cons "embedded" "prefix/tmp/golden-work/file")
+                              (cons "lookalike" "/tmp/golden-workshop/file")
+                              (cons "private" "/tmp/external")
+                              (cons "private-embedded" "prefix/private/tmp/file")
+                              (cons "tool" "$WORK/bin/longtoolname"))))))
+
+  (it "normalizes volatile values only at envelope positions"
+    (expect (%json-golden-case-normalize
+             (json-kit:parse
+              "{\"duration_ms\":91,\"session\":\"s_actual\",\"version\":\"0.8.0\",\"state\":{\"duration_ms\":5,\"jobs\":[{\"pid\":8123}],\"pid\":41,\"session\":\"state-user\",\"version\":\"state-user\"},\"stdout\":{\"duration_ms\":7,\"pid\":1001,\"session\":\"stdout-user\",\"version\":\"user-data\"}}"))
+            :to-equal
+            (list (cons "duration_ms" 0)
+                  (cons "session" "s_golden")
+                  (cons "state"
+                        (list (cons "duration_ms" 5)
+                              (cons "jobs" (list :array (list (cons "pid" 0))))
+                              (cons "pid" 41)
+                              (cons "session" "state-user")
+                              (cons "version" "state-user")))
+                  (cons "stdout"
+                        (list (cons "duration_ms" 7)
+                              (cons "pid" 1001)
+                              (cons "session" "stdout-user")
+                              (cons "version" "user-data")))
+                  (cons "version" "<VERSION>"))))
+
+  (it "rejects expectation updates when CI is set"
+    (let ((condition
+            (handler-case
+                (progn (%json-golden-update-mode-p "" "1") nil)
+              (error (condition) condition))))
+      (expect (and condition
+                   (search "CI" (princ-to-string condition)))
+              :to-be-truthy)
+      (expect (%json-golden-update-mode-p nil "1") :to-be-truthy)))
+
+  (it "fails after writing updated expectations"
+    (let ((binary (uiop:getenv "NSHELL_BIN"))
+          (failure nil)
+          (written-p nil))
+      (expect (and binary (plusp (length binary))) :to-be-truthy)
+      (host-kit:with-temporary-directory (work)
+        (let* ((case-path (merge-pathnames "case.json" work))
+               (case (json-kit:parse "{\"env\":{},\"expected\":{},\"files\":{},\"input\":\"echo hi\"}")))
+          (%json-golden-write-case case-path case nil)
+          (setf failure
+                (handler-case
+                    (progn
+                      (%json-golden-run-case case-path binary t nil)
+                      nil)
+                  (cl-weave:test-failure (condition) condition)))
+          (setf written-p
+                (eql 0 (gethash "status"
+                                (gethash "expected"
+                                         (%json-golden-read-case case-path)))))))
+      (expect (typep failure 'cl-weave:test-failure) :to-be-truthy)
+      (expect written-p :to-be-truthy)))
+
+  (it "normalizes the D-84 fields and path values"
+    (let ((actual
+            (json-kit:parse
+             "{\"duration_ms\":91,\"outside\":\"/private/tmp/external\",\"session\":\"s_actual\",\"state\":{\"cwd\":\"/tmp/golden-work/home\",\"jobs\":[{\"pid\":8123}],\"tool\":\"/nix/store/hash-coreutils/bin/echo\"},\"version\":\"0.7.0\",\"work\":\"/tmp/golden-work/cache\"}")))
+      (expect (%json-golden-case-normalize
+               actual
+               :work "/tmp/golden-work"
+               :environment (list "HOME=/tmp/golden-work/home"))
+              :to-equal
+              (list (cons "duration_ms" 0)
+                    (cons "outside" "/tmp/external")
+                    (cons "session" "s_golden")
+                    (cons "state"
+                          (list (cons "cwd" "$HOME")
+                                (cons "jobs" (list :array (list (cons "pid" 0))))
+                                (cons "tool" "<tool>")))
+                    (cons "version" "<VERSION>")
+                    (cons "work" "$WORK/cache")))))
+
+  (it "stores error.message but excludes it from comparisons"
+    (let* ((first (json-kit:parse
+                   "{\"error\":{\"code\":\"E_TEST\",\"message\":\"first\"}}"))
+           (second (json-kit:parse
+                    "{\"error\":{\"code\":\"E_TEST\",\"message\":\"second\"}}"))
+           (normalized (%json-golden-case-normalize first))
+           (error-object (cdr (assoc "error" normalized :test #'string=))))
+      (expect (%json-golden-comparison-value first)
+              :to-equal (%json-golden-comparison-value second))
+      (expect (cdr (assoc "message" error-object :test #'string=))
+              :to-equal "first"))))
+
+(describe "golden PATH"
+  (it "uses only WORK/bin and the t/spec fixed bin by default"
+    (host-kit:with-temporary-directory (work)
+      (let* ((work-path (%json-golden-native work))
+             (fixed-bin (uiop:getenv "NSHELL_SPEC_BIN_DIR"))
+             (environment (%json-golden-case-environment
+                           work (make-hash-table :test #'equal)))
+             (path-entry
+               (find-if (lambda (entry)
+                          (and (>= (length entry) 5)
+                               (string= "PATH=" entry :end2 5)))
+                        environment)))
+        (expect path-entry
+                :to-equal (format nil "PATH=~A/bin:~A" work-path fixed-bin)))))
+
+  (it "expands only complete WORK tokens in an explicit PATH"
+    (host-kit:with-temporary-directory (work)
+      (let ((fixture (make-hash-table :test #'equal)))
+        (setf (gethash "PATH" fixture)
+              "$WORKSHOP/bin:$WORK/bin:$WORK:/fixture/bin")
+        (let* ((work-path (%json-golden-native work))
+               (environment (%json-golden-case-environment work fixture))
+               (path-entry
+                 (find-if (lambda (entry)
+                            (and (>= (length entry) 5)
+                                 (string= "PATH=" entry :end2 5)))
+                          environment)))
+          (expect path-entry
+                  :to-equal
+                  (format nil "PATH=$WORKSHOP/bin:~A/bin:~A:/fixture/bin"
+                          work-path work-path)))))))

@@ -63,12 +63,14 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 
 ## P1-7 golden test と言語の適合テスト
 
-- [ ] `t/golden/`: --json の出力をファイルで固定するランナー。1 ケース 1 ファイルの `t/golden/<id>.json` で、中身は `{input, env, files, expected}`、キーは整列する
-- [ ] golden の正規化: `duration_ms` → 0、`session` → `s_golden`、作業ルート・HOME・XDG → `$WORK` 系、`/private/tmp` → `/tmp`、外部ツールのパス → `<tool>`、pid、バージョン文字列。`error.message` は保存するが比較しない。期待値の更新は環境変数で行う
+- [x] `t/golden/`: --json の出力をファイルで固定するランナー。1 ケース 1 ファイルの `t/golden/<id>.json` で、中身は `{input, env, files, expected}`、キーは整列する
+- [x] golden の正規化: `duration_ms` → 0、`session` → `s_golden`、作業ルート・HOME・XDG → `$WORK` 系、`/private/tmp` → `/tmp`、外部ツールのパス → `<tool>`、pid、バージョン文字列。`error.message` は保存するが比較しない。期待値の更新は環境変数で行う
+- fixture の `files` にある `bin/` から始まるパスは、実行権限を 0755 にして作る。実行器はホストの `PATH` を渡さず、`PATH` を `$WORK/bin` と `t/spec` と同じ固定 bin だけで作る。fixture の `env.PATH` があれば、その値の `$WORK` を実際の作業ディレクトリに展開し、その値をそのまま使う。
+- git リポジトリが必要な例では、実際のリポジトリを作らず、fixture の `bin/git` に固定出力を返す小さなスクリプトを置く。作業ディレクトリ外の git 設定や、ホストに入っている git のバージョンによって結果が変わらないようにする。
 - [x] `t/spec/`: `docs/design/conformance/language-probes-v0.7.0.json` の全ケースを取り込む。L7.1 の行に対応するケースは v0.8 の期待値を設計の行から書き、P2 で実装する分は担当の単位を付けた `it-fails` にする。担当がなくなった行は `it` になる。次のバージョンの期待値は `it-fails` で記述する。v0.8 で挙動が変わらないケースは JSON の v0.7.0 観測値を `it` で固定する
 - [x] `t/spec` はスクリプトモードで実行する。PATH は固定の bin に絞り、テストを流す環境で記録し直す。v0.7.0 の JSON は出典として残す
 - [x] L7 の行と probe の対応は `t/spec/l7-rows.lisp` に置く
-- [ ] golden test と spec は cl-weave のテストとして `NSHELL_BIN` を起動する。`checks.default` にバイナリを渡す
+- [x] golden test と spec は cl-weave のテストとして `NSHELL_BIN` を起動する。`checks.default` にバイナリを渡す
 - [ ] シナリオ JSON コーパスから残す 30〜40 本を選び、golden に移す候補を挙げる (削除は P2)。残すのは PTY 中心で、CI が ID を指定している P12・L02・T06・J05・Q03・Q07・Q08 を含める
 
 受け入れ条件: P2 で言語を変えたとき、どの行が変わったかが golden / spec の差分で分かる。

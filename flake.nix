@@ -809,7 +809,7 @@
       # Read by the builtin inventory and error-code page consistency tests,
       # the bug-report golden test, the response envelope schema
       # conformance test, and the machine --json golden tests, which read
-      # the examples from the two design documents.
+      # the examples from the two design documents and the t/golden cases.
       # Language conformance tests also read the v0.7 probe fixture, and
       # resolve every design `file:line` their rows cite when they load.
       sourceInclude = [
@@ -820,7 +820,7 @@
         ./docs/design/inventory
         ./docs/design/proposal/08-robustness.md
         ./docs/design/tasks/P2-language-and-cuts.md
-        ./t/golden/bug-report.txt
+        ./t/golden
         ./docs/design/conformance/envelope.schema.json
         ./docs/design/proposal/02-machine-interface.md
         ./docs/design/ux/U6-response-envelope.md
@@ -980,6 +980,8 @@
                 ctx.pkgs.git
               ];
               NSHELL_BIN = "${delivery}/bin/nshell";
+              # The t/golden case runner builds each case's PATH from this.
+              NSHELL_SPEC_BIN_DIR = "${specBinEnv}/bin";
               postCheck =
                 (ctx.pkgs.lib.optionalString ((previous.postCheck or null) != null) "${previous.postCheck}\n")
                 + ''

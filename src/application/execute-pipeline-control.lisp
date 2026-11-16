@@ -115,12 +115,20 @@ function file: classifying must not run code before the line is approved.
 :STAGE resolves the name with %resolve-command-by-name, as
 %execute-command-by-name-in-context does; :READER uses
 %resolve-command-stage-binding, as evaluate-command-stage-in-context does.
+:QUERY resolves a query target by name and returns a third value when its
+function file would be loaded by a lookup.  No file is evaluated.
 STAGE-KINDS maps nodes whose resolution the executor already made (an
 evaluated reader stage, the program exec runs) to their dispatch kind."
   (lambda (node path)
     (let ((known (assoc node stage-kinds :test #'eq)))
       (cond
         (known (values (cdr known) node))
+        ((eq path :query)
+         (multiple-value-bind (kind binding)
+             (%resolve-command-by-name
+              context (nshell.domain.parsing:command-node-command node)
+              :autoload nil)
+           (values kind node (and (eq kind :shell-function) (null binding)))))
         ((eq path :reader)
          (handler-case
              (multiple-value-bind (kind binding run-node)

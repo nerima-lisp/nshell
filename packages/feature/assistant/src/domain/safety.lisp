@@ -216,7 +216,19 @@ redirects and the written words of the outermost command."
                                :resolution (if (eq runs :by-name)
                                                (%assistant-name-resolution inner resolve)
                                                :external)))))
-            (embedded (unless kind (%assistant-embedded-command-result args resolve))))
+            (embedded (unless kind (%assistant-embedded-command-result args resolve)))
+            (queries
+              (when (and (eq resolution :builtin) (string= command "command")
+                         (member (first args) '("-v" "-V") :test #'equal)
+                         resolve)
+                (loop for name in (rest args)
+                      when (nth-value 2
+                             (funcall resolve
+                                      (nshell.domain.parsing:make-command-node name nil)
+                                      :query))
+                        collect (%assistant-subject-result
+                                 name :command name :invoked-as name
+                                 :resolution :function)))))
         (%assistant-subject-result
          command
          :command (%assistant-command-basename command)
@@ -231,7 +243,8 @@ redirects and the written words of the outermost command."
          :writes writes
          :redirect-problems redirect-problems
          :words raw-words
-         :nested (append (and wrapped (%assistant-result-reasons wrapped)) nested)
+         :nested (append (and wrapped (%assistant-result-reasons wrapped))
+                         (mapcan #'%assistant-result-reasons queries) nested)
          :embedded (and embedded (%assistant-result-reasons embedded)))))))
 
 (defparameter +assistant-output-redirect-kinds+

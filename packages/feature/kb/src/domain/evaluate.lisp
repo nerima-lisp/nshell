@@ -150,8 +150,9 @@ command is resolved: :BY-NAME like a typed command, else :EXTERNAL."
          (spec (rest row))
          (runs (getf spec :runs :external)))
     (when (and row
-               (not (member (first arguments) (getf spec :query-options)
-                            :test #'equal)))
+               (not (and (rest arguments)
+                         (member (first arguments) (getf spec :query-options)
+                                 :test #'equal))))
       (case (getf spec :source)
         (:eval
          (if (= (length arguments) 1)

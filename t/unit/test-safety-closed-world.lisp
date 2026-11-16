@@ -153,9 +153,13 @@
   (it "matches tail against its spec row"
     (%closed-world-expect-levels
      '(("tail README.md" :safe) ("tail -n 2 a b" :safe)
-       ("tail -n2 a" :safe) ("tail -c 2 a" :safe) ("tail -c2 a" :safe)
+       ("tail -n 2 a" :safe) ("tail -n2 a" :safe)
+       ("tail -c 2 a" :safe) ("tail -c2 a" :safe)
+       ("tail +1f a" :confirm) ("tail +2 a" :confirm)
        ("tail -n +2 a" :confirm) ("tail -c 1K a" :confirm)
-       ("tail -n" :confirm) ("tail -f a" :confirm) ("tail -F a" :confirm))))
+       ("tail -n" :confirm) ("tail -f a" :confirm) ("tail -F a" :confirm)
+       ("tail --follow a" :confirm) ("tail --retry a" :confirm)
+       ("tail -fn 2 a" :confirm) ("tail a -f" :confirm))))
 
   (it "matches wc against its spec row"
     (%closed-world-expect-levels
@@ -166,7 +170,8 @@
   (it "matches stat against its spec row"
     (%closed-world-expect-levels
      '(("stat a b" :safe) ("stat -L a" :safe)
-       ("stat -f a" :confirm) ("stat --format=x a" :confirm))))
+       ("stat -f a" :confirm) ("stat --format=x a" :confirm)
+       ("stat -c x a" :confirm) ("stat -t a" :confirm))))
 
   (it "matches du against its spec row"
     (%closed-world-expect-levels
@@ -174,13 +179,14 @@
        ("du -k a" :safe) ("du -a a" :safe) ("du -c a" :safe)
        ("du -d 2 a" :safe) ("du -d2 a" :safe) ("du -x a" :safe)
        ("du -d -1 a" :confirm) ("du -d" :confirm)
+       ("du -L a" :confirm) ("du --max-depth=2 a" :confirm)
        ("du --files0-from=x" :confirm))))
 
   (it "matches df against its spec row"
     (%closed-world-expect-levels
      '(("df a b" :safe) ("df -h a" :safe) ("df -k a" :safe)
-       ("df -l a" :safe) ("df -i a" :safe)
-       ("df -P a" :safe) ("df -T a" :confirm))))
+       ("df -l a" :safe) ("df -i a" :safe) ("df -P a" :safe)
+       ("df -T a" :confirm) ("df -a a" :confirm) ("df -t a" :confirm))))
 
   (it "matches builtin pwd against its spec row"
     (%closed-world-expect-levels
@@ -201,6 +207,7 @@
     (%closed-world-expect-levels
      '(("command -v ls" :safe) ("command -V ls git" :safe)
        ("command ls" :confirm) ("command -p ls" :confirm)
+       ("command -vV ls" :confirm) ("command -v" :confirm)
        ("command -v --unknown ls" :confirm))))
 
   (it "confirms each excluded ls option in the policy row"

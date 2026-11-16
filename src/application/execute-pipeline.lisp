@@ -60,22 +60,23 @@ spawns, so a stage's assignment reaches that stage's process alone.")
              (let ((exit-code 0)
                    (pipeline-statuses nil))
                (values
-                (with-output-to-string (*standard-output*)
-                  (multiple-value-bind (status statuses)
-                      (nshell.infrastructure.acl:spawn-pipeline
-                       clean-commands
-                       :redirects redirects
-                       :pipefail-p pipefail-p
-                       :preserve-fds
-                       (%process-substitution-resource-fds resources)
-                       :after-spawn
-                       (lambda ()
-                         (setf spawned-p t)
-                         (%release-process-substitution-resources
-                          resources)))
-                    (setf exit-code (or status 0)
-                          pipeline-statuses (or statuses
-                                                (list exit-code)))))
+                (%call-capturing-standard-output
+                 (lambda ()
+                   (multiple-value-bind (status statuses)
+                       (nshell.infrastructure.acl:spawn-pipeline
+                        clean-commands
+                        :redirects redirects
+                        :pipefail-p pipefail-p
+                        :preserve-fds
+                        (%process-substitution-resource-fds resources)
+                        :after-spawn
+                        (lambda ()
+                          (setf spawned-p t)
+                          (%release-process-substitution-resources
+                           resources)))
+                     (setf exit-code (or status 0)
+                           pipeline-statuses (or statuses
+                                                 (list exit-code))))))
                 exit-code
                 pipeline-statuses))
            (error (condition)
@@ -185,18 +186,19 @@ spawns, so a stage's assignment reaches that stage's process alone.")
                           (pipeline-statuses nil))
                       (progn
                         (setf output
-                              (with-output-to-string (*standard-output*)
-                                (multiple-value-bind (status statuses)
-                                    (nshell.infrastructure.acl:spawn-pipeline
-                                     clean-commands
-                                     :redirects redirects
-                                     :stage-environments
-                                     *pipeline-stage-environments*
-                                     :pipefail-p
-                                     (shell-context-pipefail-p context))
-                                  (setf exit-code (or status 0)
-                                        pipeline-statuses
-                                        (or statuses (list exit-code))))))
+                              (%call-capturing-standard-output
+                               (lambda ()
+                                 (multiple-value-bind (status statuses)
+                                     (nshell.infrastructure.acl:spawn-pipeline
+                                      clean-commands
+                                      :redirects redirects
+                                      :stage-environments
+                                      *pipeline-stage-environments*
+                                      :pipefail-p
+                                      (shell-context-pipefail-p context))
+                                   (setf exit-code (or status 0)
+                                         pipeline-statuses
+                                         (or statuses (list exit-code)))))))
                         (%record-pipeline-statuses context pipeline-statuses)
                         (values output exit-code))))))))))
 

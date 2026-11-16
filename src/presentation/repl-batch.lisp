@@ -50,6 +50,14 @@
   (nshell.feature.assistant:reset-assistant-settings)
   (%reset-repl-state-tables))
 
+;;; RUN-REPL-BATCH-OBSERVED binds this to a function of (KIND VALUE &rest
+;;; DETAILS) so a caller learns why a run ended without parsing its stderr.
+(defvar *batch-outcome-observer* nil)
+
+(defun %observe-batch-outcome (kind value &rest details)
+  (when *batch-outcome-observer*
+    (apply *batch-outcome-observer* kind value details)))
+
 (defun %run-batch-source-lines (lines)
   (let ((command-not-found-command nil))
     (call-with-crash-capture
@@ -62,6 +70,7 @@
                 (handler-case
                     (nshell.application:source-lines-to-stream context lines)
                   (nshell.application:command-failed (condition)
+                    (%observe-batch-outcome :command-failed condition)
                     (values
                      nil
                      (or
@@ -71,6 +80,8 @@
                        condition)))))))
           (declare (ignore output))
           (setf *last-exit-code* (or code 0))
+          (when command-not-found-command
+            (%observe-batch-outcome :missing-command command-not-found-command))
           (when (and (= *last-exit-code* 127)
                      command-not-found-command)
             (let ((corrections
@@ -79,6 +90,10 @@
                 (format *error-output* "nshell: did you mean: ~{~a~^, ~}?~%" corrections))))
           *last-exit-code*))
      (lambda (crash)
+       (%observe-batch-outcome
+        :crash
+        (nshell.infrastructure.persistence:crash-record-condition crash)
+        (%crash-in-user-code-p crash))
        (format *error-output* "nshell error: ~a~%"
                (if (%crash-storage-p crash) "storage exhausted" (%crash-message crash)))
        (%record-crash-log crash *error-output*)
@@ -95,6 +110,14 @@ SCRIPT-ARGS are exposed as $argv for --command."
         (%run-batch-source-lines
          (nshell.application:collect-source-lines *standard-input*))))
   *last-exit-code*)
+
+(defun run-repl-batch-observed (line observer &key script-args)
+  "Run LINE as RUN-REPL-BATCH does and return its exit status. OBSERVER is
+called with :MISSING-COMMAND and the last command name that was not found,
+:COMMAND-FAILED and the condition that ended the run, or :CRASH, the condition
+and whether the user's own Lisp code signalled it."
+  (let ((*batch-outcome-observer* observer))
+    (run-repl-batch :line line :script-args script-args)))
 (defun run-repl-shell-command (command arguments
                               &key (load-config-p t) config-path)
   "Load the interactive startup configuration and delegate COMMAND to /bin/sh."

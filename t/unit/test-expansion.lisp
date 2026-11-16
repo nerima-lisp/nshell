@@ -462,7 +462,26 @@ Each case is (EXPECTED INPUT &rest ARGS)."
           (expect (list input expanded) :to-equal (list input expected))
           (expect (list input (uiop:symbol-call :nshell.domain.expansion
                                                '#:brace-expansion-p input))
-                  :to-equal (list input (not (equal expanded (list input)))))))))
+                  :to-equal (list input (not (equal expanded (list input))))))))
+    (let* ((endpoint (make-string 64 :initial-element #\9))
+           (input (format nil "{~a..~a}" endpoint endpoint))
+           (expanded (nshell.domain.expansion:expand-braces input)))
+      (expect expanded :to-equal (list endpoint))
+      (expect (nshell.domain.expansion:brace-expansion-p input)
+              :to-equal (not (equal expanded (list input)))))
+    (let* ((endpoint (make-string 4096 :initial-element #\9))
+           (input (format nil "{~a..~a}" endpoint endpoint))
+           (calls 0)
+           (detected nil))
+      (with-temporary-function
+          ('nshell.domain.expansion::%brace-range-bounds
+           (lambda (&rest arguments)
+             (declare (ignore arguments))
+             (incf calls)
+             (error "brace detection must not parse integer endpoints")))
+        (setf detected (nshell.domain.expansion:brace-expansion-p input)))
+      (expect detected :to-be-truthy)
+      (expect calls :to-equal 0)))
 
   (it "glob-pattern-p-detects-wildcard-characters"
     "glob-pattern-p returns true for patterns containing * ? or [."

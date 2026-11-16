@@ -128,4 +128,26 @@ this session; records that are new in the replaced file are merged."
       (%history-refresh-new-prompt)
       (expect '("echo rewritten" "echo kept-b" "echo kept-a")
               :to-equal (%history-refresh-texts))
-      (expect 2 :to-equal reads))))
+      (expect 2 :to-equal reads)))
+
+  (it "a-failed-history-read-is-retried-at-the-next-prompt"
+    "A read that fails because the lock cannot be opened does not mark the
+unchanged file as merged: once the lock opens, the next prompt brings the
+records in."
+    (with-history-refresh-session (reads)
+      (rewrite '("echo recover"))
+      (let* ((path nshell.infrastructure.persistence:*history-file-path-override*)
+             (lock (namestring
+                    (nshell.infrastructure.persistence::%history-lock-path path)))
+             (contents (uiop:read-file-string path)))
+        ;; A directory in place of the lock fails the lock open for root too.
+        (delete-file lock)
+        (sb-posix:mkdir lock #o700)
+        (unwind-protect
+             (let ((*error-output* (make-broadcast-stream)))
+               (%history-refresh-new-prompt)
+               (expect "" :to-equal (%history-refresh-prev-key)))
+          (sb-posix:rmdir lock))
+        (%history-refresh-new-prompt)
+        (expect "echo recover" :to-equal (%history-refresh-prev-key))
+        (expect contents :to-equal (uiop:read-file-string path))))))

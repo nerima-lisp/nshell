@@ -202,10 +202,7 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
       (when (= status (+ 128 sb-unix:sighup))
         (maphash
          (lambda (job-id entry)
-           (let* ((processes (cond
-                               ((null entry) nil)
-                               ((listp entry) entry)
-                               (t (list entry))))
+           (let* ((processes (nshell.infrastructure.acl:pipeline-stage-processes entry))
                   (job (nshell.domain.job-control:monitor-find-job
                         nshell.application:*job-monitor*
                         job-id))

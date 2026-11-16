@@ -6,11 +6,11 @@
   "Return the OS PID of a background PROCESS object, or NIL if unavailable."
   (ignore-errors (nshell.infrastructure.acl:process-pid process)))
 
-(defun %register-background-job (context processes command-line &optional stage-results)
+(defun %register-background-job (context processes command-line)
   "Register PROCESSES as a background job in CONTEXT's monitor and process registry.
-PROCESSES is a single process object (command) or a list (pipeline).
+PROCESSES is a process or a source-ordered list of processes and stage statuses.
 Returns the job ID, or NIL when PIDs cannot be obtained."
-  (let* ((proc-list (if (listp processes) processes (list processes)))
+  (let* ((proc-list (nshell.infrastructure.acl:pipeline-stage-processes processes))
          (pids (delete nil (mapcar #'%background-process-pid proc-list))))
     (when pids
       (let ((job-id (nshell.domain.job-control:monitor-add-background-job
@@ -18,7 +18,7 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
                      pids
                      command-line
                      :pipefail-p (shell-context-pipefail-p context))))
-        (%store-shell-process-registry-entry context job-id (or stage-results processes))
+        (%store-shell-process-registry-entry context job-id processes)
         (when (shell-context-environment context)
           (setf (shell-context-environment context)
                 (nshell.domain.environment:env-set
@@ -34,43 +34,41 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
        context
        (nshell.domain.parsing:pipeline-node-commands command))
     (cond
-     (error
-      (%abort-process-substitution-resources resources)
-      (values error 127))
-     (t
-      (let ((gate (%assistant-gate-expanded-node
-                   context (nshell.domain.parsing:make-pipeline-node
-                            expanded-commands))))
-        (when gate
-          (%abort-process-substitution-resources resources)
-          (return-from %spawn-background-pipeline-in-context
-                       (values (first gate) (second gate)))))
-      (when resources
-        (%abort-process-substitution-resources resources)
-        (return-from %spawn-background-pipeline-in-context
-                     (values
-                      (%process-substitution-error
-                       "is not supported in background jobs")
-                      127)))
-      (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
-             (clean-commands
-              (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
-               redirect-split))
-             (redirects
-              (nshell.domain.parsing:command-list-redirect-split-result-redirects
-               redirect-split))
-             (clean-pipeline (nshell.domain.parsing:make-pipeline-node
-                              clean-commands))
-             (stage-results nil)
-             (processes (multiple-value-bind (processes results)
-                            (nshell.infrastructure.acl:spawn-pipeline-async clean-commands :redirects redirects)
-                          (setf stage-results results)
-                          processes))
-             (command-line (nshell.domain.parsing:ast-node->command-line
-                            clean-pipeline)))
-        (when processes
-          (%register-background-job context processes command-line stage-results))
-        (values nil (if processes 0 127)))))))
+      (error
+       (%abort-process-substitution-resources resources)
+       (values error 127))
+      (t
+       (let ((gate (%assistant-gate-expanded-node
+                    context (nshell.domain.parsing:make-pipeline-node
+                             expanded-commands))))
+         (when gate
+           (%abort-process-substitution-resources resources)
+           (return-from %spawn-background-pipeline-in-context
+             (values (first gate) (second gate)))))
+       (when resources
+         (%abort-process-substitution-resources resources)
+         (return-from %spawn-background-pipeline-in-context
+           (values
+            (%process-substitution-error
+             "is not supported in background jobs")
+            127)))
+       (let* ((redirect-split (%extract-pipeline-redirects expanded-commands))
+              (clean-commands
+                (nshell.domain.parsing:command-list-redirect-split-result-clean-commands
+                 redirect-split))
+              (redirects
+                (nshell.domain.parsing:command-list-redirect-split-result-redirects
+                 redirect-split))
+              (clean-pipeline (nshell.domain.parsing:make-pipeline-node
+                               clean-commands))
+              (command-line (nshell.domain.parsing:ast-node->command-line
+                             clean-pipeline)))
+         (multiple-value-bind (processes stage-results)
+             (nshell.infrastructure.acl:spawn-pipeline-async
+              clean-commands :redirects redirects)
+           (when processes
+             (%register-background-job context stage-results command-line))
+           (values nil (if processes 0 127))))))))
 
 (defun %spawn-background-command-in-context (context command)
   (multiple-value-bind (expanded-command error resources)
@@ -99,15 +97,14 @@ Returns the job ID, or NIL when PIDs cannot be obtained."
               (redirects
                 (nshell.domain.parsing:command-redirect-split-result-redirects
                  redirect-split))
-              (cmd (nshell.domain.parsing:command-node-command clean-command))
-              (args (nshell.domain.parsing:command-node-arg-values clean-command))
               (command-line (nshell.domain.parsing:ast-node->command-line
                              clean-command))
-              (process (nshell.infrastructure.acl:spawn-async
-                        cmd args :redirects redirects)))
+              (process
+                (first (nshell.infrastructure.acl:spawn-pipeline-async
+                        (list clean-command) :redirects (list redirects)))))
          (when process
            (%register-background-job context process command-line))
-         (values nil 0))))))
+         (values nil (if process 0 127)))))))
 
 (defun %spawn-background-node-in-context (context command)
   "Spawn COMMAND (command-node or pipeline-node) asynchronously and register a job."

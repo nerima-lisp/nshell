@@ -1,6 +1,23 @@
 (in-package #:nshell/test)
 
 (describe "execute-pipeline-service-tests"
+  (it "BUG-3 stage helpers separate processes from status markers"
+    (cl-weave:expect-assertions 9)
+    (expect nil :to-equal (nshell.infrastructure.acl:pipeline-stage-processes nil))
+    (expect nil :to-equal (nshell.infrastructure.acl:pipeline-stage-processes 127))
+    (expect '(:first) :to-equal (nshell.infrastructure.acl:pipeline-stage-processes :first))
+    (expect '(:first :last) :to-equal
+            (nshell.infrastructure.acl:pipeline-stage-processes '(127 :first 0 :last)))
+    (expect nil :to-equal (nshell.infrastructure.acl:pipeline-stage-processes '(127 127)))
+    (let ((called nil))
+      (expect 127 :to-equal
+              (nshell.infrastructure.acl:pipeline-stage-status
+               127 (lambda (process) (push process called) 7)))
+      (expect nil :to-equal called)
+      (expect 7 :to-equal
+              (nshell.infrastructure.acl:pipeline-stage-status
+               :first (lambda (process) (push process called) 7)))
+      (expect '(:first) :to-equal called)))
   (dolist (phase '(:wait-error :callback-error))
     (let ((phase phase))
       (it (format nil "copier-order-~(~A~)" phase)

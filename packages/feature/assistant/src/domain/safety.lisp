@@ -197,30 +197,37 @@ so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
                   :resolve resolve
                   :resolution (%assistant-name-resolution tail resolve))))
 
-(defun %assistant-query-argument-expands-p (argument source-arguments-p)
+(defun %assistant-query-argument-expands-p (argument source-arguments-p resolve)
+  "Reuse runtime predicates on source query values.  Outside single quotes,
+any unescaped $ or backtick conservatively requires confirmation."
   (when (and argument
              (or source-arguments-p
                  (nshell.domain.parsing:command-arg-expand-p argument)))
-    (loop for fragment in (nshell.domain.parsing:command-arg-fragments argument)
-          for value = (nshell.domain.parsing:command-fragment-value fragment)
-          for style = (nshell.domain.parsing:command-fragment-quote-style fragment)
-          for escaped = (nshell.domain.parsing:command-fragment-escaped-positions fragment)
-          thereis
-          (and (not (eq style :single))
-               (loop for character across value
-                     for index from 0
-                     thereis
-                     (and (not (member index escaped))
-                          (or (find character "$`(")
-                              (and (null style)
-                                   (or (char= character #\{)
-                                       (and (nshell.domain.parsing:command-arg-glob-p argument)
-                                            (find character "*?["))
-                                       (and (zerop index)
-                                            (char= character #\~)))))))))))
+    (some
+     (lambda (fragment)
+       (let ((style (nshell.domain.parsing:command-fragment-quote-style fragment))
+             (value (copy-seq (nshell.domain.parsing:command-fragment-value fragment))))
+         (dolist (position (nshell.domain.parsing:command-fragment-escaped-positions fragment))
+           (when (< position (length value))
+             (setf (char value position) #\Null)))
+         (and (not (eq style :single))
+              (or (and (null style)
+                       (nshell.domain.parsing:parenthesized-substitution-texts value "("))
+                  (position #\$ value)
+                  (position #\` value)
+                  (and (or (null style) (not source-arguments-p))
+                       (or (not (equal (list value)
+                                       (nshell.domain.expansion:expand-braces value)))
+                           (funcall resolve
+                                    (nshell.domain.parsing:make-command-node value nil)
+                                    :query-tilde)
+                           (and (nshell.domain.parsing:command-arg-glob-p argument)
+                                (nshell.domain.expansion::glob-pattern-p value))))))))
+     (nshell.domain.parsing:command-arg-fragments argument))))
 
 (defun %assistant-classify-argv (words &key resolution resolve assignments nested
-                                       writes redirect-problems raw-words argument-nodes source-arguments-p)
+                                           writes redirect-problems raw-words
+                                           argument-nodes argument-forms source-arguments-p)
   "Classify the command the argv WORDS run.  RESOLUTION is how the executor
 resolves its command word (:BUILTIN, :EXTERNAL, or :FUNCTION).  ASSIGNMENTS
 are the environment names assigned before it and NESTED the reasons of its
@@ -228,7 +235,8 @@ substitutions.  WRITES, REDIRECT-PROBLEMS, and RAW-WORDS describe the
 redirects and the written words of the outermost command."
   (let ((command (first words))
         (args (rest words)))
-    (multiple-value-bind (kind inner mismatches names env-options source runs query-options)
+    (multiple-value-bind (kind inner mismatches names env-options source runs
+                          query-options)
         (nshell.feature.kb:command-wrapper command args resolution)
       (let ((wrapped (cond
                       (source (%assistant-classify-command-line source resolve))
@@ -236,32 +244,40 @@ redirects and the written words of the outermost command."
                               inner
                               :resolve resolve
                               :source-arguments-p source-arguments-p
-                               :argument-nodes (nthcdr (- (length words) (length inner))
-                                                      argument-nodes)
+                              :argument-forms (nthcdr (- (length words) (length inner))
+                                                     argument-forms)
+                              :argument-nodes (nthcdr (- (length words) (length inner))
+                                                     argument-nodes)
                               :resolution (if (eq runs :by-name)
                                               (%assistant-name-resolution inner resolve)
-                                            :external)))))
+                                              :external)))))
             (embedded (unless kind (%assistant-embedded-command-result args resolve)))
             (queries
              (when query-options
-               (let ((targets args)
-                     (target-nodes argument-nodes))
-                 (loop while (member (first targets) query-options :test #'equal)
-                       do (pop targets) (pop target-nodes))
-                 (when (equal (first targets) "--")
-                   (pop targets) (pop target-nodes))
-                 (loop for name in targets
-                       for argument = (pop target-nodes)
-                       when (%assistant-query-argument-expands-p argument source-arguments-p)
-                       collect (%assistant-subject-result
-                                name :command name :wrapper-mismatches (list name))
-                       else when (nth-value 2
-                                            (funcall resolve
-                                                     (nshell.domain.parsing:make-command-node name nil)
-                                                     :query))
-                       collect (%assistant-subject-result
-                                name :command name :invoked-as name
-                                :resolution :function))))))
+               (if (some #'nshell.domain.parsing:command-value-form-p argument-forms)
+                   (list (%assistant-subject-result
+                          command :command command
+                          :wrapper-mismatches (list "query target requires expansion")))
+                   (let ((targets args)
+                         (target-nodes argument-nodes))
+                     (loop while (member (first targets) query-options :test #'equal)
+                           do (pop targets) (pop target-nodes))
+                     (when (equal (first targets) "--")
+                       (pop targets) (pop target-nodes))
+                     (loop for name in targets
+                           for argument = (pop target-nodes)
+                           when (%assistant-query-argument-expands-p argument source-arguments-p resolve)
+                           collect (%assistant-subject-result
+                                    name :command name
+                                    :wrapper-mismatches
+                                    (list (format nil "query target requires expansion: ~a" name)))
+                           else when (nth-value 2
+                                     (funcall resolve
+                                              (nshell.domain.parsing:make-command-node name nil)
+                                              :query))
+                           collect (%assistant-subject-result
+                                    name :command name :invoked-as name
+                                    :resolution :function)))))))
         (%assistant-subject-result
          command
          :command (%assistant-command-basename command)
@@ -363,7 +379,7 @@ targets, here-document bodies, and assignments included), the output
 targets, the redirect problems, the results of its process substitution
 redirects, the redirects used, the command's resolution by RESOLVE
 (:BUILTIN, :EXTERNAL, or :FUNCTION), and the node the executor runs
-instead (after an alias), or NIL, and the typed arguments of the command."
+instead (after an alias), or NIL, the typed arguments, and the argument forms."
   (let* ((reader-p (eq path :reader))
          (reader-assignments
            (mapcar #'nshell.domain.parsing:arg-value
@@ -418,6 +434,12 @@ instead (after an alias), or NIL, and the typed arguments of the command."
                             (if split
                                 (nshell.domain.parsing:command-redirect-split-result-clean-command
                                  split)
+                                rest)))
+                      (and rest
+                           (nshell.domain.parsing:command-node-argument-forms
+                            (if split
+                                (nshell.domain.parsing:command-redirect-split-result-clean-command
+                                 split)
                                 rest)))))))))))
 
 (defun classify-command (node &key (path :bare-line) resolve
@@ -426,7 +448,7 @@ instead (after an alias), or NIL, and the typed arguments of the command."
 and RESOLVE are as for classify-ast."
   (if (nshell.domain.parsing:command-node-p node)
       (multiple-value-bind (argv assignments words writes problems results
-                            redirects resolution run-node argument-nodes)
+                            redirects resolution run-node argument-nodes argument-forms)
           (%assistant-command-parts node path resolve)
         (declare (ignore redirects))
         (let ((nested (mapcan #'%assistant-result-reasons
@@ -473,6 +495,7 @@ and RESOLVE are as for classify-ast."
               :redirect-problems problems
               :raw-words words
               :argument-nodes argument-nodes
+              :argument-forms argument-forms
               :source-arguments-p source-arguments-p
               :nested nested)))))
       (%assistant-unparsable-result "the value is not a command AST node")))
@@ -574,7 +597,9 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
     (t (%assistant-unparsable-result "unsupported AST node"))))
 
 (defun classify-ast (node &key (path :bare-line) resolve)
-  "Classify shell AST and S-expression input without inspecting raw text.
+  "Classify shell AST and S-expression input using metadata and argument values.
+Query expansion checks reuse runtime predicates on source argument values.
+Outside single quotes, an unescaped $ or backtick conservatively requires confirmation.
 PATH names the executor that runs a command, pipeline, or sequence node
 (:BARE-LINE, :STAGE, or :READER, described above); reader results always
 run as reader stages.  RESOLVE gives the executor's resolution of a

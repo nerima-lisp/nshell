@@ -654,7 +654,7 @@ the gate, and the executor see them."
           (expect (probe-file marker) :to-be nil)
           (expect (%safety-view-registered-count context) :to-equal 1)))))
 
-    (it "confirms query targets requiring expansion at Enter and at the gate"
+  (it "confirms query targets requiring expansion at Enter and at the gate"
     (host-kit:with-temporary-directory (directory)
       (let ((marker (merge-pathnames "loaded" directory))
             (context (%safety-view-autoload-context directory)))
@@ -729,4 +729,95 @@ the gate, and the executor see them."
                  (nshell.feature.assistant:assistant-safety-result-classification
                   (nshell.feature.assistant:classify-ast
                    ast :resolve (nshell.application:assistant-command-resolver context))))
-           :to-equal (list source :safe)))))))
+           :to-equal (list source :safe))))))
+
+  (it "confirms reader query value forms after literal operands"
+    (host-kit:with-temporary-directory (directory)
+      (let ((marker (merge-pathnames "loaded" directory))
+            (context (%safety-view-autoload-context directory)))
+        (%safety-view-write-function-file directory "foo" marker)
+        (setf (nshell.application:shell-context-environment context)
+              (nshell.domain.environment:env-set
+               (nshell.application:shell-context-environment context) "X" "foo" t))
+        (dolist (source '("command -v ls $X" "command -V ls \"$X\""
+                          "command -v -- $X" "command -v ls ${X}"))
+          (with-temporary-function
+              ('nshell.application::%expand-source-arg-in-context
+               (lambda (&rest arguments)
+                 (declare (ignore arguments))
+                 (error "classification must not expand query targets")))
+            (with-repl-test-state
+              (let ((nshell.presentation::*environment*
+                      (nshell.application:shell-context-environment context))
+                    (nshell.presentation::*functions*
+                      (nshell.application:shell-context-function-table context)))
+                (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                        :to-equal (list source :confirm)))))
+          (let ((nshell.application:*execution-origin* :proposal)
+                (nshell.application:*execution-approval* :safe)
+                (nshell.application::*execution-gate-parent-kind* nil)
+                (nshell.application:*execution-gate-stopped-p* nil)
+                (ast (nshell.domain.parsing:parse-result-ast
+                      (nshell.domain.parsing:parse-command-line source))))
+            (expect (list source
+                          (nth-value 1 (nshell.application:execute-ast-in-context context ast))
+                          nshell.application:*execution-gate-stopped-p*)
+                    :to-equal (list source 126 t))))
+        (dolist (source '("command -v ls $X" "command -V ls \"$X\""
+                          "command -v -- $X"))
+          (multiple-value-bind (status stopped-p)
+              (%safety-view-run-ai-line context source :auto :safe)
+            (expect (list source status stopped-p) :to-equal (list source 126 t))))
+        (expect (probe-file marker) :to-be nil)
+        (expect (%safety-view-registered-count context) :to-equal 0))))
+
+  (it "uses runtime expansion rules for query argument values"
+    (let ((context (make-test-shell-context)))
+      (dolist (case '(("command -v {a}" :safe)
+                      ("command -v fo?" :confirm)
+                      ("command -v '$X'" :safe)
+                      ("command -v \\$X" :safe)
+                      ("command -v \"$X\"" :confirm)
+                      ("command -v `x`" :confirm)
+                      ("command -v $(x)" :confirm)
+                      ("command -v ${X}" :confirm)))
+        (destructuring-bind (source expected) case
+          (let ((ast (nshell.domain.parsing:parse-result-ast
+                      (nshell.domain.parsing:parse-command-line source))))
+            (expect (list source
+                          (nshell.feature.assistant:assistant-safety-result-classification
+                           (nshell.feature.assistant:classify-ast
+                            ast :resolve (nshell.application:assistant-command-resolver context))))
+                    :to-equal (list source expected)))
+          (with-repl-test-state
+            (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                    :to-equal (list source expected)))))))
+
+  (it "checks tilde query targets with the execution context environment"
+    (let* ((context (make-test-shell-context))
+           (environment (nshell.application:shell-context-environment context)))
+      (setf environment (nshell.domain.environment:env-set
+                         environment "HOME" "/tmp/query-home" t))
+      (setf environment (nshell.domain.environment:env-set
+                         environment "USER" "query-user" t))
+      (setf (nshell.application:shell-context-environment context) environment)
+      (let ((resolve (nshell.application:assistant-command-resolver context)))
+        (dolist (case '(("~" t) ("~/tool" t) ("~query-user/tool" t)
+                        ("~other-user/tool" nil) ("prefix~" nil)))
+          (destructuring-bind (target changes-p) case
+            (expect (funcall resolve
+                             (nshell.domain.parsing:make-command-node target nil)
+                             :query-tilde)
+                    :to-be changes-p)
+            (let* ((source (format nil "command -v ~a" target))
+                   (expected (if changes-p :confirm :safe))
+                   (ast (nshell.domain.parsing:parse-result-ast
+                         (nshell.domain.parsing:parse-command-line source))))
+              (expect (list source
+                            (nshell.feature.assistant:assistant-safety-result-classification
+                             (nshell.feature.assistant:classify-ast ast :resolve resolve)))
+                      :to-equal (list source expected))
+              (with-repl-test-state
+                (let ((nshell.presentation::*environment* environment))
+                  (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                          :to-equal (list source expected)))))))))))

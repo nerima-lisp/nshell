@@ -117,12 +117,18 @@ function file: classifying must not run code before the line is approved.
 %resolve-command-stage-binding, as evaluate-command-stage-in-context does.
 :QUERY resolves a query target by name and returns a third value when its
 function file would be loaded by a lookup.  No file is evaluated.
+:QUERY-TILDE returns whether the target changes under the context's tilde expansion.
 STAGE-KINDS maps nodes whose resolution the executor already made (an
 evaluated reader stage, the program exec runs) to their dispatch kind."
   (lambda (node path)
     (let ((known (assoc node stage-kinds :test #'eq)))
       (cond
         (known (values (cdr known) node))
+        ((eq path :query-tilde)
+         (let ((value (nshell.domain.parsing:command-node-command node)))
+           (not (string= value
+                         (nshell.domain.expansion:expand-tilde
+                          value (shell-context-environment context))))))
         ((eq path :query)
          (multiple-value-bind (kind binding)
              (%resolve-command-by-name

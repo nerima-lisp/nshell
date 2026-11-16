@@ -436,6 +436,23 @@ shown. A dead worker cannot answer, so the suggestion is computed here."
                 (t
                  (sleep 0.001))))))))))
 
+(defparameter *suggestion-worker-stop-seconds* 0.1
+  "Time an idle worker gets to see the shutdown flag before it is terminated.")
+
+(defun %join-suggestion-worker (thread)
+  "Stop THREAD without depending on its computation finishing. A computation
+can block indefinitely (a FIFO named GNUmakefile, a hung NFS mount), so after
+a bounded join the thread is terminated, which also interrupts a blocking
+open(2) or read(2), and is abandoned if it still does not end."
+  (ignore-errors
+    (sb-thread:join-thread thread :default nil
+                                  :timeout *suggestion-worker-stop-seconds*))
+  (when (sb-thread:thread-alive-p thread)
+    (ignore-errors (sb-thread:terminate-thread thread))
+    (ignore-errors
+      (sb-thread:join-thread thread :default nil
+                                    :timeout *suggestion-worker-stop-seconds*))))
+
 (defun %stop-suggestion-worker ()
   (let ((state *suggestion-worker-state*))
     (when state
@@ -446,11 +463,12 @@ shown. A dead worker cannot answer, so the suggestion is computed here."
                 (%suggestion-worker-state-pending-request state) nil
                 (%suggestion-worker-state-result state) nil
                 (%suggestion-worker-state-status state) :stopping))
-        (when (and thread (sb-thread:thread-alive-p thread))
+        (when (and thread
+                   (sb-thread:thread-alive-p thread)
+                   (not (eq thread sb-thread:*current-thread*)))
           (sb-thread:signal-semaphore
            (%suggestion-worker-state-semaphore state))
-          (unless (eq thread sb-thread:*current-thread*)
-            (sb-thread:join-thread thread :default nil))))
+          (%join-suggestion-worker thread)))
       (setf *suggestion-worker-state* nil))
     (setf *suggestion-history-source* nil
           *suggestion-history-snapshot* nil

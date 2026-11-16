@@ -380,4 +380,13 @@ one UNREAD-CHAR of the character most recently read."))
                     :to-equal "world")))
         (expect (nshell.infrastructure.terminal:key-event-char
                  (nshell.infrastructure.terminal:read-key-event))
-                :to-equal #\n)))))
+                :to-equal #\n))))
+  (it "cursor-query-read-ahead-decodes-alt-enter"
+    (multiple-value-bind (row column input)
+        (query-scripted-cursor-position
+         3 (format nil "~C~C" #\Esc #\Return))
+      (expect row :to-be nil)
+      (expect column :to-be nil)
+      (expect (nshell.infrastructure.terminal:key-event-type
+               (next-scripted-key input))
+              :to-be :alt-enter))))

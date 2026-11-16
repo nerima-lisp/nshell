@@ -20,6 +20,7 @@
   ;; the first column.
   '((:none :none nil)
     (:enter :enter nil)
+    (:insert-newline :insert-newline nil)
     (:move-line-up :move-line-up nil)
     (:move-line-down :move-line-down nil)
     (:cycle-completion-next :cycle-completion 1)
@@ -66,6 +67,7 @@
   ;; handled outside this table by INPUT-DISPATCH-ACTION-FOR-KEY-EVENT, so
   ;; they are not bindable keys.
   '((:enter . :enter)
+    (:alt-enter . :insert-newline)
     (:tab . :cycle-completion-next)
     (:shift-tab . :cycle-completion-prev)
     (:backspace . :backspace)

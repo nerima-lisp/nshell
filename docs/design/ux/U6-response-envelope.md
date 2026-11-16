@@ -6,7 +6,7 @@
 
 常に出すキーは nshell_api・ok・status・duration_ms・stdout・stderr・effects・safety・state の 9 つ。ほかは必要なときだけ出す。JSON Schema ではトップレベルを `additionalProperties: true` にし、error.code はエラーコードの列挙型で縛る。
 
-Schema は `conformance/envelope.schema.json` に置く。下の表にない細部は Schema で決める。stdout・stderr は text と bytes が必須。error は code だけが必須。state は cwd だけが必須。warnings[] の要素は error と同じ形 (code・message・span・fixes) で、code は W_ の列挙型。forms[] の要素は text・kind・rule (P2-2 までは null)・path。effects[].size は整数か文字列 (U7 の例は "1.2 GB")。ok が true なら status は 0 で error はない。
+Schema は `conformance/envelope.schema.json` に置く。下の表にない細部は Schema で決める。stdout・stderr は text と bytes が必須。error は code だけが必須。state は cwd だけが必須。warnings[] の要素は error と同じ形 (code・message・span・fixes) で、code は W_ の列挙型。forms[] の要素は text・kind・rule (P2-2 までは null)・path。effects[].size は整数か文字列 (U7 の例は "1.2 GB")。ok が true なら status は 0 で error はない。error がないとは、キーを省くか null にすることを指す。
 
 |   |   |   |
 |---|---|---|

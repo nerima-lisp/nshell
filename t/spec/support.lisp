@@ -610,11 +610,21 @@ from the v0.7.0 JSON record."
 ;;; Row lookup and checks called by the generated tests
 
 (defvar *l7-rows*)
+(defvar *probe-changes*)
 (defvar *crash-probes*)
 
 (defun %l7-row (number)
   (or (find number *l7-rows* :key (lambda (row) (getf row :row)))
       (error "No L7.1 row ~a" number)))
+
+(defun %v08-entry (designator)
+  ;; An L7.1 row by its line number, or a *probe-changes* entry by probe id.
+  (if (integerp designator)
+      (%l7-row designator)
+      (or (find designator *probe-changes*
+                :key (lambda (entry) (getf entry :probe))
+                :test #'string=)
+          (error "No probe change ~a" designator))))
 
 (defun %v07-row-for-probe (id)
   (find-if (lambda (row)
@@ -633,13 +643,13 @@ from the v0.7.0 JSON record."
                   :v07-record t)
      run)))
 
-(defun %check-v08 (number)
-  (let* ((row (%l7-row number))
-         (case (%fixture-case (getf row :probe)))
-         (v08 (getf row :v08))
+(defun %check-v08 (designator)
+  (let* ((entry (%v08-entry designator))
+         (case (%fixture-case (getf entry :probe)))
+         (v08 (getf entry :v08))
          (expect (getf v08 :expect))
          (warning (getf v08 :warning))
-         (run (%run-probe (getf row :input) case)))
+         (run (%run-probe (getf entry :input) case)))
     (%assert-no-mismatches
      (if (eq expect :v07)
          (%mismatches (%v07-expectation case) run
@@ -651,10 +661,10 @@ from the v0.7.0 JSON record."
                       :mode (if warning :required :none)))
      run)))
 
-(defun %check-v09 (number)
-  (let* ((row (%l7-row number))
-         (v09 (or (getf row :v09) (error "L7.1 row ~a has no :v09" number)))
-         (run (%run-probe (getf v09 :input) (%fixture-case (getf row :probe)))))
+(defun %check-v09 (designator)
+  (let* ((entry (%v08-entry designator))
+         (v09 (or (getf entry :v09) (error "~a has no :v09" designator)))
+         (run (%run-probe (getf v09 :input) (%fixture-case (getf entry :probe)))))
     (%assert-no-mismatches (%mismatches (getf v09 :expect) run) run)))
 
 (defun %check-no-crash-log (id)

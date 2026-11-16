@@ -118,6 +118,19 @@ NAME.ran in the directory, so a test can tell whether it started."
                             :to-equal (list 1 column end))
                     (expect (json-at envelope "error" "fixes" 0 "input") :to-equal fix)))))))
 
+  (it "gives no span or fix for a program refused in a sourced file"
+    (with-noninteractive-test-state ()
+      (%full-screen-call-with-programs
+       '("less")
+       (lambda (directory)
+         (let ((script (format nil "~A/script.nsh" directory)))
+           (with-open-file (out script :direction :output)
+             (format out "less NOTES.txt~%"))
+           (let ((envelope (json-command (format nil "echo less; source ~A" script))))
+             (expect (json-at envelope "error" "code") :to-equal "E_INTERACTIVE_PROGRAM")
+             (expect (json-at envelope "error" "span") :to-be-null)
+             (expect (json-at envelope "error" "fixes") :to-be-null)))))))
+
   (it "suggests the noninteractive form of man and top"
     (with-noninteractive-test-state ()
       (%full-screen-call-with-programs

@@ -270,9 +270,11 @@ column, END one past its last column."
 
 (defun %input-name-span (input name-span)
   "Return the start and end in INPUT of NAME-SPAN, the TEXT-SPAN of a command
-name, or NIL when it does not lie inside INPUT."
+name, or NIL when NAME-SPAN is a position in another text: a sourced file, a
+command substitution or a function body is read from a string of its own, so
+only a span into INPUT itself, the string the batch run reads, is one."
   (when (and name-span
-             (<= (nshell.domain.parsing:text-span-end name-span) (length input)))
+             (eq (nshell.domain.parsing:text-span-text name-span) input))
     (values (nshell.domain.parsing:text-span-start name-span)
             (nshell.domain.parsing:text-span-end name-span))))
 

@@ -153,6 +153,15 @@ an orphan needs its new parent to reap it before kill 0 fails."
                              (json-at envelope "error" "span" "end"))
                        :to-equal span))))
 
+  (it "gives no span for a command not found in a sourced file"
+    (host-kit:with-temporary-directory (directory)
+      (let ((script (sb-ext:native-namestring (merge-pathnames "script.nsh" directory))))
+        (with-open-file (out script :direction :output)
+          (format out "gti status~%"))
+        (let ((envelope (json-command (format nil "echo gti; source ~A" script))))
+          (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
+          (expect (json-at envelope "error" "span") :to-be-null)))))
+
   (it "reports unreadable input as E_PARSE and a Lisp error as E_LISP_ERROR"
     (let ((envelope (json-command "(echo")))
       (expect (json-at envelope "status") :to-equal 2)

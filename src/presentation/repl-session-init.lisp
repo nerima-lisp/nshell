@@ -178,7 +178,8 @@ reading the file.")
 a new prompt is drawn, never from key handling, so navigation and Ctrl-R see
 external appends from the next prompt on."
   (when (and *history-loading-enabled-p* *history*)
-    (%merge-history-file-into *history*)))
+    (when (%merge-history-file-into *history*)
+      (%note-suggestion-history-changed))))
 
 (defun %vi-mode-flag-enabled-p (flag)
   (and flag
@@ -214,6 +215,7 @@ and assistant state from being written. When HISTORY-P is true, existing
 history remains available in private mode. In safe mode
 (NSHELL.APPLICATION:*SAFE-MODE-P*) the startup files and the AI sidecar are
 skipped, while history still follows HISTORY-P."
+  (%stop-suggestion-worker)
   (setf *boundaries* (make-real-boundary-context)
         *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
         *running* t
@@ -297,4 +299,5 @@ skipped, while history still follows HISTORY-P."
   (%apply-east-asian-ambiguous-width)
   (when history-p
     (%seed-history-from-file *history*))
-  (seed-repl-completion-knowledge-base *kb*))
+  (seed-repl-completion-knowledge-base *kb*)
+  (%refresh-suggestion-history-snapshot))

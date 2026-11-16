@@ -11,20 +11,33 @@
   (let ((*preserve-transient-panel-on-next-prompt-p* t))
     (render-prompt-cont)))
 
-(defun %read-key-event-for-current-mode (interrupt-predicate)
-  "Read keys with vi Escape handling whenever a vi editing mode is active."
+(defun %read-key-event-for-current-mode (interrupt-predicate
+                                         &optional idle-predicate)
+  "Read keys with vi Escape handling whenever a vi editing mode is active.
+IDLE-PREDICATE, when given, is polled only while no key is pending."
   (let ((vi-mode-p
           (and *vi-mode-enabled*
                *input-state*
                (member (input-state-mode *input-state*)
                        '(:insert :vi-command :vi-d :vi-c :vi-visual)
                        :test #'eq))))
-    (if vi-mode-p
-        (nshell.infrastructure.terminal:read-key-event
-         :interrupt-predicate interrupt-predicate
-         :vi-mode-p t)
-        (nshell.infrastructure.terminal:read-key-event
-         :interrupt-predicate interrupt-predicate))))
+    (cond
+      ((and vi-mode-p idle-predicate)
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate
+        :idle-predicate idle-predicate
+        :vi-mode-p t))
+      (vi-mode-p
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate
+        :vi-mode-p t))
+      (idle-predicate
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate
+        :idle-predicate idle-predicate))
+      (t
+       (nshell.infrastructure.terminal:read-key-event
+        :interrupt-predicate interrupt-predicate)))))
 
 (defun %assistant-repeat-cancel-event-p (event)
   (let ((last-cancel-at *assistant-last-cancel-at*)
@@ -123,8 +136,21 @@
                      (nshell.infrastructure.acl:consume-terminal-resize-p))
             (return-from %process-input-event
               (%render-prompt-after-terminal-resize)))
+          (when (%suggestion-acceptance-key-event-p event)
+            (%await-current-suggestion-before-acceptance))
           (multiple-value-bind (new-state output-event)
               (reduce-input-state *input-state* event)
+            ;; A pending result answers the old buffer, cursor and
+            ;; suggestion; :SUGGEST-UPDATE schedules a new request instead.
+            (when (and (not (eq output-event :suggest-update))
+                       (or output-event
+                           (not (string= (input-state-buffer *input-state*)
+                                         (input-state-buffer new-state)))
+                           (/= (input-state-cursor-pos *input-state*)
+                               (input-state-cursor-pos new-state))
+                           (not (eq (input-state-suggestion *input-state*)
+                                    (input-state-suggestion new-state)))))
+              (%invalidate-current-input-suggestion))
             (when (and (eq *assistant-command-origin* :proposal)
                        (not (string= (input-state-buffer *input-state*)
                                      (input-state-buffer new-state))))
@@ -202,7 +228,10 @@
                      (when (nshell.infrastructure.acl:consume-git-status-update-p)
                        (nshell.domain.input:make-key-event
                         :ignore nil nil (list :git-status-update t)))
-                     (%poll-assistant-model-event)))))
+                     (%poll-assistant-model-event)))
+               (and *interactive-terminal-installed-p*
+                    *suggestion-worker-state*
+                    #'%poll-suggestion-worker-event)))
             (event (unless (nshell.feature.assistant:assistant-model-event-p
                             raw-event)
                      (%map-rendered-mouse-event-to-buffer raw-event))))
@@ -230,6 +259,15 @@
              (lambda ()
                (let ((*preserve-transient-panel-on-next-prompt-p* t))
                  (render-prompt-cont))))
+            ((getf (nshell.domain.input:key-event-data event)
+                   :suggestion-worker-result)
+             (lambda ()
+               (if (%apply-suggestion-worker-result
+                    (getf (nshell.domain.input:key-event-data event)
+                          :suggestion-worker-result))
+                   (let ((*preserve-transient-panel-on-next-prompt-p* t))
+                     (render-prompt-cont))
+                   (read-key-cont))))
             (t (lambda () (read-key-cont)))))
          ((and event *rerun-confirmation-pending-p*)
           (lambda () (%process-input-event event)))
@@ -320,7 +358,9 @@ repeated crashes happens only after the cleanup has restored the terminal."
                    (unwind-protect
                         (ignore-errors (nshell.feature.assistant:assistant-model-stop))
                      (restore-interactive-terminal))
-                (%completion-help-drain-workers))
+                (unwind-protect
+                     (%stop-suggestion-worker)
+                  (%completion-help-drain-workers)))
               (format t "Goodbye!~%"))))
       (if *safe-reexec-requested-p*
           (%reexec-with-safe-mode)

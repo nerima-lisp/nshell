@@ -71,9 +71,30 @@ SBCL thread otherwise sees only global values.")
   ;; The worker outlived the deadline's terminate-thread: its output streams
   ;; may still be written and its locks still held.
   (worker-alive-p nil)
-  (worker nil)
   ;; The car lists every process group the run created (*PROCESS-GROUP-LOG*).
   (group-log (list nil)))
+
+(defun %exec-exit-function (run tag out err)
+  "Return the *EXEC-EXIT-FUNCTION* of RUN: exec ends the run, not the process.
+
+In the worker, exec ends the run with the exec'd program's status: the worker
+records it, passes on the captured output and throws to TAG, so the commands
+after exec do not run.
+
+In a pipeline stage, exec ends only that stage, with its program's status,
+and every other stage runs to its end. The pipeline then ends as without exec
+and calls this function in the thread that waited for it, with the
+pipeline's own status: the last stage's, or under pipefail the first nonzero
+one. In the worker that ends the run as above; in an enclosing stage it ends
+that stage in turn. So when several stages exec, the run's status does not
+depend on which of them ends first."
+  (lambda (status)
+    (if nshell.application::*pipeline-stage-exit-function*
+        (funcall nshell.application::*pipeline-stage-exit-function* status)
+        (progn
+          (setf (json-run-status run) status)
+          (nshell.application::flush-pending-captured-output out err)
+          (throw tag :exec)))))
 
 (defun %worker-bindings (run tag out err timeout agent-p)
   (let ((symbols (copy-list +json-conveyed-specials+))
@@ -83,22 +104,7 @@ SBCL thread otherwise sees only global values.")
              (push value values)))
       (bind '*standard-output* out)
       (bind '*error-output* err)
-      ;; exec ends the run, with the exec'd program's status, not the process.
-      ;; Pipeline stage threads get this function too; the CATCH for TAG is
-      ;; in the worker, so a stage asks the worker to unwind and ends itself.
-      (bind 'nshell.application::*exec-exit-function*
-            (lambda (status)
-              (setf (json-run-status run) status)
-              (flet ((end-run ()
-                       (nshell.application::flush-pending-captured-output out err)
-                       ;; The worker may already have left the CATCH for TAG.
-                       (ignore-errors (throw tag :exec))))
-                (if (eq sb-thread:*current-thread* (json-run-worker run))
-                    (end-run)
-                    (progn
-                      (ignore-errors
-                        (sb-thread:interrupt-thread (json-run-worker run) #'end-run))
-                      (sb-thread:abort-thread))))))
+      (bind 'nshell.application::*exec-exit-function* (%exec-exit-function run tag out err))
       ;; Every process group the run creates, so the deadline can stop a
       ;; group whose leader was already reaped.
       (bind 'nshell.infrastructure.acl:*process-group-log* (json-run-group-log run))
@@ -182,7 +188,6 @@ Return true when the worker has exited."
               (sb-thread:make-thread
                (lambda ()
                  (progv symbols values
-                   (setf (json-run-worker run) sb-thread:*current-thread*)
                    (catch tag
                      (setf (json-run-status run)
                            (nshell.presentation:run-repl-batch-observed

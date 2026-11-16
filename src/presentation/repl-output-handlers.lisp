@@ -671,30 +671,43 @@ wrapped line's other rows on screen as stale duplicates."
          (cdr approval))))
 
 (defun %assistant-proposal-level (text)
-  (multiple-value-bind (status classification)
+  "Return the safety level of TEXT and its reason; unreadable text is :BLOCK."
+  (multiple-value-bind (status classification reason)
       (%assistant-proposal-assessment text)
     (if (eq status :classified)
-        (nshell.feature.assistant:assistant-safety-result-classification
-         classification)
-        :block)))
+        (values (nshell.feature.assistant:assistant-safety-result-classification
+                 classification)
+                (nshell.feature.assistant:assistant-safety-result-reason
+                 classification))
+        (values :block reason))))
 
 (defun %assistant-enter-approval (text)
-  "Record the Enter on the AI-originated TEXT and return its approval level.
-A pending record turns into :CONFIRM before TEXT is classified, so a line the
-gate stopped (for example after alias expansion) can be approved even though
+  "Record the Enter on the AI-originated TEXT and return its approval level,
+plus the classification reason when the level is :BLOCK.
+A block line gets no record, so no number of Enters runs it. A pending
+record turns into :CONFIRM before the safe check, so a line the gate
+stopped (for example after alias expansion) can be approved even though
 TEXT itself still classifies as safe (D-P1-5 3.1)."
-  (let ((level (cond
-                 ((eq :pending (%assistant-approval-level text)) :confirm)
-                 ((eq :safe (%assistant-proposal-level text)) :safe)
-                 (t :pending))))
-    (setf *assistant-command-approval* (cons text level))
-    level))
+  (multiple-value-bind (enter-level reason) (%assistant-proposal-level text)
+    (if (eq enter-level :block)
+        (progn
+          (setf *assistant-command-approval* nil)
+          (values :block reason))
+        (let ((level (cond
+                       ((eq :pending (%assistant-approval-level text)) :confirm)
+                       ((eq :safe enter-level) :safe)
+                       (t :pending))))
+          (setf *assistant-command-approval* (cons text level))
+          level))))
 
 (defun %assistant-proposal-confirmation-required-p (text)
-  (and *input-state*
-       (input-state-proposal-origin *input-state*)
-       (not (%blank-command-text-p text))
-       (eq :pending (%assistant-enter-approval text))))
+  "Return :PENDING or :BLOCK (and a reason) when Enter must not run TEXT."
+  (when (and *input-state*
+             (input-state-proposal-origin *input-state*)
+             (not (%blank-command-text-p text)))
+    (multiple-value-bind (level reason) (%assistant-enter-approval text)
+      (when (member level '(:pending :block) :test #'eq)
+        (values level reason)))))
 
 (defun %current-execution-origin ()
   (cond
@@ -708,10 +721,12 @@ TEXT itself still classifies as safe (D-P1-5 3.1)."
                      (input-state-buffer *input-state*)))))
     (and (member level '(:safe :confirm)) level)))
 
-(defun %confirm-assistant-proposal ()
+(defun %confirm-assistant-proposal (&optional (level :pending) reason)
   (clear-rendered-transient-panel)
   (render-transient-panel
-   (list "AI proposal requires confirmation; press Enter again to execute."))
+   (list (if (eq level :block)
+             (format nil "AI proposal blocked: ~a" reason)
+             "AI proposal requires confirmation; press Enter again to execute.")))
   (lambda () (render-prompt-cont)))
 
 (defun %execute-complete-command (ast text &optional evaluator)
@@ -1210,30 +1225,32 @@ TEXT itself still classifies as safe (D-P1-5 3.1)."
                      (%evaluate-repl-reader-submission
                       expanded-text reader-context))))))))))))
   (defun %execute-command-line (text)
-    (if (%assistant-proposal-confirmation-required-p text)
-        (%confirm-assistant-proposal)
-        (call-with-crash-capture
-         (lambda ()
-           (handler-case
-               (multiple-value-prog1 (%execute-new-reader-command-line text)
-                 (setf *crash-streak* nil))
-             ;; Raw mode could not be restored: end the session rather than
-             ;; run the line editor on a cooked terminal. Not a crash.
-             (nshell.infrastructure.terminal:terminal-mode-operation-failed
-                 (condition)
-               (format *error-output* "~%nshell: ~a~%" condition)
-               (%set-command-failure-state 1)
-               (setf *running* nil)
-               +repl-exit+)))
-         (lambda (crash)
-           (if (%crash-storage-p crash)
-               (format t "~%nshell: storage exhausted~%")
-               (format t "~%nshell error: ~a~%" (%crash-message crash)))
-           (%record-crash-log crash *standard-output*)
-           (%set-command-failure-state 1)
-           (if (%note-interactive-crash crash)
-               (%end-session-after-crash)
-               (with-reset-rendered-prompt-state-and-prompt-cont))))))
+    (multiple-value-bind (stop-level reason)
+        (%assistant-proposal-confirmation-required-p text)
+      (if stop-level
+          (%confirm-assistant-proposal stop-level reason)
+          (call-with-crash-capture
+           (lambda ()
+             (handler-case
+                 (multiple-value-prog1 (%execute-new-reader-command-line text)
+                   (setf *crash-streak* nil))
+               ;; Raw mode could not be restored: end the session rather than
+               ;; run the line editor on a cooked terminal. Not a crash.
+               (nshell.infrastructure.terminal:terminal-mode-operation-failed
+                   (condition)
+                 (format *error-output* "~%nshell: ~a~%" condition)
+                 (%set-command-failure-state 1)
+                 (setf *running* nil)
+                 +repl-exit+)))
+           (lambda (crash)
+             (if (%crash-storage-p crash)
+                 (format t "~%nshell: storage exhausted~%")
+                 (format t "~%nshell error: ~a~%" (%crash-message crash)))
+             (%record-crash-log crash *standard-output*)
+             (%set-command-failure-state 1)
+             (if (%note-interactive-crash crash)
+                 (%end-session-after-crash)
+                 (with-reset-rendered-prompt-state-and-prompt-cont)))))))
 
   (defun %process-execute-output-event ()
     (clear-rendered-completions)

@@ -113,8 +113,12 @@ its own."
            ast (shell-context-alias-table context))))))
     (t ast)))
 
+(defun %assistant-gate-active-p ()
+  "True while executing a line that came from an AI proposal or agent step."
+  (member *execution-origin* '(:proposal :agent) :test #'eq))
+
 (defun %assistant-execution-gate (context ast)
-  (when (member *execution-origin* '(:proposal :agent) :test #'eq)
+  (when (%assistant-gate-active-p)
     (labels ((rank (value)
                (case (nshell.feature.assistant:assistant-safety-result-classification value)
                  (:safe 0)
@@ -147,7 +151,7 @@ its own."
                  (:safe
                   (when (and agent-p (null approval))
                     (list
-                     "nshell: AI proposal requires approval before execution~%"
+                     (format nil "nshell: AI proposal requires approval before execution~%")
                      126)))
                  (:confirm
                   (unless (eq approval :confirm)

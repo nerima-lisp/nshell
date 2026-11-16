@@ -5,7 +5,10 @@
    *function-call-depth*
    nshell.domain.expansion:*positional-args*
    nshell.infrastructure.persistence:*history-file-mutations-enabled-p*
-   nshell.infrastructure.persistence::*history-file-path-override*))
+   nshell.infrastructure.persistence::*history-file-path-override*
+   *execution-origin*
+   *execution-approval*
+   *execution-gate-parent-kind*))
 
 (define-condition byte-stream-execution-error (error)
   ((operation :initarg :operation :reader byte-stream-execution-error-operation)
@@ -220,6 +223,10 @@
         (history-file-path-override
           nshell.infrastructure.persistence::*history-file-path-override*)
         (function-call-depth *function-call-depth*)
+        ;; A stage thread runs AI-originated functions under the same gate.
+        (execution-origin *execution-origin*)
+        (execution-approval *execution-approval*)
+        (execution-gate-parent-kind *execution-gate-parent-kind*)
         (positional-args
           (copy-list nshell.domain.expansion:*positional-args*)))
     (setf (aref (%byte-stream-execution-state-threads state) index)
@@ -236,7 +243,10 @@
                    (nshell.infrastructure.persistence::*history-file-path-override*
                      history-file-path-override)
                    (*foreground-terminal-runner* nil)
-                   (*function-call-depth* function-call-depth))
+                   (*function-call-depth* function-call-depth)
+                   (*execution-origin* execution-origin)
+                   (*execution-approval* execution-approval)
+                   (*execution-gate-parent-kind* execution-gate-parent-kind))
                (unwind-protect
                     (handler-case
                         (let ((*standard-input*

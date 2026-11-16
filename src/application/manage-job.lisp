@@ -81,11 +81,14 @@
         (%set-acl-foreground-pgid nil)))))
 
 (defun %run-terminal-pipeline (context commands redirects)
-  (let ((processes (nshell.infrastructure.acl:spawn-pipeline-async
-                    commands :redirects redirects :start-p nil
-                    :stage-environments *pipeline-stage-environments*)))
+  (multiple-value-bind (processes stage-results)
+      (nshell.infrastructure.acl:spawn-pipeline-async
+       commands :redirects redirects :start-p nil
+       :stage-environments *pipeline-stage-environments*)
+    (setf stage-results (or stage-results processes))
     (unless processes
-      (return-from %run-terminal-pipeline (values nil 127 (list 127))))
+      (return-from %run-terminal-pipeline
+        (values nil 127 stage-results)))
     (let ((pgid (nshell.infrastructure.acl:process-pid (first processes)))
           (retained-p nil))
       (unwind-protect
@@ -107,17 +110,23 @@
                                         commands)
                                 " | ")
                                :pipefail-p (shell-context-pipefail-p context))))
-                     (%store-shell-process-registry-entry context id processes)
+                     (%store-shell-process-registry-entry context id stage-results)
                      (nshell.domain.job-control:suspend-job monitor id nil)
                      (setf retained-p t)
                      (values nil (+ 128 sb-unix:sigtstp)
-                             (mapcar (lambda (process)
-                                       (if (eq :stopped (nshell.infrastructure.acl:process-status process))
-                                           (+ 128 sb-unix:sigtstp)
-                                           (nshell.infrastructure.acl:process-exit-status-code process)))
-                                     processes)))
-                   (let ((statuses (mapcar #'nshell.infrastructure.acl:process-exit-status-code
-                                           processes)))
+                             (mapcar (lambda (stage)
+                                       (cond
+                                         ((integerp stage) stage)
+                                         ((eq :stopped (nshell.infrastructure.acl:process-status stage))
+                                          (+ 128 sb-unix:sigtstp))
+                                         (t (nshell.infrastructure.acl:process-exit-status-code stage))))
+                                     stage-results)))
+                   (let ((statuses
+                           (mapcar (lambda (stage)
+                                     (if (integerp stage)
+                                         stage
+                                         (nshell.infrastructure.acl:process-exit-status-code stage)))
+                                   stage-results)))
                      (values nil
                              (if (shell-context-pipefail-p context)
                                  (or (find-if-not #'zerop statuses) 0)

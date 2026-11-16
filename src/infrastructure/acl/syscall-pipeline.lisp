@@ -76,20 +76,20 @@
                 (%external-command-not-found-message cmd))
         nil)))
 
-(defun %run-synchronous-pipeline (procs pgid pipes pipefail-p skip-start-barrier-p)
+(defun %run-synchronous-pipeline (procs pgid pipes pipefail-p skip-start-barrier-p
+                                  &optional (output-process (car procs)))
   (flet ((finish-pipeline ()
            (when (and pgid (not skip-start-barrier-p))
              (process-continue-group pgid procs))
            (let ((timeout (%foreground-external-command-timeout)))
              (%wait-pipeline-with-output
-              procs
-              timeout
+              procs timeout
               (lambda ()
                 (format *error-output*
                         "nshell: pipeline timed out after ~a seconds~%"
                         timeout)
                 124)
-              pipefail-p))))
+              pipefail-p output-process))))
     (%close-pipeline-fds pipes)
     (if (and pgid (not skip-start-barrier-p))
         (%with-foreground-process-group pgid (finish-pipeline))

@@ -17,17 +17,24 @@
       (error "PATH command cache lock has not been configured")))
 
 (defun %configure-path-command-cache-locks (factory)
+  "FACTORY returns a lock function of one thunk. The cache lock is made with
+:UNINTERRUPTIBLE T: its bodies are short table updates, and the key-lock
+reference count must change together with the caller's record of it. Key
+locks guard directory reads, which termination must be able to interrupt."
   (unless (functionp factory)
     (error "PATH command cache lock factory must be a function: ~S" factory))
   (setf *path-command-cache-lock-factory* factory
-        *path-command-directory-cache-lock* (funcall factory)
+        *path-command-directory-cache-lock* (funcall factory :uninterruptible t)
         *path-command-directory-key-locks* (make-hash-table :test #'equal)
         *path-command-directory-cache* (make-hash-table :test #'equal))
   (incf *path-command-directory-cache-generation*)
   nil)
 
+(defun %call-with-path-command-lock (lock thunk)
+  (funcall lock thunk))
+
 (defmacro %with-path-command-directory-cache-lock (&body body)
-  `(cl-boundary-kit:call-with-lock
+  `(%call-with-path-command-lock
     (%require-path-command-directory-cache-lock)
     (lambda ()
       ,@body)))
@@ -36,11 +43,13 @@
   (%with-path-command-directory-cache-lock
     (let ((record (gethash key *path-command-directory-key-locks*)))
       (if record
-          (progn
-            (incf (cdr record))
-            record)
-          (setf (gethash key *path-command-directory-key-locks*)
-                (cons (%make-path-command-cache-lock) 1))))))
+          (incf (cdr record))
+          (setf record
+                (setf (gethash key *path-command-directory-key-locks*)
+                      (cons (%make-path-command-cache-lock) 1))))
+      (when *path-command-key-lock-cell*
+        (setf (car *path-command-key-lock-cell*) record))
+      record)))
 
 (defun %release-path-command-directory-key-lock (key record)
   (%with-path-command-directory-cache-lock
@@ -50,15 +59,19 @@
 
 (defmacro %with-path-command-directory-key-lock ((key) &body body)
   (let ((key-value (gensym "KEY"))
+        (cell (gensym "CELL"))
         (record (gensym "RECORD")))
-    `(let* ((,key-value ,key)
-            (,record (%path-command-directory-key-lock ,key-value)))
+    `(let ((,key-value ,key)
+           (,cell (list nil)))
        (unwind-protect
-           (cl-boundary-kit:call-with-lock
-            (car ,record)
-            (lambda ()
-              ,@body))
-         (%release-path-command-directory-key-lock ,key-value ,record)))))
+           (let ((,record (let ((*path-command-key-lock-cell* ,cell))
+                            (%path-command-directory-key-lock ,key-value))))
+             (%call-with-path-command-lock
+              (car ,record)
+              (lambda ()
+                ,@body)))
+         (when (car ,cell)
+           (%release-path-command-directory-key-lock ,key-value (car ,cell)))))))
 
 (defun %invalidate-path-command-cache ()
   "Discard all cached PATH directory entries."

@@ -1808,3 +1808,32 @@
                (%eval-form context form reader-result nil position
                            classification)))
          (values value *current-evaluation-status*))))))
+
+(defun reader-result-form-kind (context reader-result)
+  "Return how evaluate-reader-result-in-context runs READER-RESULT's form:
+:COMMAND for a command (a bare-line command or a list it runs as a command
+island), :SYNTAX for a pipeline or a sequence (language/L2 2.1 row 2), and
+:LISP for everything it evaluates as Lisp.  It tests the evaluator's own
+predicates in the evaluator's order and runs nothing."
+  (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
+    (cond
+      ((nshell.domain.parsing:command-node-p form) :command)
+      ((nshell.domain.parsing::ast-node-p form) :syntax)
+      ((%reader-pipeline-form-p form reader-result) :syntax)
+      ((and (consp form)
+            (symbolp (first form))
+            (eq :command-island
+                (%form-command-classification context form reader-result)))
+       :command)
+      (t :lisp))))
+
+(defun reader-result-command-ast (context reader-result)
+  "Return the AST the evaluator runs for READER-RESULT's command or syntax
+form, or NIL for a Lisp form.  It converts the form the way %eval-form does
+and runs nothing."
+  (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
+    (cond
+      ((nshell.domain.parsing::ast-node-p form) form)
+      ((member (reader-result-form-kind context reader-result) '(:command :syntax))
+       (%command-form->ast context form reader-result))
+      (t nil))))

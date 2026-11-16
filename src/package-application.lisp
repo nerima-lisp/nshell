@@ -11,6 +11,8 @@ running a builtin, and fg/bg/jobs/disown live here; this is the only layer
 permitted to know both the domain and infrastructure.")
   (:use #:cl)
   (:export #:assistant-command-resolver)
+  (:export #:reader-result-form-kind #:reader-result-command-ast
+           #:context-current-directory)
   (:import-from #:nshell.util #:define-value-struct #:string-prefix-p)
   (:export #:*job-monitor* #:*shell-pgid* #:*foreground-job-pgid*
             ;; Shared S-expression transition contracts; each stub signals

@@ -19,7 +19,7 @@ cons; pipeline stage threads share it, so a refusal in a stage reaches it.")
 
 (defvar *full-screen-program-guard* nil
   "NIL, or a function of an external command's name, its argument strings and
-the source span of the command in the input (NIL when it has none) that
+the TEXT-SPAN of its name as written (NIL when the parser recorded none) that
 returns true when the command is a full-screen program that must not start.
 Machine mode binds it (ux/U6); the execution gate then refuses the command
 with E_INTERACTIVE_PROGRAM.")
@@ -112,7 +112,9 @@ so it is marked quoted and never read as an assignment or a prefix of one."
       (nshell.domain.parsing:command-node-redirects node)
       (nshell.domain.parsing:command-node-force-external-p node)
       (nshell.domain.parsing:command-node-argument-forms node)
-      (nshell.domain.parsing:command-node-environment-assignments node)))
+      (nshell.domain.parsing:command-node-environment-assignments node)
+      nil
+      (nshell.domain.parsing:command-node-name-span node)))
     (t node)))
 
 (defun assistant-command-resolver (context &key stage-kinds)
@@ -211,7 +213,7 @@ or NIL. PATH and RESOLVE are as for %ASSISTANT-EXECUTION-GATE."
                                 (mapcar #'nshell.domain.parsing:arg-value
                                         (nshell.domain.parsing:command-node-args
                                          run-node))
-                                (nshell.domain.parsing:ast-node-span node)))
+                                (nshell.domain.parsing:command-node-name-span node)))
               (return
                 (%gate-refusal
                  "E_INTERACTIVE_PROGRAM"

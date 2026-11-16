@@ -77,12 +77,20 @@
   (type :unknown :type keyword :read-only t)
   (span nil :type list :read-only t))
 
+(defstruct (text-span (:constructor make-text-span (start end text)))
+  "A half-open range [START, END) of character offsets into TEXT, the very
+string a parser read: a position is only meaningful in that text."
+  (start 0 :type (integer 0) :read-only t)
+  (end 0 :type (integer 0) :read-only t)
+  (text "" :type string :read-only t))
+
 (defstruct (command-node
              (:include ast-node)
              (:constructor %make-command-node
                  (command args &optional span command-quote-style
                           command-fragments redirects force-external-p
-                          argument-forms environment-assignments alias-template)))
+                          argument-forms environment-assignments alias-template
+                          name-span)))
   (command "" :type string :read-only t)
   (command-quote-style nil :type (member nil :single :double) :read-only t)
   (args nil :type list :read-only t)
@@ -91,7 +99,10 @@
   (redirects nil :type list :read-only t)
   (force-external-p nil :type boolean :read-only t)
   (environment-assignments nil :type list :read-only t)
-  (alias-template nil :type (or null ast-node) :read-only t))
+  (alias-template nil :type (or null ast-node) :read-only t)
+  ;; Where the command name token, as written, sits in the parsed text, or
+  ;; NIL when the parser recorded none.
+  (name-span nil :type (or null text-span) :read-only t))
 
 (defun %command-node-fragment-quote-style (fragments)
   (let ((styles
@@ -113,7 +124,8 @@
 (defun make-command-node (command args &optional span command-quote-style
                                   command-fragments redirects force-external-p
                                   (argument-forms nil argument-forms-supplied-p)
-                                  environment-assignments alias-template)
+                                  environment-assignments alias-template
+                                  name-span)
   (let* ((legacy-args (%copy-command-args args))
          (argument-forms
            (%copy-command-argument-forms
@@ -148,7 +160,22 @@
                         (and force-external-p t)
                         argument-forms
                         validated-environment-assignments
-                        alias-template)))
+                        alias-template
+                        name-span)))
+
+(defun command-node-with-name-span (node name-span)
+  "Return a copy of the command NODE whose command name sits at NAME-SPAN."
+  (%make-command-node (command-node-command node)
+                      (command-node-args node)
+                      (ast-node-span node)
+                      (command-node-command-quote-style node)
+                      (command-node-command-fragments node)
+                      (command-node-redirects node)
+                      (command-node-force-external-p node)
+                      (command-node-argument-forms node)
+                      (command-node-environment-assignments node)
+                      (command-node-alias-template node)
+                      name-span))
 
 (defun %validated-source-span (span)
   (when span

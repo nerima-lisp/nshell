@@ -679,12 +679,14 @@
            (let ((command-node
                    (nshell.application:evaluated-command-stage-command-node
                     stage)))
-             (nshell.domain.parsing:make-command-node
-              (nshell.domain.parsing:command-node-command command-node)
-              (command-argv-strings
-               context
-               (nshell.application:evaluated-command-stage-arguments stage))
-              (nshell.domain.parsing:ast-node-span command-node))))
+             (nshell.domain.parsing:command-node-with-name-span
+              (nshell.domain.parsing:make-command-node
+               (nshell.domain.parsing:command-node-command command-node)
+               (command-argv-strings
+                context
+                (nshell.application:evaluated-command-stage-arguments stage))
+               (nshell.domain.parsing:ast-node-span command-node))
+              (nshell.domain.parsing:command-node-name-span command-node))))
          (terminal-redirect-kind (redirect)
            (case (nshell.domain.parsing:ast-redirect-entry-kind redirect)
              (:input-file :<)
@@ -1007,7 +1009,9 @@
       (nshell.domain.parsing:command-node-redirects command)
       (nshell.domain.parsing:command-node-force-external-p command)
       arguments
-      (nshell.domain.parsing:command-node-environment-assignments command)))))
+      (nshell.domain.parsing:command-node-environment-assignments command)
+      nil
+      (nshell.domain.parsing:command-node-name-span command)))))
 
 (defun %reader-assistant-gate (context command-nodes parent-kind dispatch-kinds)
   "Apply the AI execution gate to the expanded COMMAND-NODES, judged as if

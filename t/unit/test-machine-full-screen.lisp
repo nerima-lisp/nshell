@@ -99,6 +99,25 @@ NAME.ran in the directory, so a test can tell whether it started."
                     (expect (json-at envelope "error" "span" "end") :to-equal (+ column 4))
                     (expect (json-at envelope "error" "fixes" 0 "input") :to-equal fix)))))))
 
+  (it "replaces the command name as written, not a same-named argument"
+    (with-noninteractive-test-state ()
+      (%full-screen-call-with-programs
+       '("less")
+       (lambda (directory)
+         (declare (ignore directory))
+         (loop for (input fix column end)
+                 in '(("^less less" "cat less" 1 6)
+                      ("l\"ess\" less" "cat less" 1 7)
+                      ("(^less \"less\")" "(cat \"less\")" 2 7))
+               do (let ((envelope (json-command input)))
+                    (expect (json-at envelope "error" "code")
+                            :to-equal "E_INTERACTIVE_PROGRAM")
+                    (expect (list (json-at envelope "error" "span" "line")
+                                  (json-at envelope "error" "span" "column")
+                                  (json-at envelope "error" "span" "end"))
+                            :to-equal (list 1 column end))
+                    (expect (json-at envelope "error" "fixes" 0 "input") :to-equal fix)))))))
+
   (it "suggests the noninteractive form of man and top"
     (with-noninteractive-test-state ()
       (%full-screen-call-with-programs

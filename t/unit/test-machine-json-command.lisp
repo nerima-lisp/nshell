@@ -144,7 +144,8 @@ an orphan needs its new parent to reap it before kill 0 fails."
 
   (it "points the span of E_COMMAND_NOT_FOUND at the command, not an earlier word"
     (loop for (input span) in (list '("echo gti; gti status" (1 11 14))
-                                    (list (format nil "echo gti~%X=gti gti status") '(2 7 10)))
+                                    (list (format nil "echo gti~%X=gti gti status") '(2 7 10))
+                                    '("g\"ti\" gti status" (1 1 6)))
           do (let ((envelope (json-command input)))
                (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
                (expect (list (json-at envelope "error" "span" "line")

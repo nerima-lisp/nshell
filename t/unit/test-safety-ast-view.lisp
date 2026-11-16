@@ -820,4 +820,25 @@ the gate, and the executor see them."
               (with-repl-test-state
                 (let ((nshell.presentation::*environment* environment))
                   (expect (list source (nshell.presentation::%assistant-proposal-level source))
-                          :to-equal (list source expected)))))))))))
+                          :to-equal (list source expected))))))))))
+
+  (it "classifies brace query targets without enumerating expansions"
+    (let ((calls 0))
+      (with-temporary-function
+          ('nshell.domain.expansion:expand-braces
+           (lambda (&rest arguments)
+             (declare (ignore arguments))
+             (incf calls)
+             (error "classification must not enumerate brace expansions")))
+        (with-temporary-function
+            ('nshell.domain.expansion::%brace-range-expansion
+             (lambda (&rest arguments)
+               (declare (ignore arguments))
+               (incf calls)
+               (error "classification must not enumerate brace ranges")))
+          (%closed-world-expect-levels
+           '(("command -v {1..100000000}" :confirm)
+             ("command -v {a}" :safe)
+             ("command -v {foo,ls}" :confirm)
+             ("command -v \\{a,b}" :safe)))))
+      (expect calls :to-equal 0))))

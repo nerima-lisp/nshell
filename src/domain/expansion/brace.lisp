@@ -21,9 +21,8 @@
     (push (subseq string start) parts)
     (nreverse parts)))
 
-(defun %brace-range-expansion (content)
-  "Return the list of expansions for a numeric (1..5) or single-character (a..e)
-range CONTENT, or NIL when CONTENT is not a valid range."
+(defun %brace-range-bounds (content)
+  "Return endpoints and :INTEGER or :CHARACTER for a supported brace range."
   (let ((dots (search ".." content)))
     (when dots
       (let ((lo (subseq content 0 dots))
@@ -31,17 +30,23 @@ range CONTENT, or NIL when CONTENT is not a valid range."
         (cond
           ((and (plusp (length lo)) (every #'digit-char-p lo)
                 (plusp (length hi)) (every #'digit-char-p hi))
-           (let ((a (parse-integer lo)) (b (parse-integer hi)))
-             (if (<= a b)
-                 (loop for n from a to b collect (princ-to-string n))
-                 (loop for n from a downto b collect (princ-to-string n)))))
+           (values (parse-integer lo) (parse-integer hi) :integer))
           ((and (= 1 (length lo)) (alpha-char-p (char lo 0))
                 (= 1 (length hi)) (alpha-char-p (char hi 0)))
-           (let ((a (char-code (char lo 0))) (b (char-code (char hi 0))))
-             (if (<= a b)
-                 (loop for c from a to b collect (string (code-char c)))
-                 (loop for c from a downto b collect (string (code-char c))))))
-          (t nil))))))
+           (values (char-code (char lo 0)) (char-code (char hi 0)) :character)))))))
+
+(defun %brace-range-expansion (content)
+  "Return expansions for a supported numeric or character range, or NIL."
+  (multiple-value-bind (lo hi kind) (%brace-range-bounds content)
+    (case kind
+      (:integer
+       (if (<= lo hi)
+           (loop for n from lo to hi collect (princ-to-string n))
+           (loop for n from lo downto hi collect (princ-to-string n))))
+      (:character
+       (if (<= lo hi)
+           (loop for c from lo to hi collect (string (code-char c)))
+           (loop for c from lo downto hi collect (string (code-char c))))))))
 
 (defun %brace-expansion-options (content)
   "Return expansion options for one brace group CONTENT, or NIL when literal."
@@ -111,3 +116,18 @@ no valid range is left literal, matching shell behavior."
                (if (null (brace-expansion-frame-options frame))
                    (%brace-expansion-literal-results frame suffix-expansions)
                    (%brace-expansion-cartesian-product frame suffix-expansions)))))))))
+
+(defun brace-expansion-p (input)
+  "Return whether EXPAND-BRACES changes INPUT without enumerating its results.
+INPUT carries the same quote and escape protection as for EXPAND-BRACES."
+  (loop with start = 0
+        for open = (position #\{ input :start start)
+        while open
+        for close = (%find-matching-brace input open)
+        while close
+        for content = (subseq input (1+ open) close)
+        when (or (nth-value 2 (%brace-range-bounds content))
+                 (rest (%split-top-level-commas content)))
+          return t
+        do (setf start (1+ close))
+        finally (return nil)))

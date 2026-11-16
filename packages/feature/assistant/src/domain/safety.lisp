@@ -198,8 +198,9 @@ so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
                   :resolution (%assistant-name-resolution tail resolve))))
 
 (defun %assistant-query-argument-expands-p (argument source-arguments-p resolve)
-  "Reuse runtime predicates on source query values.  Outside single quotes,
-any unescaped $ or backtick conservatively requires confirmation."
+  "Detect source query expansions without enumerating brace results.
+Unquoted ( uses the shared substitution scanner as a deliberately broad check.
+Outside single quotes, an unescaped $ or backtick conservatively requires confirmation."
   (when (and argument
              (or source-arguments-p
                  (nshell.domain.parsing:command-arg-expand-p argument)))
@@ -216,13 +217,12 @@ any unescaped $ or backtick conservatively requires confirmation."
                   (position #\$ value)
                   (position #\` value)
                   (and (or (null style) (not source-arguments-p))
-                       (or (not (equal (list value)
-                                       (nshell.domain.expansion:expand-braces value)))
+                       (or (nshell.domain.expansion:brace-expansion-p value)
                            (funcall resolve
                                     (nshell.domain.parsing:make-command-node value nil)
                                     :query-tilde)
                            (and (nshell.domain.parsing:command-arg-glob-p argument)
-                                (nshell.domain.expansion::glob-pattern-p value))))))))
+                                (nshell.domain.expansion:glob-pattern-p value))))))))
      (nshell.domain.parsing:command-arg-fragments argument))))
 
 (defun %assistant-classify-argv (words &key resolution resolve assignments nested
@@ -598,8 +598,10 @@ and :NETWORK.  Writes come from the redirects in the AST (D-P1-5 2.5)."
 
 (defun classify-ast (node &key (path :bare-line) resolve)
   "Classify shell AST and S-expression input using metadata and argument values.
-Query expansion checks reuse runtime predicates on source argument values.
-Outside single quotes, an unescaped $ or backtick conservatively requires confirmation.
+Query expansion detection uses runtime predicates on source argument values.
+Brace detection does not enumerate results.  Unquoted ( uses the shared
+substitution scanner as a deliberately broad check.  Outside single quotes,
+an unescaped $ or backtick conservatively requires confirmation.
 PATH names the executor that runs a command, pipeline, or sequence node
 (:BARE-LINE, :STAGE, or :READER, described above); reader results always
 run as reader stages.  RESOLVE gives the executor's resolution of a

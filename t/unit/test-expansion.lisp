@@ -435,6 +435,35 @@ Each case is (EXPECTED INPUT &rest ARGS)."
       (expect '("a{b,c}" "d") :to-equal (options "a{b,c},d"))
       (expect (options "literal") :to-be-null)))
 
+  (it "detects brace changes without changing expansion results"
+    (dolist (name '("BRACE-EXPANSION-P" "GLOB-PATTERN-P"))
+      (multiple-value-bind (symbol status)
+          (find-symbol name :nshell.domain.expansion)
+        (expect status :to-be :external)
+        (expect (and symbol (fboundp symbol)) :to-be-truthy)))
+    (dolist (case '(("plain" ("plain")) ("{a}" ("{a}"))
+                    ("{a,b}" ("a" "b")) ("{1..3}" ("1" "2" "3"))
+                    ("{3..1}" ("3" "2" "1")) ("{0..0}" ("0"))
+                    ("{01..03}" ("1" "2" "3")) ("{a..c}" ("a" "b" "c"))
+                    ("{c..a}" ("c" "b" "a")) ("{a..a}" ("a"))
+                    ("{a..}" ("{a..}")) ("a{b" ("a{b"))
+                    ("{1..3..0}" ("{1..3..0}")) ("{1..3..2}" ("{1..3..2}"))
+                    ("{3..1..-1}" ("{3..1..-1}"))
+                    ("{-1..2}" ("{-1..2}")) ("{+1..3}" ("{+1..3}"))
+                    ("{a,{b,c}}" ("a" "b" "c"))
+                    ("{{a,b}}" ("{{a,b}}")) ("{{a,b}" ("{{a,b}"))
+                    ("{literal}{a,b}" ("{literal}a" "{literal}b"))
+                    ("{a,b}{c,d}" ("ac" "ad" "bc" "bd"))
+                    ("{}" ("{}")) ("{,}" ("" ""))
+                    ("{a,,b}" ("a" "" "b"))
+                    ("\\{a,b}" ("\\a" "\\b"))))
+      (destructuring-bind (input expected) case
+        (let ((expanded (nshell.domain.expansion:expand-braces input)))
+          (expect (list input expanded) :to-equal (list input expected))
+          (expect (list input (uiop:symbol-call :nshell.domain.expansion
+                                               '#:brace-expansion-p input))
+                  :to-equal (list input (not (equal expanded (list input)))))))))
+
   (it "glob-pattern-p-detects-wildcard-characters"
     "glob-pattern-p returns true for patterns containing * ? or [."
     (flet ((pat (s) (nshell.domain.expansion::glob-pattern-p s)))

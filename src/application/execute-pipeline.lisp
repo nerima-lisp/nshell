@@ -320,6 +320,7 @@ COMMAND-NODE as (NAME . EXPANDED-VALUE) pairs, and the node that remains, or
 NIL when the line was assignments only."
   (let ((command (nshell.domain.parsing:command-node-command command-node)))
     (if (or (nshell.domain.parsing:command-node-command-quote-style command-node)
+            (nshell.domain.parsing:command-node-force-external-p command-node)
             (not (nshell.domain.parsing:shell-assignment-word-p command)))
         (values nil command-node)
         (let ((assignments (list (%assignment-word-binding context command)))
@@ -360,7 +361,8 @@ NIL when the line was assignments only."
                (%execute-plain-command-node-in-context context node))))
       (cond
         ((null assignments) (run))
-        ((null node) (%assign-shell-variables context assignments))
+        ((nshell.domain.parsing:command-node-assignment-words command-node)
+         (%assign-shell-variables context assignments))
         (t (%call-with-prefix-assignments context assignments #'run))))))
 
 (defun %environment-with-assignments (environment assignments)

@@ -997,16 +997,17 @@
                    (command-argv-strings
                     context
                     (evaluated-command-stage-arguments evaluated-stage)))))
-    (nshell.domain.parsing:make-command-node
-     (nshell.domain.parsing:command-node-command command)
-     arguments
-     (nshell.domain.parsing:ast-node-span command)
-     nil
-     nil
-     (nshell.domain.parsing:command-node-redirects command)
-     (nshell.domain.parsing:command-node-force-external-p command)
-     arguments
-     (nshell.domain.parsing:command-node-environment-assignments command))))
+    (%assistant-command-stage-node
+     (nshell.domain.parsing:make-command-node
+      (nshell.domain.parsing:command-node-command command)
+      arguments
+      (nshell.domain.parsing:ast-node-span command)
+      nil
+      nil
+      (nshell.domain.parsing:command-node-redirects command)
+      (nshell.domain.parsing:command-node-force-external-p command)
+      arguments
+      (nshell.domain.parsing:command-node-environment-assignments command)))))
 
 (defun %reader-assistant-gate (context command-nodes parent-kind)
   "Apply the AI execution gate to the expanded COMMAND-NODES, judged as if
@@ -1038,27 +1039,23 @@ running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
 
 (defun %reader-execute-foreground-in-context
     (context ast stage-evaluator)
-  (when (and (nshell.domain.parsing:command-node-p ast)
-             (string= "" (nshell.domain.parsing:command-node-command ast))
-             (nshell.domain.parsing:command-node-environment-assignments ast))
-    (let ((refusal (and (%assistant-gate-active-p)
-                        (%assistant-execution-gate context ast))))
-      (when refusal
+  (let ((assignment-words
+          (nshell.domain.parsing:command-node-assignment-words ast)))
+    (when assignment-words
+      (let ((refusal (and (%assistant-gate-active-p)
+                          (%assistant-execution-gate context ast))))
+        (when refusal
+          (return-from %reader-execute-foreground-in-context
+            (%reader-gate-refusal context refusal 1))))
+      (let* ((*execution-gate-parent-kind* :command)
+             (assignments
+               (mapcar (lambda (word) (%assignment-word-binding context word))
+                       assignment-words)))
+        (%assign-shell-variables context assignments)
+        (%record-pipeline-statuses context '(0))
+        (%record-last-exit-code context 0)
         (return-from %reader-execute-foreground-in-context
-          (%reader-gate-refusal context refusal 1))))
-    (let* ((*execution-gate-parent-kind* :command)
-           (assignments
-            (mapcar (lambda (assignment)
-                      (%assignment-word-binding
-                       context
-                       (nshell.domain.parsing:command-arg-value assignment)))
-                    (nshell.domain.parsing:command-node-environment-assignments
-                     ast))))
-      (%assign-shell-variables context assignments)
-      (%record-pipeline-statuses context '(0))
-      (%record-last-exit-code context 0)
-      (return-from %reader-execute-foreground-in-context
-        (values nil 0 (make-pipeline-execution-result 0 '(0) '(nil))))))
+          (values nil 0 (make-pipeline-execution-result 0 '(0) '(nil)))))))
   ;; Everything this line runs while its stages are evaluated or dispatched
   ;; (substitutions, function bodies) is nested: the line's own approval does
   ;; not cover it (D-P1-5 3.1, item 5).

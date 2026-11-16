@@ -286,15 +286,6 @@ substitution redirects."
                       problems)
                   results))))))
 
-(defun %assistant-assignment-only-names (argv assignments)
-  "Return the assigned names when ARGV runs no command, else NIL.  A reader
-node keeps its assignments apart and has the empty command word; a parsed
-line has them as NAME=value words."
-  (let ((words (remove "" argv :test #'string=)))
-    (when (every (lambda (word) (find #\= word)) words)
-      (append assignments
-              (mapcar #'nshell.feature.kb:assignment-name words)))))
-
 (defun classify-command (node)
   "Classify a command-node using its effective command and arguments."
   (if (nshell.domain.parsing:command-node-p node)
@@ -302,7 +293,11 @@ line has them as NAME=value words."
           (%assistant-command-parts node)
         (let ((nested (mapcan #'%assistant-result-reasons
                               (append results (%assistant-substitution-results words))))
-              (assigned-only (%assistant-assignment-only-names argv assignments)))
+              ;; The parser decides what is an assignment-only line, the same
+              ;; way the executors do; quoted and forced words are commands.
+              (assigned-only
+                (mapcar #'nshell.feature.kb:assignment-name
+                        (nshell.domain.parsing:command-node-assignment-words node))))
           (if assigned-only
               (%assistant-subject-result
                nil

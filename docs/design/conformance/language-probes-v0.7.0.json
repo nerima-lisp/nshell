@@ -380,8 +380,8 @@
    "src": "echo hi | (tr a-z A-Z)\n",
    "files": {},
    "observed_v0_7_0": {
-    "exit": 1,
-    "stdout": "source: $WORK/case.nsh: Command execution plan failed during :WAIT: Condition NSHELL.APPLICATION:BYTE-STREAM-EXECUTION-ERROR was signalled.\nsource: $WORK/case.nsh: Command execution plan failed during :WAIT: Condition NSHELL.APPLICATION:BYTE-STREAM-EXECUTION-ERROR was signalled.\n",
+    "exit": 127,
+    "stdout": "",
     "stderr": "nshell: (tr a-z A-Z): command not found\n"
    }
   },

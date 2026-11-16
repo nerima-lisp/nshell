@@ -146,7 +146,10 @@
                                (shell-function-scope-table ,scope)) ,binding))
        (let ((*active-shell-function-scope* ,scope))
          ,@body))))
-(defun %autoload-shell-function-from-directory (context canonical-key)
+(defun %autoload-function-file (context canonical-key)
+  "Return the function file the autoloader loads for CANONICAL-KEY in
+CONTEXT, with the function name and whether it is escaped, or NIL when there
+is none.  It only looks for the file; it reads nothing."
   (labels ((absolute-directory-p (value)
                                  (and (stringp value)
                                       (plusp (length value))
@@ -193,8 +196,21 @@
                                   (t
                                    (merge-pathnames
                                     #P".config/nshell/functions/"
-                                    (user-homedir-pathname))))))
-           (requested-defun-form (reader-results name escaped-p)
+                                    (user-homedir-pathname)))))))
+    (multiple-value-bind (name escaped-p)
+        (autoload-name canonical-key)
+      ;; Safe mode never reads the functions directory, including from the
+      ;; derived contexts that install this hook on their own registries.
+      (when (and (not *safe-mode-p*) (simple-function-name-p name))
+        (let ((path (merge-pathnames
+                     (make-pathname :name (if escaped-p name (string-downcase name))
+                                    :type "nsh")
+                     (function-directory))))
+          (when (probe-file path)
+            (values path name escaped-p)))))))
+
+(defun %autoload-shell-function-from-directory (context canonical-key)
+  (labels ((requested-defun-form (reader-results name escaped-p)
                                  (some
                                   (lambda (reader-result)
                                     (let ((form
@@ -209,56 +225,48 @@
                                                       (string-upcase (symbol-name (second form)))))
                                            form)))
                                   reader-results)))
-    (multiple-value-bind (name escaped-p)
-        (autoload-name canonical-key)
-      ;; Safe mode never reads the functions directory, including from the
-      ;; derived contexts that install this hook on their own registries.
-      (when (and (not *safe-mode-p*) (simple-function-name-p name))
-        (let* ((file-name (if escaped-p name (string-downcase name)))
-               (path
-                (merge-pathnames
-                 (make-pathname :name file-name :type "nsh")
-                 (function-directory)))
-               (registry (context-shell-function-registry context)))
-          (when (probe-file path)
-            (let* ((source (uiop:read-file-string path))
-                   (scan-result
-                    (funcall
-                     (symbol-function '%source-reader-scan-result)
-                     context source)))
-              (unless (eq (nshell.domain.parsing:scan-result-status
-                           scan-result)
-                          :complete)
-                (error "Function file ~a is incomplete." path))
-              (let* ((reader-results
-                      (nshell.domain.parsing:read-submission
-                       source :reader-context :auto :source-path path))
-                     (requested-defun
-                      (requested-defun-form reader-results name escaped-p)))
-                (dolist (reader-result reader-results)
-                  (evaluate-reader-result-in-context context reader-result))
-                (unless (nth-value 1
-                                   (%find-shell-function registry canonical-key nil))
-                  (when requested-defun
-                    (multiple-value-bind (symbol status)
-                        (find-symbol (symbol-name (second requested-defun)) "NSHELL.USER")
-                      (when (and symbol
-                                 (or (eq status :internal)
-                                     (eq status :external))
-                                 (fboundp symbol))
-                        (let ((function (symbol-function symbol)))
-                          (register-shell-function
-                           registry name
-                           (make-shell-function-binding
-                            (lambda (call-context evaluated-command-args call-position)
-                              (let ((*current-user-evaluator-context* call-context)
-                                    (*current-user-evaluator-position* call-position))
-                                (apply
-                                 function
-                                 (mapcar
-                                  (function
-                                   nshell.domain.parsing:evaluated-command-arg-value)
-                                  evaluated-command-args))))
-                            (third requested-defun) name path nil)
-                           :escaped-p escaped-p))))))))))))))
+    (multiple-value-bind (path name escaped-p)
+        (%autoload-function-file context canonical-key)
+      (when path
+        (let ((registry (context-shell-function-registry context)))
+          (let* ((source (uiop:read-file-string path))
+                 (scan-result
+                  (funcall
+                   (symbol-function '%source-reader-scan-result)
+                   context source)))
+            (unless (eq (nshell.domain.parsing:scan-result-status
+                         scan-result)
+                        :complete)
+              (error "Function file ~a is incomplete." path))
+            (let* ((reader-results
+                    (nshell.domain.parsing:read-submission
+                     source :reader-context :auto :source-path path))
+                   (requested-defun
+                    (requested-defun-form reader-results name escaped-p)))
+              (dolist (reader-result reader-results)
+                (evaluate-reader-result-in-context context reader-result))
+              (unless (nth-value 1
+                                 (%find-shell-function registry canonical-key nil))
+                (when requested-defun
+                  (multiple-value-bind (symbol status)
+                      (find-symbol (symbol-name (second requested-defun)) "NSHELL.USER")
+                    (when (and symbol
+                               (or (eq status :internal)
+                                   (eq status :external))
+                               (fboundp symbol))
+                      (let ((function (symbol-function symbol)))
+                        (register-shell-function
+                         registry name
+                         (make-shell-function-binding
+                          (lambda (call-context evaluated-command-args call-position)
+                            (let ((*current-user-evaluator-context* call-context)
+                                  (*current-user-evaluator-position* call-position))
+                              (apply
+                               function
+                               (mapcar
+                                (function
+                                 nshell.domain.parsing:evaluated-command-arg-value)
+                                evaluated-command-args))))
+                          (third requested-defun) name path nil)
+                         :escaped-p escaped-p)))))))))))))
 

@@ -775,7 +775,10 @@
            (values output status)))
        (builtin-binding-argument-mode builtin-binding))))
 
-  (defun %resolve-command-stage-binding (context command-node)
+  (defun %resolve-command-stage-binding (context command-node &key (autoload t))
+    ;; AUTOLOAD NIL (the AI safety classifier and gate) loads no function
+    ;; file: a file the registry would load resolves to :SHELL-FUNCTION
+    ;; without a binding.
     (let* ((command-node
              (%reader-alias-expanded-command-node context command-node))
            (head-info
@@ -817,10 +820,20 @@
                      sexp-alias-found-p)
                 (values :alias sexp-alias command-node)
                 (multiple-value-bind (shell-binding shell-found-p)
-                    (lookup-shell-function
-                     (context-shell-function-registry context)
-                     name :scope (active-shell-function-scope)
-                     :escaped-p escaped-p)
+                    (multiple-value-bind (binding found-p)
+                        ;; peek-shell-function searches the same registry
+                        ;; without the lookup-miss hook that loads a file.
+                        (funcall (if autoload #'lookup-shell-function #'peek-shell-function)
+                                 (context-shell-function-registry context)
+                                 name :scope (active-shell-function-scope)
+                                 :escaped-p escaped-p)
+                      (if (or found-p autoload)
+                          (values binding found-p)
+                          (values nil
+                                  (and (%autoload-function-file
+                                        context
+                                        (%shell-function-canonical-key name escaped-p))
+                                       t))))
                   (if shell-found-p
                       (values :shell-function shell-binding command-node)
                       (multiple-value-bind (function-body function-found-p)

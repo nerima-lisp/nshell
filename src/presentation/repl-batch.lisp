@@ -1,6 +1,18 @@
 ;;; Batch REPL execution
 (in-package #:nshell.presentation)
 
+(defvar *noninteractive-batch-p* nil
+  "True when a batch run follows ux/U6 for machine callers: --json binds it,
+and so does NSHELL_AGENT=1 for every batch entry point. Its children start
+from +NONINTERACTIVE-CHILD-ENVIRONMENT+ with /dev/null as standard input, and
+nshell's own output has no color. The interactive shell never reads it.")
+
+(defun %noninteractive-child-environment (environment)
+  (reduce (lambda (environment entry)
+            (nshell.domain.environment:env-set environment (car entry) (cdr entry) t))
+          nshell.feature.machine:+noninteractive-child-environment+
+          :initial-value environment))
+
 (defun %initialize-batch-state ()
   "Reset the global shell state for a non-interactive (batch or script) run."
   (setf *repl-filesystem* (nshell.infrastructure.acl:make-host-filesystem)
@@ -45,6 +57,10 @@
                         (function nshell.infrastructure.acl:current-working-directory))))
   ;; Batch and -c never issue terminal probes, but explicit configuration and
   ;; the locale fallback still apply.
+  (when *noninteractive-batch-p*
+    (setf *environment* (%noninteractive-child-environment *environment*)
+          nshell.infrastructure.acl:*detach-child-standard-input* t
+          nshell.infrastructure.terminal:*terminal-color-depth* :none))
   (%apply-east-asian-ambiguous-width :interactive-p nil)
   (nshell.feature.assistant:reset-assistant-usage)
   (nshell.feature.assistant:reset-assistant-settings)

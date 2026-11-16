@@ -12,6 +12,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
   (:use #:cl)
   (:import-from #:nshell.util #:define-value-struct)
   (:export #:*exported-environment*
+           #:*detach-child-standard-input*
            #:+default-external-command-timeout+
            #:+default-command-substitution-timeout+
            #:timeout-seconds-p

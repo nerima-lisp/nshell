@@ -731,6 +731,20 @@ record.")
       (t
        (values nil nil owned-fds)))))
 
+(defvar *detach-child-standard-input* nil
+  "True when a child that would inherit this process's standard input gets
+/dev/null instead (ux/U6). Input a redirection or a pipe gives still reaches
+the child.")
+
+(defun %spawn-child-input (input)
+  "Return INPUT, or NIL (/dev/null) in place of this process's standard input
+while *DETACH-CHILD-STANDARD-INPUT* is true."
+  (if (and *detach-child-standard-input*
+           (or (eq input t)
+               (and (streamp input) (eql 0 (%spawn-stream-fd input :input)))))
+      nil
+      input))
+
 (defun %spawn-posix-process
     (program args environment &key input output (error nil error-supplied-p)
                                process-group preserve-fds input-source-owned-p)
@@ -757,7 +771,7 @@ record.")
            (unwind-protect
                 (progn
                   (multiple-value-bind (channel channel-fds)
-                      (%spawn-make-channel input :input 0)
+                      (%spawn-make-channel (%spawn-child-input input) :input 0)
                     (setf input-channel channel
                           owned-fds (nconc owned-fds channel-fds)))
                   (multiple-value-bind (channel channel-fds)

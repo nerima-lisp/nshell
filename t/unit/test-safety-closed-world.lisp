@@ -141,7 +141,47 @@
         (expect (%closed-world-level "frobnicate x") :to-be :confirm)
         (expect (list (%closed-world-level "ls -la") (%closed-world-level "git status"))
                 :to-equal (list (first before) (third before))))
-      (expect (second before) :to-be :confirm))))
+      (expect (second before) :to-be :confirm)))
+  (it "matches head against its spec row"
+    (%closed-world-expect-levels
+     '(("head README.md" :safe) ("head -n 2 a b" :safe)
+       ("head -n2 a" :safe) ("head -c 2 a" :safe) ("head -c2 a" :safe)
+       ("head -n -2 a" :confirm) ("head -c 1K a" :confirm)
+       ("head -n a" :confirm) ("head -n" :confirm)
+       ("head --lines=2 a" :confirm))))
+
+  (it "matches tail against its spec row"
+    (%closed-world-expect-levels
+     '(("tail README.md" :safe) ("tail -n 2 a b" :safe)
+       ("tail -n2 a" :safe) ("tail -c 2 a" :safe) ("tail -c2 a" :safe)
+       ("tail -n +2 a" :confirm) ("tail -c 1K a" :confirm)
+       ("tail -n" :confirm) ("tail -f a" :confirm) ("tail -F a" :confirm))))
+
+  (it "matches wc against its spec row"
+    (%closed-world-expect-levels
+     '(("wc a b" :safe) ("wc -l a" :safe) ("wc -w a" :safe)
+       ("wc -c a" :safe) ("wc -m a" :safe) ("wc -lwcm a" :safe)
+       ("wc -L a" :confirm) ("wc --files0-from=x" :confirm))))
+
+  (it "matches stat against its spec row"
+    (%closed-world-expect-levels
+     '(("stat a b" :safe) ("stat -L a" :safe)
+       ("stat -f a" :confirm) ("stat --format=x a" :confirm))))
+
+  (it "matches du against its spec row"
+    (%closed-world-expect-levels
+     '(("du a b" :safe) ("du -s a" :safe) ("du -h a" :safe)
+       ("du -k a" :safe) ("du -a a" :safe) ("du -c a" :safe)
+       ("du -d 2 a" :safe) ("du -d2 a" :safe) ("du -x a" :safe)
+       ("du -d -1 a" :confirm) ("du -d" :confirm)
+       ("du --files0-from=x" :confirm))))
+
+  (it "matches df against its spec row"
+    (%closed-world-expect-levels
+     '(("df a b" :safe) ("df -h a" :safe) ("df -k a" :safe)
+       ("df -l a" :safe) ("df -i a" :safe)
+       ("df -P a" :safe) ("df -T a" :confirm))))
+)
 
 (describe "closed-world safety: redirects from the AST"
   (it "allows only /dev/null and the stdout/stderr duplications"

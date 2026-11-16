@@ -1,0 +1,59 @@
+## nshell bug report
+
+<!-- nshell bug-report printed this draft and sent nothing.
+     Fill in the sections below, check the rest, and paste it
+     into a new issue. -->
+
+### What happened
+
+<!-- What you did, what you expected, and what happened instead. -->
+
+### Steps to reproduce
+
+1.
+
+### Environment
+
+- nshell: <normalized>
+- Lisp: <normalized>
+- OS: <normalized>
+- Architecture: <normalized>
+- Terminal width: <normalized>
+- TERM: xterm-256color
+- COLORTERM: (unset)
+- LANG: ja_JP.UTF-8
+- LC_ALL: ~/locale
+- LC_CTYPE: UTF-8
+- NSHELL_* variables set (names only): NSHELL_API_TOKEN, NSHELL_SAFE
+
+### Configuration
+
+Directory: $XDG_CONFIG_HOME/nshell/ (presence, size, and sha256 only)
+
+- init.lisp: 67 bytes, sha256 0b60295d63f43c64327174198d532860a171e89c07149059d8617d9632271aff
+- conf.d: 1 file
+  - conf.d #1: 27 bytes, sha256 5b445c1481ca20bb12698653719885189b5c1521747bca1b8e0720a1030ebf9e
+- functions: 1 file
+  - functions #1: 48 bytes, sha256 5bc323545a5e52c45f85da3024cb5dc0c24ae3215f97fa1f70e04bdeaf300c79
+
+### Crash logs
+
+Directory: $XDG_STATE_HOME/nshell/crash/
+
+- Logs: 3
+- Most recent: 20261116T010203.000004Z-1.log
+
+### Dependencies
+
+- cl-prolog-kit: <normalized>
+- cl-parser-kit: <normalized>
+- cl-dataflow-kit: <normalized>
+- cl-host-kit: <normalized>
+- cl-boundary-kit: <normalized>
+- cl-cli: <normalized>
+- cl-tty-kit: <normalized>
+- cl-history-kit: <normalized>
+- cl-concurrent-kit: <normalized>
+- cl-json-kit: <normalized>
+- cl-regex-kit: <normalized>
+- cl-ollama-kit: <normalized>

@@ -54,14 +54,15 @@ A nonzero ATTEMPT adds a -ATTEMPT suffix, for when the plain name is taken."
       (find character "-_./")))
 
 (defun replace-home-directory (text home)
-  "Replace HOME with ~ in TEXT where it stands as a whole path prefix: not
-preceded by a path character and followed by /, the end of TEXT, or a character
-that cannot continue a file name. HOME of / or a relative HOME changes nothing,
-since replacing it would rewrite unrelated paths."
+  "Replace each occurrence of HOME in TEXT with ~ when the next character is
+/, the end of TEXT, or a character that cannot continue a file name. What
+comes before HOME does not matter, so HOME inside a longer value such as
+prefix/home/u/locale is still replaced; /home/user2 is not replaced for HOME
+/home/user. HOME loses its trailing slashes first, and a HOME shorter than two
+characters (empty or /) changes nothing, since it would rewrite every path."
   (let ((home (and (stringp home) (string-right-trim "/" home))))
     (if (or (not (stringp text))
-            (not (%nonempty-string-p home))
-            (char/= (char home 0) #\/))
+            (< (length home) 2))
         text
         (with-output-to-string (output)
           (loop with length = (length home)
@@ -72,13 +73,9 @@ since replacing it would rewrite unrelated paths."
                          (write-string text output :start start)
                          (return))
                        (let ((end (+ position length)))
-                         (if (and (or (zerop position)
-                                      (not (%path-component-char-p
-                                            (char text (1- position)))))
-                                  (or (= end (length text))
-                                      (char= (char text end) #\/)
-                                      (not (%path-component-char-p
-                                            (char text end)))))
+                         (if (or (= end (length text))
+                                 (char= (char text end) #\/)
+                                 (not (%path-component-char-p (char text end))))
                              (progn
                                (write-string text output :start start :end position)
                                (write-char #\~ output)

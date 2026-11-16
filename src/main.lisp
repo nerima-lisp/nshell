@@ -241,6 +241,20 @@ read the same value as the thread that started them."
              :private-p private-p
              :errexit-p errexit-p))))))))
 
+(defun %run-bug-report (arguments)
+  "Run `nshell bug-report`: print the issue draft to stdout and send nothing."
+  (if arguments
+      (%print-startup-option-error "bug-report takes no arguments")
+      (progn
+        (write-string (nshell.infrastructure.persistence:bug-report-text))
+        (finish-output)
+        0)))
+
+(nshell.feature.command-line:register-subcommand
+ "bug-report"
+ "Print an issue draft with version, OS, and terminal details; send nothing."
+ '%run-bug-report)
+
 (defparameter *main-exit-function*
   (lambda (&key unix-status)
     (sb-ext:quit :unix-status unix-status))
@@ -261,9 +275,16 @@ read the same value as the thread that started them."
                   (%establish-safe-mode nil)
                   (%run-default-invocation))
                  ((not (%flag-argument-p (first arguments)))
-                  (%establish-safe-mode nil)
-                  (nshell.presentation:run-repl-script
-                   (first arguments) (rest arguments)))
+                  ;; A registered subcommand name wins over a script of the
+                  ;; same name (D-53); ./NAME and -- NAME reach the script.
+                  (let ((subcommand (nshell.feature.command-line:find-subcommand
+                                     (first arguments))))
+                    (if subcommand
+                        (funcall subcommand (rest arguments))
+                        (progn
+                          (%establish-safe-mode nil)
+                          (nshell.presentation:run-repl-script
+                           (first arguments) (rest arguments))))))
                  (t
                   (multiple-value-bind
                         (invocation usage-error-p)

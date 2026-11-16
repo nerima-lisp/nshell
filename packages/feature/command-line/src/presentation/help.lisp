@@ -3,6 +3,7 @@
 (defun print-usage (&optional (stream *standard-output*))
   "Print the command-line usage text to STREAM."
   (format stream "~a~%" (usage-synopsis))
+  (format stream "       nshell SUBCOMMAND [ARGS...]~%")
   (format stream "~%")
   (format stream "Without arguments, nshell starts an interactive shell when~%")
   (format
@@ -32,7 +33,21 @@
   (format stream "      --private      Read history without saving this session's commands.~%")
   (format stream "      --mcp          Run the stdio MCP server.~%")
   (format stream "  -h, --help         Show usage and exit.~%")
-  (format stream "  -V, --version      Show version and exit.~%"))
+  (format stream "  -V, --version      Show version and exit.~%")
+  (print-subcommands stream))
+
+(defun print-subcommands (stream)
+  "Print the registered subcommands and how to run a script of the same name."
+  (let* ((summaries (subcommand-summaries))
+         (width (reduce #'max summaries
+                        :key (lambda (entry) (length (first entry)))
+                        :initial-value 0)))
+    (when summaries
+      (format stream "~%Subcommands:~%")
+      (loop for (name summary) in summaries
+            do (format stream "  ~va  ~a~%" width name summary))
+      (format stream "~%A subcommand takes precedence over a script of the same name.~%")
+      (format stream "Run such a script as nshell ./NAME or nshell -- NAME.~%"))))
 
 (defun print-version (&optional (stream *standard-output*))
   "Print nshell's version banner to STREAM."

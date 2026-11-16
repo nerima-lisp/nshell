@@ -71,10 +71,10 @@
 
 ## P0-6 nshell bug-report
 
-- [ ] サブコマンドは予約語を優先する仕組みを作る。同名のスクリプトは `nshell ./doctor` か `nshell -- doctor` で実行する。予約語は、そのサブコマンドを実装するタスクがそのつど登録する (bug-report・explain・migrate・doctor・init・import・trust)
-- [ ] 版・OS・端末 (TERM, COLORTERM, 幅)・SBCL の版・秘匿化した設定・直近のクラッシュログを集め、issue の下書きを標準出力に出す
-- [ ] 値を出してよい環境変数は TERM・COLORTERM・LANG・LC_* だけ。設定ファイルは、有無・サイズ・sha256 と、設定済みの NSHELL_* の名前だけを出す
-- [ ] 送信はしない。redaction を通すテストを書く
+- [x] サブコマンドは予約語を優先する仕組みを作る。同名のスクリプトは `nshell ./doctor` か `nshell -- doctor` で実行する。予約語は、そのサブコマンドを実装するタスクがそのつど登録する (bug-report・explain・migrate・doctor・init・import・trust)
+- [x] 版・OS・端末 (TERM, COLORTERM, 幅)・SBCL の版・秘匿化した設定・直近のクラッシュログを集め、issue の下書きを標準出力に出す
+- [x] 値を出してよい環境変数は TERM・COLORTERM・LANG・LC_* だけ。設定ファイルは、有無・サイズ・sha256 と、設定済みの NSHELL_* の名前だけを出す
+- [x] 送信はしない。redaction を通すテストを書く
 
 受け入れ条件: 出力に HOME のパス・トークンらしき文字列が含まれず、環境変数の値は TERM・COLORTERM・LANG・LC_* のもの以外を含まない。
 

@@ -263,4 +263,20 @@ writing the file happen in infrastructure.")
            #:render-crash-log
            #:safe-reexec-arguments))
 
+(defpackage #:nshell.domain.bug-report
+  (:documentation
+   "Domain: what `nshell bug-report` may print and how the issue draft reads.
+Which environment variables may show their value (an allow-list), where the
+configuration and crash log directories are and how they are named without
+their real path, SHA-256 digests of configuration files, and the draft text.
+Reading the environment and the files happens in infrastructure.")
+  (:use #:cl)
+  (:export #:sha256-hex
+           #:environment-value-printable-p #:nshell-variable-name-p
+           #:parse-environment-entries
+           #:config-directory #:config-directory-label
+           #:crash-log-directory-label #:crash-log-file-name-p
+           #:make-config-file-fact
+           #:render-bug-report))
+
 )

@@ -12,4 +12,7 @@ boundary.")
     (:export #:flag-argument-p
              #:usage-synopsis
              #:print-usage
-             #:print-version)))
+             #:print-version
+             #:register-subcommand
+             #:find-subcommand
+             #:subcommand-summaries)))

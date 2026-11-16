@@ -128,6 +128,25 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
             (setf *input-state* new-state)
             (process-output-event output-event))))))
 
+(defun %proposal-dropped-by-event-p (state-before event state-after output-event)
+  "True when EVENT ran the clear-input command (Ctrl-C by default) on
+STATE-BEFORE, or submitted a blank line."
+  (let ((buffer (input-state-buffer state-after)))
+    (if (eq :execute output-event)
+        (every (lambda (character)
+                 (member character '(#\Space #\Tab #\Newline #\Return)))
+               buffer)
+        (and (zerop (length buffer))
+             (let ((type (nshell.domain.input:key-event-type event)))
+               (if (input-state-completion-pager state-before)
+                   (eq :ctrl-c type)
+                   (case (input-state-mode state-before)
+                     (:insert
+                      (eq :clear-input (input-dispatch-binding-action-name type)))
+                     ((:search :vi-command :vi-visual :vi-d :vi-c)
+                      (eq :ctrl-c type))
+                     (t nil))))))))
+
 (defun %process-input-event (event)
   (let ((input-state-before *input-state*))
     (call-with-crash-capture
@@ -151,6 +170,18 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
                            (not (eq (input-state-suggestion *input-state*)
                                     (input-state-suggestion new-state)))))
               (%invalidate-current-input-suggestion))
+            ;; Clearing the line, or submitting it blank, cancels a pending
+            ;; proposal the way a blocked proposal is dropped.  The fresh input
+            ;; state also drops the undo stack and kill ring, so the cancelled
+            ;; text cannot come back as a typed command.  Other ways of
+            ;; emptying the buffer (Ctrl-U, Backspace) keep the proposal origin
+            ;; because undo or yank can restore the text.
+            (when (and (eq *assistant-command-origin* :proposal)
+                       (%proposal-dropped-by-event-p
+                        *input-state* event new-state output-event))
+              (setf new-state (make-repl-input-state)
+                    *assistant-command-origin* :typed
+                    *assistant-command-confirmed-p* nil))
             (when (and (eq *assistant-command-origin* :proposal)
                        (not (string= (input-state-buffer *input-state*)
                                      (input-state-buffer new-state))))

@@ -41,7 +41,8 @@ schema accepts it."
       (expect (gethash "text" (gethash "stdout" parsed)) :to-equal "")
       (expect (%machine-form-summaries parsed)
               :to-equal '(("ls | grep foo > out.txt" "syntax" t)))
-      (expect (%machine-effect-summaries parsed) :to-equal '(("writes" "out.txt")))
+      (expect (%machine-effect-summaries parsed)
+              :to-equal '(("reads" ".") ("writes" "out.txt")))
       (expect (gethash "level" (gethash "safety" parsed)) :to-equal "confirm")
       (expect (member "classify/output-redirect" (%machine-reason-rules parsed)
                       :test #'equal)
@@ -62,7 +63,8 @@ schema accepts it."
   (it "reports the deletion of a sequence and the command's verdict"
     (let ((parsed (%machine-parsed (%machine-explain "ls; rm -r build"))))
       (expect (%machine-form-summaries parsed) :to-equal '(("ls; rm -r build" "syntax" t)))
-      (expect (%machine-effect-summaries parsed) :to-equal '(("deletes" "build")))
+      (expect (%machine-effect-summaries parsed)
+              :to-equal '(("reads" ".") ("deletes" "build")))
       (expect (gethash "level" (gethash "safety" parsed)) :to-equal "confirm")
       (expect (%machine-reason-rules parsed) :to-equal '("classify/delete-dir"))))
 

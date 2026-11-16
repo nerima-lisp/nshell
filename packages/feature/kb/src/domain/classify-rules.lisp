@@ -164,11 +164,25 @@ changes no other command.")
     ;; Basenames whose own rules always decide them.
     ((covered-command "rm")) ((covered-command "curl"))
     ((network-command "curl")) ((network-command "wget")) ((network-command "ssh"))
+    ;; Read-only commands of the spec table whose every operand is a path
+    ;; they read; none of their options takes a value.  Without an operand
+    ;; cat and wc read only standard input, which is no path.
+    ((path-operand-reader "cat")) ((path-operand-reader "ls"))
+    ((path-operand-reader "wc")) ((path-operand-reader "stat"))
+    ((path-operand-reader "file"))
+    ;; Commands that read the working directory when given no operand.
+    ((working-directory-reader "ls"))
 
     ;; --- effect model (B) ---------------------------------------------------
     ((effect ?c (deletes ?p)) (command ?c "rm") (operand ?c ?p))
     ((effect ?c (writes ?p)) (redirect ?c ?p))
     ((effect ?c :network) (command ?c ?n) (network-command ?n))
+    ((effect ?c (reads ?p))
+     (command ?c ?n) (path-operand-reader ?n) (operand ?c ?p))
+    ((effect ?c (reads "."))
+     (command ?c ?n) (working-directory-reader ?n) (not (operand ?c ?p)))
+    ;; git status reads the working tree (proposal/02).
+    ((effect ?c (reads ".")) (command ?c "git") (subcommand ?c "status"))
 
     ;; --- derived facts ------------------------------------------------------
     ((flag ?c :recursive)

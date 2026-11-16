@@ -1,0 +1,47 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [
+      {
+        "kind": "reads",
+        "path": "."
+      }
+    ],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/sexp-not-forced",
+          "text": "S-expression command requires explicit force and has no redirects"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 2,
+      "lines": 1,
+      "text": "3\n",
+      "truncated": false
+    }
+  },
+  "files": {
+    "a.txt": "a.txt\n",
+    "b.txt": "b.txt\n",
+    "c.txt": "c.txt\n"
+  },
+  "input": "(| (git status --short) (wc -l))"
+}

@@ -62,7 +62,10 @@ resolves it to a builtin, a function, or an alias."
                 (%external-path context (%command-ast context reader-result)
                                 resolve)))))
 
-(defun %explain-effects (context reader-results)
+(defun reader-results-effects (context reader-results)
+  "Return the ENVELOPE-EFFECTs of the commands READER-RESULTS run in CONTEXT,
+from the effect model, each once in the order the commands appear.  explain
+and --json both report these."
   (knowledge-base-effects
    (remove-duplicates
     (loop for reader-result in reader-results
@@ -104,7 +107,7 @@ be read, or that holds no form, is E_PARSE."
                  :forms (mapcar (lambda (reader-result)
                                   (%explain-form context reader-result text resolve))
                                 reader-results)
-                 :effects (%explain-effects context reader-results)
+                 :effects (reader-results-effects context reader-results)
                  :safety (classification-safety
                           (nshell.feature.assistant:classify-ast
                            reader-results :resolve resolve))

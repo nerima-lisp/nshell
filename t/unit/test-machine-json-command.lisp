@@ -48,6 +48,11 @@ JSON OBJECT; NIL when a member is missing."
                        ((integerp key) (aref object key))
                        (t (gethash key object))))))
 
+(defun json-effects (envelope)
+  "Return the effects of decoded ENVELOPE as (KIND PATH) lists."
+  (map 'list (lambda (effect) (list (gethash "kind" effect) (gethash "path" effect)))
+       (or (json-at envelope "effects") #())))
+
 (defun json-pid-alive-p (pid)
   (handler-case (progn (sb-posix:kill pid 0) t)
     (sb-posix:syscall-error () nil)))
@@ -292,6 +297,7 @@ an orphan needs its new parent to reap it before kill 0 fails."
           (expect (json-at envelope "safety" "level") :to-equal "confirm")
           (expect (json-at envelope "safety" "reasons" 0 "rule")
                   :to-equal "classify/delete-dir")
+          (expect (json-effects envelope) :to-equal (list (list "deletes" victim)))
           (expect (probe-file marker) :to-be-truthy))
         ;; rm refuses to remove ".", so this stays harmless even if it ran.
         (let ((envelope (json-command "rm -r ." :environment-agent-p t)))
@@ -306,6 +312,7 @@ an orphan needs its new parent to reap it before kill 0 fails."
         (let ((envelope (json-command (format nil "rm -r ~A" victim))))
           (expect (json-at envelope "ok") :to-equal t)
           (expect (json-at envelope "safety" "level") :to-equal "confirm")
+          (expect (json-effects envelope) :to-equal (list (list "deletes" victim)))
           (expect (probe-file marker) :to-be-null)))))
 
   (it "maps the execution gate's own refusals to approval and policy errors"

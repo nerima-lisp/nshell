@@ -48,6 +48,17 @@ input runs nothing and is :SAFE."
                 (loop for (rule . text) in reasons
                       collect (make-envelope-reason :rule rule :text text))))))
 
+(defun %input-effects (input)
+  "Return the envelope effects of the commands INPUT runs, as explain reports
+them, in the context the run starts in.  INPUT is input %CLASSIFY-INPUT could
+read; the Enter assessment it uses returns only its verdict, so INPUT is read
+again here, with the same reader context."
+  (reader-results-effects
+   (nshell.presentation::%make-repl-shell-context)
+   (nshell.domain.parsing:read-submission
+    input
+    :reader-context (nshell.domain.parsing:submission-reader-context input))))
+
 ;;; Running
 
 (defparameter +json-conveyed-specials+
@@ -338,7 +349,7 @@ its PATH, and return the session, or NIL when nothing could be saved."
            (sb-posix:rmdir (string-right-trim "/" (output-session-directory session))))))
     (and saved session)))
 
-(defun %refusal-envelope (verdict duration-ms)
+(defun %refusal-envelope (verdict effects duration-ms)
   "The envelope of input refused at the Enter step: :BLOCK is never run, and
 :CONFIRM needs an approval no one can give under --json."
   (destructuring-bind (level . reasons) verdict
@@ -351,7 +362,7 @@ its PATH, and return the session, or NIL when nothing could be saved."
                     :duration-ms duration-ms
                     :stdout (output-from-text "")
                     :stderr (output-from-text "")
-                    :effects nil
+                    :effects effects
                     :safety (%envelope-safety-of verdict)
                     :state (%state))))
 
@@ -381,9 +392,12 @@ first failing command, as -e does."
     ;; The classifier resolves names in the batch shell state the run uses.
     (nshell.presentation::%initialize-batch-state)
     (multiple-value-bind (verdict readable-p) (%classify-input input)
-      (let ((level (first verdict)))
+      ;; Judged before the run, as the verdict is: the run may change what
+      ;; the names resolve to.
+      (let ((level (first verdict))
+            (effects (and readable-p (%input-effects input))))
         (when (and environment-agent-p readable-p (member level '(:confirm :block)))
-          (let ((envelope (%refusal-envelope verdict (%elapsed-ms start))))
+          (let ((envelope (%refusal-envelope verdict effects (%elapsed-ms start))))
             (return-from run-json-command
               (values (envelope-to-json envelope) (envelope-status envelope)
                       envelope))))
@@ -408,7 +422,7 @@ first failing command, as -e does."
                (parts (list :duration-ms (%elapsed-ms start)
                             :stdout stdout
                             :stderr stderr
-                            :effects nil
+                            :effects effects
                             :safety (%envelope-safety-of verdict)
                             :state (%state)
                             :session (and session (output-session-id session))

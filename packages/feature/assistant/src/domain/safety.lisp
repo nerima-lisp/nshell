@@ -265,6 +265,10 @@ substitution redirects."
       (multiple-value-bind (prefix argv) (%assistant-assignment-prefix argv)
         (let ((words (append (list (nshell.domain.parsing:command-node-command node))
                              (nshell.domain.parsing:command-node-arg-values node)
+                             ;; Reader nodes keep NAME=value words apart.
+                             (mapcar #'nshell.domain.parsing:arg-value
+                                     (nshell.domain.parsing:command-node-environment-assignments
+                                      node))
                              texts)))
           (values argv
                   (mapcar #'nshell.feature.kb:assignment-name
@@ -282,19 +286,38 @@ substitution redirects."
                       problems)
                   results))))))
 
+(defun %assistant-assignment-only-names (argv assignments)
+  "Return the assigned names when ARGV runs no command, else NIL.  A reader
+node keeps its assignments apart and has the empty command word; a parsed
+line has them as NAME=value words."
+  (let ((words (remove "" argv :test #'string=)))
+    (when (every (lambda (word) (find #\= word)) words)
+      (append assignments
+              (mapcar #'nshell.feature.kb:assignment-name words)))))
+
 (defun classify-command (node)
   "Classify a command-node using its effective command and arguments."
   (if (nshell.domain.parsing:command-node-p node)
       (multiple-value-bind (argv assignments words writes problems results)
           (%assistant-command-parts node)
-        (%assistant-classify-argv
-         argv
-         :assignments assignments
-         :writes writes
-         :redirect-problems problems
-         :raw-words words
-         :nested (mapcan #'%assistant-result-reasons
-                         (append results (%assistant-substitution-results words)))))
+        (let ((nested (mapcan #'%assistant-result-reasons
+                              (append results (%assistant-substitution-results words))))
+              (assigned-only (%assistant-assignment-only-names argv assignments)))
+          (if assigned-only
+              (%assistant-subject-result
+               nil
+               :assignments assigned-only
+               :writes writes
+               :redirect-problems problems
+               :words words
+               :nested nested)
+              (%assistant-classify-argv
+               argv
+               :assignments assignments
+               :writes writes
+               :redirect-problems problems
+               :raw-words words
+               :nested nested))))
       (%assistant-unparsable-result "the value is not a command AST node")))
 
 (defun command-effects (node)

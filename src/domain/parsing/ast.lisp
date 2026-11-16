@@ -78,21 +78,26 @@
   (span nil :type list :read-only t))
 
 (defstruct (text-span (:constructor make-text-span
-                           (start end text &optional alias-word-p)))
+                           (start end text &optional alias-word-p
+                                                     forced-external-p)))
   "A half-open range [START, END) of character offsets into TEXT, the very
 string a parser read: a position is only meaningful in that text.
 ALIAS-WORD-P is true when the range holds an alias word whose expansion
-replaced it, so the text there is not the command that runs."
+replaced it, so the text there is not the command that runs.
+FORCED-EXTERNAL-P is true when the range is a command name the parser read
+with the one-character ^ marker in front, which the range includes."
   (start 0 :type (integer 0) :read-only t)
   (end 0 :type (integer 0) :read-only t)
   (text "" :type string :read-only t)
-  (alias-word-p nil :type boolean :read-only t))
+  (alias-word-p nil :type boolean :read-only t)
+  (forced-external-p nil :type boolean :read-only t))
 
 (defun alias-word-text-span (span)
   "Return SPAN, the TEXT-SPAN of an alias word, marked as one, or NIL."
   (and span
        (make-text-span (text-span-start span) (text-span-end span)
-                       (text-span-text span) t)))
+                       (text-span-text span) t
+                       (text-span-forced-external-p span))))
 
 (defstruct (command-node
              (:include ast-node)

@@ -293,11 +293,16 @@ only a span into INPUT itself, the string the batch run reads, is one."
   "Return the start and end in INPUT of the command name NAME-SPAN covers
 when a fix may replace it there: NAME-SPAN is a position in INPUT (see
 %INPUT-NAME-SPAN) and not an alias word, whose expansion is not in INPUT, so
-no rewrite of INPUT runs another command in its place."
+no rewrite of INPUT runs another command in its place.  A ^ marker the parser
+read in front of the name stays out of the range, so the fix still skips
+builtins, functions and aliases."
   (multiple-value-bind (start end) (%input-name-span input name-span)
     (when (and start
                (not (nshell.domain.parsing:text-span-alias-word-p name-span)))
-      (values start end))))
+      (values (if (nshell.domain.parsing::text-span-forced-external-p name-span)
+                  (1+ start)
+                  start)
+              end))))
 
 (defun %full-screen-program-fixes (input program start end)
   "The fixes for the full-screen PROGRAM, (COMMAND ARGUMENTS NAME-SPAN), refused

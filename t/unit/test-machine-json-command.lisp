@@ -612,6 +612,21 @@ an orphan needs its new parent to reap it before kill 0 fails."
                                           fixes))
                        :to-equal (list input t)))))
 
+  (it "keeps the ^ marker in front of the name it replaces"
+    ;; The span still covers the ^ the parser read; the fix replaces only
+    ;; the name after it, so it too skips builtins, functions and aliases.
+    (loop for (input fix column) in '(("^gti --version" "^git --version" 1)
+                                      ("(^gti --version)" "(^git --version)" 2))
+          do (let ((envelope (json-command input)))
+               (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
+               (expect (list input (json-at envelope "error" "span" "column")
+                             (json-at envelope "error" "span" "end"))
+                       :to-equal (list input column (+ column 4)))
+               (expect (list input (and (member (list fix "edit distance 1" "diagnose/typo")
+                                                (json-fixes envelope) :test #'equal)
+                                        t))
+                       :to-equal (list input t)))))
+
   (it "gives no fix for a command named through an alias or in a sourced file"
     (let ((envelope (json-command "alias g2 gti; g2 status")))
       (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")

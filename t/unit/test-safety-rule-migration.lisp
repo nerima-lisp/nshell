@@ -3,8 +3,9 @@
 ;;; P1-5 replaced the hand-written safety classifier with knowledge-base
 ;;; rules.  These tests run the pre-P1-5 classifier (legacy-assistant-safety)
 ;;; and the rules on one corpus and require every difference to be one that
-;;; D-78 decided or a listed review fix that only makes the rules stricter or
-;;; recognizes a harmless environment prefix.
+;;; D-78 decided, a listed review fix, or a listed consequence of the
+;;; closed-world model of D-P1-5 (opaque wrappers, argument specs, assignment
+;;; names, redirects from the AST).
 
 (defparameter +safety-migration-corpus+
   '(;; Inputs of the existing safety tests (bare-line).
@@ -84,6 +85,16 @@
     (:bare "rm -rf --no-preserve-root /./") (:bare "rm -rf //") (:bare "rm -rf /../")
     (:bare "rm -rf /.") (:bare "rm -rf /tmp/..") (:bare "rm -rf //*")
     (:bare "rm -rf ./..")
+    ;; The closed-world model (D-P1-5): review findings, wrappers, option
+    ;; specs, and redirects read from the AST.
+    (:bare "rg --hostname-bin=/tmp/helper needle") (:bare "file -C -m magic x")
+    (:bare "/usr/bin/time -o FILE ls") (:bare "time -o FILE ls")
+    (:bare "ls | xargs git diff") (:bare "env FOO+=x ls") (:bare "env LANG+=C ls")
+    (:bare "env 1=x ls") (:bare "env '=x' ls") (:bare "find -- . -name a -delete")
+    (:bare "git log --format=%G?") (:bare "printf '\\e]52;c;aGk=\\a'")
+    (:bare "nohup ls") (:bare "sudo sh -c 'rm -rf /'") (:bare "ls --color=auto")
+    (:bare "nice -n 10 ls") (:bare "command ls") (:bare "echo -e hi")
+    (:bare "ls > /dev/null") (:bare "ls 2>&1") (:bare "cat <<< $(rm -rf /)")
     ;; S-expression inputs (sexp reader).
     (:sexp "(ls)") (:sexp "(^ls)") (:sexp "(rm -rf /)") (:sexp "(| (ls) (rm -rf /))")
     (:sexp "(cat <(rm -rf /))") (:sexp "(^rm -rf /)") (:sexp "(^rm -rf marker-dir)")
@@ -109,8 +120,6 @@ submission with that reader context and classify the reader results.")
     ((:bare "git diff --cached") :confirm :safe :read-only-known-command)
     ((:bare "git diff HEAD~1 -- src") :confirm :safe :read-only-known-command)
     ((:bare "git diff --stat") :confirm :safe :read-only-known-command)
-    ((:bare "bash -c 'git status'") :confirm :safe :read-only-known-command)
-    ((:bare "eval git status") :confirm :safe :read-only-known-command)
     ((:sexp "(^git status)") :confirm :safe :read-only-known-command)
     ((:auto "git status") :confirm :safe :read-only-known-command)
     ((:auto "git diff") :confirm :safe :read-only-known-command)
@@ -141,9 +150,34 @@ submission with that reader context and classify the reader results.")
     ((:bare "rm -rf /../") :confirm :block :root-normalization)
     ((:bare "rm -rf /.") :confirm :block :root-normalization)
     ((:bare "rm -rf /tmp/..") :confirm :block :root-normalization)
-    ((:bare "rm -rf //*") :confirm :block :root-normalization))
+    ((:bare "rm -rf //*") :confirm :block :root-normalization)
+    ;; D-P1-5 closed-world model.  Opaque wrappers are confirm at least and
+    ;; keep the argv of the command they run, so a quoted sh -c script that
+    ;; deletes the root blocks again.
+    ((:bare "sudo ls") :safe :confirm :opaque-wrapper)
+    ((:bare "nohup ls") :safe :confirm :opaque-wrapper)
+    ((:bare "sudo sh -c 'rm -rf /'") :confirm :block :opaque-wrapper)
+    ((:bare "command ls") :safe :confirm :opaque-wrapper)
+    ;; Safe only when every argument matches the command's spec row.
+    ((:bare "git branch --") :confirm :safe :closed-world-arguments)
+    ((:bare "git status -sb") :confirm :safe :closed-world-arguments)
+    ((:bare "rg --hostname-bin=/tmp/helper needle") :safe :confirm
+     :closed-world-arguments)
+    ((:bare "file -C -m magic x") :safe :confirm :closed-world-arguments)
+    ((:bare "git log --format=%G?") :safe :confirm :closed-world-arguments)
+    ((:bare "printf '\\e]52;c;aGk=\\a'") :safe :confirm :closed-world-arguments)
+    ((:bare "echo -e hi") :safe :confirm :closed-world-arguments)
+    ;; Assignment names match the harmless table exactly, with no grammar.
+    ((:bare "env FOO+=x ls") :safe :confirm :environment-prefix)
+    ((:bare "env LANG+=C ls") :safe :confirm :environment-prefix)
+    ((:bare "env 1=x ls") :safe :confirm :environment-prefix)
+    ((:bare "env '=x' ls") :safe :confirm :environment-prefix)
+    ;; Redirects come from the AST: /dev/null and 2>&1 stay safe.
+    ((:bare "ls > /dev/null") :confirm :safe :redirect-ast)
+    ((:bare "ls 2>&1") :confirm :safe :redirect-ast))
   "((READER INPUT) OLD NEW REASON) for every input whose level changed.
-REASON is a D-78 item or a review fix named in the comments above.")
+REASON is a D-78 item, a review fix, or a D-P1-5 key named in the comments
+above.")
 
 (defun %safety-migration-classify (reader input classify level)
   (funcall level

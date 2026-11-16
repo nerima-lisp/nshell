@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Run the native flake checks once per target. Granularity belongs in the
+  # Run the native flake checks for this runner. Granularity belongs in the
   # flake's `checks.*` attributes, where Nix can share build results.
   # The additional Linux jobs below cover real-PTY integration, coverage
   # artifact upload, and binary execution outside the sandbox.

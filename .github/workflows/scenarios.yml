@@ -24,7 +24,6 @@ jobs:
         include:
           - runner: ubuntu-latest
             system: x86_64-linux
-            run_batch_check: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -162,7 +161,6 @@ jobs:
           --out-link "$RUNNER_TEMP/nshell-q08-fault-injected-binary"
 
       - name: Run J05 PTY scenario before batch check
-        if: ${{ matrix.run_batch_check }}
         run: >-
           nix develop .#scenarios -c python3 scripts/run-scenarios.py
           --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
@@ -171,7 +169,6 @@ jobs:
           --scenario-id J05-option-name-and-description
 
       - name: Build and run the batch scenario check
-        if: ${{ matrix.run_batch_check }}
         run: >-
           nix build --print-build-logs
           ".#checks.${{ matrix.system }}.scenarios-batch"
@@ -181,45 +178,17 @@ jobs:
         run: |
           set -euo pipefail
           q07_image="$RUNNER_TEMP/nshell-q07.sparseimage"
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            q07_tmp_root="/Volumes/NShellQ07"
-            if [[ -e "$q07_tmp_root" ]]; then
-              echo "Q07 mountpoint already exists: $q07_tmp_root" >&2
-              exit 1
-            fi
-            hdiutil create -size 16m -fs HFS+ -volname NShellQ07 -type SPARSE "$q07_image"
-            hdiutil attach -nobrowse -noverify "$q07_image"
-            q07_detach() {
-              local scenario_status=$?
-              trap - EXIT
-              if hdiutil detach "$q07_tmp_root"; then
-                exit "$scenario_status"
-              fi
-              for delay in 1 2 3; do
-                sleep "$delay" || :
-                if hdiutil detach "$q07_tmp_root"; then
-                  exit "$scenario_status"
-                fi
-              done
-              if ! hdiutil detach -force "$q07_tmp_root"; then
-                printf 'Q07: forced detach failed for %s\n' "$q07_tmp_root" >&2 || :
-              fi
-              exit "$scenario_status"
-            }
-            trap q07_detach EXIT
-          else
-            q07_tmp_root="/mnt/nshell-q07"
-            if mountpoint -q "$q07_tmp_root"; then
-              echo "Q07 mountpoint is already mounted: $q07_tmp_root" >&2
-              exit 1
-            fi
-            truncate -s 16M "$q07_image"
-            sudo mkfs.ext4 -F "$q07_image"
-            sudo mkdir -p "$q07_tmp_root"
-            sudo mount -o loop "$q07_image" "$q07_tmp_root"
-            trap 'sudo umount "$q07_tmp_root"' EXIT
-            sudo chown "$(id -u):$(id -g)" "$q07_tmp_root"
+          q07_tmp_root="/mnt/nshell-q07"
+          if mountpoint -q "$q07_tmp_root"; then
+            echo "Q07 mountpoint is already mounted: $q07_tmp_root" >&2
+            exit 1
           fi
+          truncate -s 16M "$q07_image"
+          sudo mkfs.ext4 -F "$q07_image"
+          sudo mkdir -p "$q07_tmp_root"
+          sudo mount -o loop "$q07_image" "$q07_tmp_root"
+          trap 'sudo umount "$q07_tmp_root"' EXIT
+          sudo chown "$(id -u):$(id -g)" "$q07_tmp_root"
           nix develop .#scenarios -c python3 -B scripts/run-scenarios.py \
             --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell" \
             --scenario-binary "Q03-real-heap-exhaustion=$RUNNER_TEMP/nshell-q03-scenario-binary/bin/nshell" \

@@ -652,4 +652,81 @@ the gate, and the executor see them."
                     :resolve resolve))
                   :to-be :safe)
           (expect (probe-file marker) :to-be nil)
-          (expect (%safety-view-registered-count context) :to-equal 1))))))
+          (expect (%safety-view-registered-count context) :to-equal 1)))))
+
+    (it "confirms query targets requiring expansion at Enter and at the gate"
+    (host-kit:with-temporary-directory (directory)
+      (let ((marker (merge-pathnames "loaded" directory))
+            (context (%safety-view-autoload-context directory)))
+        (%safety-view-write-function-file directory "foo" marker)
+        (setf (nshell.application:shell-context-environment context)
+              (nshell.domain.environment:env-set
+               (nshell.application:shell-context-environment context) "X" "foo" t))
+        (dolist (option '("-v" "-V"))
+          (dolist (target '("$X" "${X}" "{foo,ls}" "$(echo foo)" "(echo foo)" "f*"
+                            "\"$X\"" "\"${X}\""))
+            (let* ((source (format nil "command ~a ~a" option target))
+                   (parsed (nshell.domain.parsing:parse-command-line source))
+                   (ast (nshell.domain.parsing:parse-result-ast parsed)))
+              (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+              (with-temporary-function
+                  ('nshell.application::%expand-source-arg-in-context
+                   (lambda (&rest arguments)
+                     (declare (ignore arguments))
+                     (error "classification must not expand query targets")))
+                (with-repl-test-state
+                  (let ((nshell.presentation::*environment*
+                          (nshell.application:shell-context-environment context))
+                        (nshell.presentation::*functions*
+                          (nshell.application:shell-context-function-table context)))
+                    (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                            :to-equal (list source :confirm))))
+                (expect
+                 (list source
+                       (nshell.feature.assistant:assistant-safety-result-classification
+                        (nshell.feature.assistant:classify-ast
+                         ast :resolve (nshell.application:assistant-command-resolver context))))
+                 :to-equal (list source :confirm)))))
+          (dolist (target '("$X" "${X}" "{foo,ls}" "$(echo foo)"))
+            (let* ((source (format nil "command ~a ~a" option target))
+                   (ast (nshell.domain.parsing:parse-result-ast
+                         (nshell.domain.parsing:parse-command-line source)))
+                   (nshell.application:*execution-origin* :proposal)
+                   (nshell.application:*execution-approval* :safe)
+                   (nshell.application::*execution-gate-parent-kind* nil)
+                   (nshell.application:*execution-gate-stopped-p* nil))
+              (expect (list source
+                            (nth-value 1 (nshell.application:execute-ast-in-context context ast))
+                            nshell.application:*execution-gate-stopped-p*)
+                      :to-equal (list source 126 t))))
+          (dolist (target '("$X" "{foo,ls}" "$(echo foo)"))
+            (let ((source (format nil "command ~a ~a" option target)))
+              (multiple-value-bind (status stopped-p)
+                  (%safety-view-run-ai-line context source :auto :safe)
+                (expect (list source status stopped-p)
+                        :to-equal (list source 126 t))))))
+        (expect (probe-file marker) :to-be nil)
+        (expect (%safety-view-registered-count context) :to-equal 0))))
+
+  (it "keeps quoted and escaped literal query targets safe"
+    (let ((context (make-test-shell-context)))
+      (dolist (source '("command -v '$X'" "command -v '${X}'"
+                        "command -v '{foo,ls}'" "command -v 'f*'"
+                        "command -v \\$X" "command -v \\{foo,ls}"
+                        "command -v f\\*"))
+        (let* ((parsed (nshell.domain.parsing:parse-command-line source))
+               (ast (nshell.domain.parsing:parse-result-ast parsed)))
+          (expect (nshell.domain.parsing:parse-complete-p parsed) :to-be-truthy)
+          (multiple-value-bind (status stopped-p)
+              (%safety-view-run-ai-line context source :auto :safe)
+            (expect (list source status stopped-p)
+                    :to-equal (list source 1 nil)))
+          (with-repl-test-state
+            (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                    :to-equal (list source :safe)))
+          (expect
+           (list source
+                 (nshell.feature.assistant:assistant-safety-result-classification
+                  (nshell.feature.assistant:classify-ast
+                   ast :resolve (nshell.application:assistant-command-resolver context))))
+           :to-equal (list source :safe)))))))

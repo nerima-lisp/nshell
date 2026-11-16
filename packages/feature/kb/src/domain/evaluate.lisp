@@ -144,20 +144,22 @@ SCRIPT, eval with one argument).  A transparent wrapper must be written as
 a bare name; with a path it is opaque.  RESOLUTION is how the executor
 resolves WORD (:BUILTIN or :EXTERNAL, the default); a row written for a
 builtin applies only to the builtin.  A seventh value says how the wrapped
-command is resolved: :BY-NAME like a typed command, else :EXTERNAL."
+command is resolved: :BY-NAME like a typed command, else :EXTERNAL.
+For a query, an eighth value gives the row's :QUERY-OPTIONS."
   (let* ((name (%word-basename word))
          (row (%find-wrapper-row name resolution))
          (spec (rest row))
          (runs (getf spec :runs :external)))
-    (when (and row
-               (not (and (rest arguments)
-                         (member (first arguments) (getf spec :query-options)
-                                 :test #'equal))))
+    (cond
+     ((and row (rest arguments)
+           (member (first arguments) (getf spec :query-options) :test #'equal))
+      (values nil nil nil nil nil nil nil (getf spec :query-options)))
+     (row
       (case (getf spec :source)
         (:eval
          (if (= (length arguments) 1)
              (values :opaque nil nil nil nil (first arguments))
-             (values :opaque arguments nil nil nil nil :by-name)))
+           (values :opaque arguments nil nil nil nil :by-name)))
         (:dash-c
          (let ((script (%dash-c-script arguments)))
            (when script
@@ -167,24 +169,24 @@ command is resolved: :BY-NAME like a typed command, else :EXTERNAL."
              (%wrapper-command spec arguments)
            (let ((env-options (and (getf spec :opaque-on-options) options)))
              (cond
-               ((or (string/= word name)
-                    (eq (getf spec :wrapper) :opaque)
-                    env-options)
-                (values :opaque command nil names env-options nil runs))
-               (command
-                (let ((own-words (remove-if (if (getf spec :assignments)
-                                                #'%assignment-word-p
-                                                (constantly nil))
-                                            (ldiff arguments command))))
-                  (values :transparent
-                          command
-                          (%option-spec-mismatches
-                           (list* :positionals (getf spec :operands 0) spec)
-                           own-words)
-                          names
-                          nil
-                          nil
-                          runs)))))))))))
+              ((or (string/= word name)
+                   (eq (getf spec :wrapper) :opaque)
+                   env-options)
+               (values :opaque command nil names env-options nil runs))
+              (command
+               (let ((own-words (remove-if (if (getf spec :assignments)
+                                               #'%assignment-word-p
+                                             (constantly nil))
+                                           (ldiff arguments command))))
+                 (values :transparent
+                         command
+                         (%option-spec-mismatches
+                          (list* :positionals (getf spec :operands 0) spec)
+                          own-words)
+                         names
+                         nil
+                         nil
+                         runs))))))))))))
 
 (defun %mismatch-text (words)
   (format nil "arguments outside the command's allowed form: ~{~a~^, ~}" words))

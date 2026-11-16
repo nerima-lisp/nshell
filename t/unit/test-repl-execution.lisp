@@ -1076,9 +1076,10 @@ path must be converted from a pathname before being appended."
       (let ((nshell.presentation::*history-persistence-enabled-p* t))
         (with-repl-input-state (:mode :insert
                                 :buffer "rm file"
-                                :cursor-pos 7)
-          (let ((nshell.presentation::*assistant-command-origin* :proposal)
-                (nshell.presentation::*assistant-command-confirmed-p* t))
+                                :cursor-pos 7
+                                :proposal-origin t)
+          (let ((nshell.presentation::*assistant-command-approval*
+                  (cons "rm file" :pending)))
             (with-temporary-functions
                 (('nshell.presentation::execute-ast
                   (lambda (ast)

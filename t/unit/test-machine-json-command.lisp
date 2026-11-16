@@ -350,6 +350,18 @@ an orphan needs its new parent to reap it before kill 0 fails."
           (expect (json-effects envelope) :to-equal (list (list "deletes" victim)))
           (expect (probe-file marker) :to-be-null)))))
 
+  (it "reports the effects of the commands in substitutions"
+    ;; Refused under NSHELL_AGENT=1, so victim is never touched.
+    (let ((envelope (json-command "echo $(rm victim)" :environment-agent-p t)))
+      (expect (json-at envelope "error" "code") :to-equal "E_NEEDS_APPROVAL")
+      (expect (json-effects envelope) :to-equal '(("deletes" "victim"))))
+    (host-kit:with-temporary-directory (directory)
+      (let ((fixture (format nil "~Afixture" (sb-ext:native-namestring directory))))
+        (with-open-file (out fixture :direction :output) (write-line "x" out))
+        (let ((envelope (json-command (format nil "echo $(cat ~A)" fixture))))
+          (expect (json-at envelope "ok") :to-equal t)
+          (expect (json-effects envelope) :to-equal (list (list "reads" fixture)))))))
+
   (it "maps the execution gate's own refusals to approval and policy errors"
     ;; The Enter step is made to pass everything, so the gate alone decides,
     ;; as for a line whose alias or function expands to more than it shows.

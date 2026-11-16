@@ -563,11 +563,11 @@ the gate, and the executor see them."
       (expect compared :to-equal 156)))))))
 
 (describe "safety classification loads no function file"
-  (it "leaves function files unread at Enter, at the gate, and for the rerun check"
+  (it "leaves function files unread at Enter and at the gate"
     (host-kit:with-temporary-directory (directory)
       (let ((marker (merge-pathnames "loaded" directory)))
         (%safety-view-write-function-file directory "echo" marker)
-        ;; Enter and the rerun check classify in the REPL context.
+        ;; Enter classifies in the REPL context.
         (with-repl-test-state
           (let ((nshell.presentation::*environment*
                   (nshell.domain.environment:env-set
@@ -575,9 +575,6 @@ the gate, and the executor see them."
                    "XDG_CONFIG_HOME" (namestring directory) t))
                 (nshell.presentation::*functions* (make-hash-table :test #'equal)))
             (expect (nshell.presentation::%assistant-proposal-level "echo hi")
-                    :to-be :confirm)
-            (expect (getf (nshell.presentation::%rerun-command-assessment "echo hi")
-                          :classification)
                     :to-be :confirm)
             (expect (%safety-view-registered-count
                      (nshell.presentation::%make-repl-shell-context))

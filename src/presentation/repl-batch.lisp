@@ -25,8 +25,6 @@ nshell's own output has no color. The interactive shell never reads it.")
         *history* (history-kit:make-history)
         *history-persistence-enabled-p* nil
         *capture-command-output-p* nil
-        *rerun-confirmation-pending-p* nil
-        *rerun-command-assessment* nil
         *failure-explain-available-p* nil
         *agent-session* nil
         *assistant-session-id* nil

@@ -33,6 +33,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
            #:current-working-directory
            #:map-path-command-directories #:make-host-filesystem #:read-regular-file-bytes
            #:clear-directory-listing-cache
+           #:path-stat-stamp
            #:spawn-pipeline #:spawn-pipeline-async #:wait-job
            #:spawn-process-substitution
            #:process-substitution-resource-p

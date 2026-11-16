@@ -1,262 +1,156 @@
 (in-package #:nshell/spec)
+
+;;; Fixture access
+
 (defparameter *probe-fixture-path*
-    (merge-pathnames #p"docs/design/conformance/language-probes-v0.7.0.json"
-                     (asdf:system-source-directory "nshell")))
-  (defvar *probe-fixture-cache* nil)
-  (defvar *l7-rows* nil)
+  (merge-pathnames #p"docs/design/conformance/language-probes-v0.7.0.json"
+                   (asdf:system-source-directory "nshell")))
 
-  (defun %read-probe-fixture ()
-    (with-open-file (stream *probe-fixture-path*
-                            :direction :input
-                            :external-format :utf-8)
-      (json-kit:read-json stream :object-type :alist :array-type :list)))
+(defvar *probe-fixture-cache* nil)
 
-  (defun %probe-fixture ()
-    (or *probe-fixture-cache*
-        (setf *probe-fixture-cache* (%read-probe-fixture))))
+(defun %read-probe-fixture ()
+  (with-open-file (stream *probe-fixture-path*
+                          :direction :input
+                          :external-format :utf-8)
+    (json-kit:read-json stream :object-type :alist :array-type :list)))
 
-  (defun %fixture-cases ()
-    (cdr (assoc "cases" (%probe-fixture) :test #'string=)))
+(defun %probe-fixture ()
+  (or *probe-fixture-cache*
+      (setf *probe-fixture-cache* (%read-probe-fixture))))
 
-  (defun %fixture-case (id)
-    (or (find id (%fixture-cases)
-              :key (lambda (case) (cdr (assoc "id" case :test #'string=)))
-              :test #'string=)
-        (error "No language-probe fixture case named ~a" id)))
+(defun %field (object key)
+  (cdr (assoc key object :test #'string=)))
 
-  (defun %field (object key)
-    (cdr (assoc key object :test #'string=)))
+(defun %fixture-cases ()
+  (%field (%probe-fixture) "cases"))
 
-  (defun %required-nshell-bin ()
-    (or (uiop:getenv "NSHELL_BIN")
-        (error "NSHELL_BIN must name the nshell script-mode executable")))
+(defun %fixture-case (id)
+  (or (find id (%fixture-cases)
+            :key (lambda (case) (%field case "id"))
+            :test #'string=)
+      (error "No language-probe fixture case named ~a" id)))
 
-  (defun %required-single-bin-path ()
-    (let* ((path (uiop:getenv "PATH"))
-           (expected (uiop:getenv "NSHELL_SPEC_BIN_DIR"))
-           (resolved-path
-             (and path
-                  (uiop:directory-exists-p path)
-                  (string-right-trim "/" (namestring (truename path))))))
-      (unless (and path expected
-                   (string= path expected)
-                   resolved-path
-                   (not (member resolved-path
-                                '("/usr/bin" "/bin" "/usr/local/bin")
-                                :test #'string=)))
-        (error "t/spec PATH must equal its fixed bin directory"))
-      path))
-  (defun %check-spec-false-exits-nonzero ()
-    (let* ((false-bin
-             (merge-pathnames
-              #p"false"
-              (uiop:ensure-directory-pathname (%required-single-bin-path)))))
-      (unless (uiop:file-exists-p false-bin)
-        (error "The fixed t/spec bin directory has no false executable"))
-      (host-kit:with-temporary-directory (directory)
-        (let ((result
-                (host-kit:run-program (namestring false-bin) nil
-                                      :directory directory
-                                      :input ""
-                                      :timeout 20)))
-          (expect (host-kit:process-result-exit-code result)
-                  :to-equal 1)))))
+(defun %probe-ids-at-expansion ()
+  (let ((cases (%fixture-cases)))
+    (unless (= 151 (length cases))
+      (error "Expected 151 language probes, found ~d" (length cases)))
+    (mapcar (lambda (case) (%field case "id")) cases)))
 
-  (defun %fixture-environment (directory)
-    (let* ((home (merge-pathnames #p"home/" directory))
-           (path (%required-single-bin-path)))
-      (list (format nil "HOME=~a" (string-right-trim "/" (namestring home)))
-            (format nil "XDG_CONFIG_HOME=~a" (string-right-trim "/" (namestring (merge-pathnames #p".config/" home))))
-            (format nil "XDG_DATA_HOME=~a" (string-right-trim "/" (namestring (merge-pathnames #p".data/" home))))
-            (format nil "XDG_STATE_HOME=~a" (string-right-trim "/" (namestring (merge-pathnames #p".state/" home))))
-            (format nil "XDG_CACHE_HOME=~a" (string-right-trim "/" (namestring (merge-pathnames #p".cache/" home))))
-            (format nil "TMPDIR=~a" (string-right-trim "/" (namestring directory)))
-            (format nil "PATH=~a" path)
-            "NSHELL_AI_COMMAND=/nonexistent"
-            "NO_COLOR=1"
-            "LANG=C.UTF-8")))
+;;; Environment
 
-  (defun %safe-fixture-path (name directory)
-    (let ((relative (pathname name)))
-      (when (or (uiop:absolute-pathname-p relative)
-                (member :up (pathname-directory relative)))
-        (error "Fixture path must stay inside its temporary work directory: ~a" name))
-      (merge-pathnames relative directory)))
+(defun %required-nshell-bin ()
+  (or (uiop:getenv "NSHELL_BIN")
+      (error "NSHELL_BIN must name the nshell script-mode executable")))
 
-  (defun %write-fixture-files (files directory)
-    (dolist (entry files)
-      (let ((path (%safe-fixture-path (car entry) directory)))
-        (ensure-directories-exist path)
-        (with-open-file (stream path
-                                :direction :output
-                                :if-exists :supersede
-                                :external-format :utf-8)
-          (write-string (cdr entry) stream)))))
+(defun %required-single-bin-path ()
+  (let* ((path (uiop:getenv "PATH"))
+         (expected (uiop:getenv "NSHELL_SPEC_BIN_DIR"))
+         (resolved-path
+           (and path
+                (uiop:directory-exists-p path)
+                (string-right-trim "/" (namestring (truename path))))))
+    (unless (and path expected
+                 (string= path expected)
+                 resolved-path
+                 (not (member resolved-path
+                              '("/usr/bin" "/bin" "/usr/local/bin")
+                              :test #'string=)))
+      (error "t/spec PATH must equal its fixed bin directory"))
+    path))
 
-  (defun %run-probe (source case)
+(defun %check-spec-false-exits-nonzero ()
+  (let ((false-bin
+          (merge-pathnames
+           #p"false"
+           (uiop:ensure-directory-pathname (%required-single-bin-path)))))
+    (unless (uiop:file-exists-p false-bin)
+      (error "The fixed t/spec bin directory has no false executable"))
     (host-kit:with-temporary-directory (directory)
-      (let* ((source-text
-               (if (and (consp source)
-                        (eq (first source) (find-symbol "FORMAT" "COMMON-LISP")))
-                   (apply (symbol-function (first source))
-                          (second source)
-                          (cddr source))
-                   source))
-             (home (merge-pathnames #p"home/" directory))
-             (script (merge-pathnames #p"case.nsh" directory))
-             (environment (%fixture-environment directory)))
-        (ensure-directories-exist home)
-        (%write-fixture-files (%field case "files") directory)
-        (with-open-file (stream script
-                                :direction :output
-                                :if-exists :supersede
-                                :external-format :utf-8)
-          (write-string source-text stream))
-        (let ((result
-                (host-kit:run-program (%required-nshell-bin)
-                                      (list (namestring script))
-                                      :directory directory
-                                      :input ""
-                                      :environment environment
-                                      :timeout 20)))
-          (list :stdout (host-kit:process-result-stdout result)
-                :stderr (host-kit:process-result-stderr result)
-                :exit (host-kit:process-result-exit-code result)
-                :source source-text
-                :workdir (namestring directory)
-                :real-workdir (namestring (truename directory))
-                :home (string-right-trim "/" (namestring home)))))))
+      (let ((result
+              (host-kit:run-program (namestring false-bin) nil
+                                    :directory directory
+                                    :input ""
+                                    :timeout 20)))
+        (expect (host-kit:process-result-exit-code result)
+                :to-equal 1)))))
 
-  (defun %replace-all (text old new)
-    (if (zerop (length old))
-        text
-        (with-output-to-string (output)
-          (loop with start = 0
-                for position = (search old text :start2 start)
-                while position
-                do (write-string text output :start start :end position)
-                   (write-string new output)
-                   (setf start (+ position (length old)))
-                finally (write-string text output :start start)))))
+(defun %fixture-environment (directory home)
+  (flet ((dir (pathname) (string-right-trim "/" (namestring pathname))))
+    (list (format nil "HOME=~a" (dir home))
+          (format nil "XDG_CONFIG_HOME=~a" (dir (merge-pathnames #p".config/" home)))
+          (format nil "XDG_DATA_HOME=~a" (dir (merge-pathnames #p".data/" home)))
+          (format nil "XDG_STATE_HOME=~a" (dir (merge-pathnames #p".state/" home)))
+          (format nil "XDG_CACHE_HOME=~a" (dir (merge-pathnames #p".cache/" home)))
+          (format nil "TMPDIR=~a" (dir directory))
+          (format nil "PATH=~a" (%required-single-bin-path))
+          "NSHELL_AI_COMMAND=/nonexistent"
+          "NO_COLOR=1"
+          "LANG=C.UTF-8")))
 
-  (defun %normalize-output (text result)
-  (let* ((work (string-right-trim "/" (getf result :workdir)))
-         (real-work (string-right-trim "/" (getf result :real-workdir)))
-         (normalized
-           (%normalize-tool-paths
-            (%replace-all (%replace-all text work "$WORK") real-work "$WORK"))))
-    (if (or (search "source: $WORK/case.nsh:" normalized)
-            (search "nshell: crash log:" normalized))
-        (let ((final-newline (%output-final-newline-p normalized)))
-          (with-input-from-string (input normalized)
-            (with-output-to-string (output)
-              (let ((in-diagnostic nil)
-                    (value-diagnostic nil)
-                    (section nil)
-                    (pending nil)
-                    (pending-prefix ""))
-                (labels ((flush-diagnostic-line (newline-p)
-                           (when pending
-                             (write-string pending-prefix output)
-                             (write-string pending output)
-                             (when newline-p
-                               (terpri output))
-                             (setf pending nil
-                                   pending-prefix "")))
-                         (start-diagnostic (line)
-                           (when in-diagnostic
-                             (flush-diagnostic-line t))
-                           (setf in-diagnostic t
-                                 value-diagnostic (search "The value" line)
-                                 section (if value-diagnostic :value :ordinary)
-                                 pending line
-                                 pending-prefix "")))
-                  (loop for line = (read-line input nil nil)
-                        while line
-                        do (let ((trimmed
-                                   (string-left-trim
-                                    (quote (#\Space #\Tab #\Return)) line)))
-                             (cond
-                               ((search "nshell: crash log:" trimmed)
-                                (when in-diagnostic
-                                  (flush-diagnostic-line t))
-                                (setf in-diagnostic nil
-                                      value-diagnostic nil
-                                      section nil)
-                                (write-string "nshell: crash log: <CRASH_LOG>" output)
-                                (terpri output))
-                               ((eql 0 (search "source: $WORK/case.nsh:" trimmed))
-                                (start-diagnostic trimmed))
-                               ((and in-diagnostic
-                                     value-diagnostic
-                                     (eql 0 (search "is not of type" trimmed)))
-                                (flush-diagnostic-line t)
-                                (setf section :marker
-                                      pending trimmed
-                                      pending-prefix ""))
-                               ((and in-diagnostic
-                                     value-diagnostic
-                                     (eql 0 (search "when binding" trimmed)))
-                                (flush-diagnostic-line t)
-                                (setf section :binding
-                                      pending trimmed
-                                      pending-prefix ""))
-                               ((and in-diagnostic
-                                     (plusp (length line))
-                                     (find (char line 0)
-                                           (quote (#\Space #\Tab #\Return))))
-                                (if (eq section :marker)
-                                    (progn
-                                      (flush-diagnostic-line t)
-                                      (setf section :type
-                                            pending trimmed
-                                            pending-prefix "  "))
-                                    (setf pending (format nil "~a ~a" pending trimmed))))
-                               (t
-                                (when in-diagnostic
-                                  (flush-diagnostic-line t)
-                                  (setf in-diagnostic nil
-                                        value-diagnostic nil
-                                        section nil))
-                                (write-string line output)
-                                (terpri output)))))
-                  (when in-diagnostic
-                    (flush-diagnostic-line final-newline)))))))
-        normalized)))
+(defun %safe-fixture-path (name directory)
+  (let ((relative (pathname name)))
+    (when (or (uiop:absolute-pathname-p relative)
+              (member :up (pathname-directory relative)))
+      (error "Fixture path must stay inside its temporary work directory: ~a" name))
+    (merge-pathnames relative directory)))
 
-  (defun %normalize-nix-tool-path (text tool)
-    (let ((suffix (format nil "/bin/~a" tool))
-          (prefix "/nix/store/"))
+(defun %write-text-file (path text)
+  (ensure-directories-exist path)
+  (with-open-file (stream path
+                          :direction :output
+                          :if-exists :supersede
+                          :external-format :utf-8)
+    (write-string text stream)))
+
+;;; Normalisation: only environment-dependent text is rewritten.
+
+(defun %replace-all (text old new)
+  (if (zerop (length old))
+      text
       (with-output-to-string (output)
         (loop with start = 0
-              for end = (search suffix text :start2 start)
-              while end
-              do (let ((store
-                         (search prefix text
-                                 :start2 start
-                                 :end2 end
-                                 :from-end t)))
-                   (if (and store
-                            (> end (+ store (length prefix)))
-                            (not (position-if
-                                  (lambda (character)
-                                    (member character
-                                            (list #\Space #\Tab #\Newline
-                                                  #\Return #\: #\/)))
-                                  text
-                                  :start (+ store (length prefix))
-                                  :end end)))
-                       (progn
-                         (write-string text output :start start :end store)
-                         (write-string (format nil "<tool>/~a" tool) output)
-                         (setf start (+ end (length suffix))))
-                       (progn
-                         (write-string text output :start start
-                                       :end (+ end (length suffix)))
-                         (setf start (+ end (length suffix))))))
+              for position = (search old text :start2 start)
+              while position
+              do (write-string text output :start start :end position)
+                 (write-string new output)
+                 (setf start (+ position (length old)))
               finally (write-string text output :start start)))))
 
-  (defun %normalize-tool-paths (text)
+(defparameter *normalized-tools*
+  '("cat" "false" "ls" "printf" "sh" "tr" "wc"
+    "sleep" "sort" "last" "join" "find"))
+
+(defun %normalize-nix-tool-path (text tool)
+  (let ((suffix (format nil "/bin/~a" tool))
+        (prefix "/nix/store/"))
+    (with-output-to-string (output)
+      (loop with start = 0
+            for end = (search suffix text :start2 start)
+            while end
+            do (let ((store
+                       (search prefix text
+                               :start2 start
+                               :end2 end
+                               :from-end t)))
+                 (if (and store
+                          (> end (+ store (length prefix)))
+                          (not (position-if
+                                (lambda (character)
+                                  (member character
+                                          '(#\Space #\Tab #\Newline
+                                            #\Return #\: #\/)))
+                                text
+                                :start (+ store (length prefix))
+                                :end end)))
+                     (progn
+                       (write-string text output :start start :end store)
+                       (format output "<tool>/~a" tool))
+                     (write-string text output :start start
+                                               :end (+ end (length suffix))))
+                 (setf start (+ end (length suffix))))
+            finally (write-string text output :start start)))))
+
+(defun %normalize-tool-paths (text)
   (labels ((path-character-p (character)
              (or (alphanumericp character)
                  (find character '(#\/ #\. #\_ #\-))))
@@ -266,392 +160,509 @@
                      for position = (search path input :start2 start)
                      while position
                      for end = (+ position (length path))
-                     for before-path = (or (zerop position)
-                                           (not (path-character-p
-                                                 (char input (1- position)))))
-                     for after-path = (or (= end (length input))
-                                          (not (path-character-p
-                                                (char input end))))
                      do (write-string input output :start start :end position)
-                        (if (and before-path after-path)
+                        (if (and (or (zerop position)
+                                     (not (path-character-p
+                                           (char input (1- position)))))
+                                 (or (= end (length input))
+                                     (not (path-character-p (char input end)))))
                             (write-string replacement output)
                             (write-string input output :start position :end end))
                         (setf start end)
                      finally (write-string input output :start start)))))
-    (loop with normalized = text
-          for tool in (list "cat" "false" "ls" "printf" "sh" "tr" "wc"
-                            "sleep" "sort" "last" "join" "find")
-          for replacement = (format nil "<tool>/~a" tool)
-          for bare-prefix = (format nil "~a:" tool)
-          for normalized-prefix = (format nil "<tool>/~a:" tool)
-          do (setf normalized (%normalize-nix-tool-path normalized tool)
-                   normalized
-                   (replace-exact-path normalized
-                                        (format nil "/usr/bin/~a" tool)
-                                        replacement)
-                   normalized
-                   (replace-exact-path normalized
-                                        (format nil "/bin/~a" tool)
-                                        replacement)
-                   normalized
-                   (%replace-all normalized
-                                 (format nil "~%~a" bare-prefix)
-                                 (format nil "~%~a" normalized-prefix)))
-             (when (and (>= (length normalized) (length bare-prefix))
-                        (eql 0 (search bare-prefix normalized)))
-               (setf normalized
-                     (concatenate 'string normalized-prefix
-                                  (subseq normalized (length bare-prefix)))))
-          finally (return normalized))))
+    (let ((normalized text))
+      (dolist (tool *normalized-tools* normalized)
+        (let ((replacement (format nil "<tool>/~a" tool))
+              (bare-prefix (format nil "~a:" tool)))
+          ;; A tool run by bare name reports itself as "NAME:"; v0.7.0 ran it
+          ;; from /usr/bin, so both forms name the same program.
+          (setf normalized (%normalize-nix-tool-path normalized tool)
+                normalized (replace-exact-path normalized
+                                               (format nil "/usr/bin/~a" tool)
+                                               replacement)
+                normalized (replace-exact-path normalized
+                                               (format nil "/bin/~a" tool)
+                                               replacement)
+                normalized (%replace-all normalized
+                                         (format nil "~%~a" bare-prefix)
+                                         (format nil "~%~a:" replacement)))
+          (when (eql 0 (search bare-prefix normalized))
+            (setf normalized
+                  (concatenate 'string replacement
+                               (subseq normalized (length tool))))))))))
 
-  (progn
-  (defun %substring-occurrences (text needle)
-    (when (zerop (length needle))
-      (error "Cannot count an empty substring"))
+(defparameter *crash-log-marker* "nshell: crash log:")
+
+(defun %output-lines (text)
+  (with-input-from-string (input text)
+    (loop for line = (read-line input nil nil)
+          while line
+          collect line)))
+
+(defun %output-final-newline-p (text)
+  (and (plusp (length text))
+       (char= (char text (1- (length text))) #\Newline)))
+
+(defun %normalize-crash-log-path (line)
+  (let ((position (search *crash-log-marker* line)))
+    (if position
+        (concatenate 'string
+                     (subseq line 0 (+ position (length *crash-log-marker*)))
+                     " <CRASH_LOG>")
+        line)))
+
+(defun %wrapped-continuation-p (line)
+  ;; SBCL's type-error report breaks with ~I~_ before "is not of type" and
+  ;; "when binding", which puts them at the block's own indentation: indented
+  ;; in the v0.7.0 recording, column 0 in later builds.
+  (and (plusp (length line))
+       (or (member (char line 0) '(#\Space #\Tab))
+           (eql 0 (search "is not of type" line))
+           (eql 0 (search "when binding " line)))))
+
+(defun %join-wrapped-diagnostics (lines)
+  ;; SBCL wraps a condition report at a width that depends on the length of
+  ;; the script path, so continuation lines are joined back into one line.
+  ;; A line too long for the margin can also leave an empty line before the
+  ;; next continuation; that empty line is part of the wrap.
+  (let ((joined nil))
+    (loop for (line next) on lines
+          do (cond
+               ((not (and joined
+                          (eql 0 (search "source: $WORK/case.nsh:" (first joined)))))
+                (push line joined))
+               ((%wrapped-continuation-p line)
+                (setf (first joined)
+                      (format nil "~a ~a"
+                              (string-right-trim '(#\Space #\Tab) (first joined))
+                              (string-trim '(#\Space #\Tab) line))))
+               ((and (zerop (length (string-trim '(#\Space #\Tab) line)))
+                     next
+                     (%wrapped-continuation-p next)))
+               (t (push line joined))))
+    (nreverse joined)))
+
+(defun %normalize-text (text work-directories)
+  (let ((replaced text))
+    ;; Longest first: /tmp/x is a suffix of its truename /private/tmp/x.
+    (dolist (directory (sort (copy-list work-directories) #'> :key #'length))
+      (setf replaced
+            (%replace-all replaced (string-right-trim "/" directory) "$WORK")))
+    (setf replaced (%normalize-tool-paths replaced))
+    (let ((lines (%join-wrapped-diagnostics
+                  (mapcar #'%normalize-crash-log-path (%output-lines replaced))))
+          (final-newline (%output-final-newline-p replaced)))
+      (format nil "~{~a~^~%~}~:[~;~%~]" lines (and lines final-newline)))))
+
+(defun %stream-shape (text)
+  (list :lines (%output-lines text)
+        :final-newline (%output-final-newline-p text)))
+
+(defun %observation (exit stdout stderr work-directories home)
+  (unless (and (integerp exit) (stringp stdout) (stringp stderr))
+    (error "A probe observation needs an integer exit and string streams"))
+  (let ((stdout (%normalize-text stdout work-directories))
+        (stderr (%normalize-text stderr work-directories)))
+    (list :exit exit
+          :stdout (%stream-shape stdout)
+          :stderr (%stream-shape stderr)
+          :text (format nil "~a~%~a" stdout stderr)
+          :home home)))
+
+;;; Running a probe
+
+(defun %probe-source (input case)
+  (let ((source (or input (%field case "src"))))
+    (unless (stringp source)
+      (error "A probe input must be a script string, got ~s" source))
+    source))
+
+(defun %run-probe (input case)
+  (host-kit:with-temporary-directory (directory)
+    (let ((home (merge-pathnames #p"home/" directory))
+          (script (merge-pathnames #p"case.nsh" directory)))
+      (ensure-directories-exist home)
+      (dolist (entry (%field case "files"))
+        (%write-text-file (%safe-fixture-path (car entry) directory) (cdr entry)))
+      (%write-text-file script (%probe-source input case))
+      (let* ((result (host-kit:run-program (%required-nshell-bin)
+                                           (list (namestring script))
+                                           :directory directory
+                                           :input ""
+                                           :environment
+                                           (%fixture-environment directory home)
+                                           :timeout 20))
+             (work-directories (list (namestring directory)
+                                     (namestring (truename directory)))))
+        (%observation (host-kit:process-result-exit-code result)
+                      (host-kit:process-result-stdout result)
+                      (host-kit:process-result-stderr result)
+                      work-directories
+                      (%normalize-text (string-right-trim "/" (namestring home))
+                                       work-directories))))))
+
+(defun %v07-observation (case)
+  (let ((observed (%field case "observed_v0_7_0")))
+    (%observation (%field observed "exit")
+                  (%field observed "stdout")
+                  (%field observed "stderr")
+                  nil
+                  nil)))
+
+;;; Occurrence counting
+
+(defun %substring-occurrences (text needle)
+  (when (zerop (length needle))
+    (error "Cannot count an empty substring"))
+  (loop with start = 0
+        for position = (search needle text :start2 start)
+        while position
+        count t
+        do (setf start (+ position (length needle)))))
+
+(defun %token-occurrences (text token)
+  ;; A code or position token counts only when it is not part of a longer
+  ;; identifier or number: case.nsh:1:1 must not match case.nsh:1:12.
+  (flet ((word-character-p (index)
+           (and (< -1 index (length text))
+                (let ((character (char text index)))
+                  (or (alphanumericp character) (char= character #\_))))))
+    (when (zerop (length token))
+      (error "Cannot count an empty token"))
     (loop with start = 0
-          for position = (search needle text :start2 start)
+          for position = (search token text :start2 start)
           while position
-          count t
-          do (setf start (+ position (length needle)))))
+          count (not (or (word-character-p (1- position))
+                         (word-character-p (+ position (length token)))))
+          do (setf start (1+ position)))))
 
-  (defun %output-lines (text)
-    (with-input-from-string (input text)
-      (loop for line = (read-line input nil nil)
-            while line
-            collect line)))
 
-  (defun %output-final-newline-p (text)
-    (and (plusp (length text))
-         (char= (char text (1- (length text))) #\Newline)))
+;;; Expectation validation
 
-  (defun %without-crash-log-lines (text)
-    (let* ((lines (%output-lines text))
-           (retained
-             (loop for line in lines
-                   for index from 0
-                   unless (search "nshell: crash log:" line)
-                     collect (cons index line)))
-           (last-retained (car (last retained)))
-           (final-newline
-             (and last-retained
-                  (or (< (car last-retained) (1- (length lines)))
-                      (%output-final-newline-p text)))))
-      (with-output-to-string (output)
-        (loop for entry in retained
-              for first-entry = t then nil
-              do (unless first-entry (terpri output))
-                 (write-string (cdr entry) output)
-              finally
-                 (when final-newline (terpri output))))))
+(defparameter *expectation-keys*
+  '(:exit :stdout :stdout-final-newline :stderr :stderr-final-newline
+    :error :position :contains :absent))
 
-  (defun %position-matches-in-stream-p (text position)
-  (destructuring-bind (line column source needle) position
-    (let* ((location (format nil "case.nsh:~d:~d" line column))
-           (lines (%output-lines text))
-           (caret-start (1- column))
-           (caret-end (+ caret-start (length needle))))
-      (and (<= caret-end (length source))
-           (string= needle (subseq source caret-start caret-end))
-           (= 1 (%substring-occurrences text location))
-           (loop for index below (length lines)
-                 thereis
-                   (and (search location (nth index lines))
-                        (let ((source-line (nth (1+ index) lines))
-                              (caret-line (nth (+ index 2) lines)))
-                          (and source-line
-                               caret-line
-                               (string= source
-                                        (string-left-trim
-                                         '(#\Space #\Tab #\Return)
-                                         source-line))
-                               (= (or (position #\^ caret-line) -1)
-                                  caret-start)
-                               (<= caret-end (length caret-line))
-                               (string= (make-string (length needle)
-                                                     :initial-element #\^)
-                                        (subseq caret-line caret-start caret-end))))))))))
+(defun %plist-key-p (plist key)
+  (loop for (candidate) on plist by #'cddr
+        thereis (eq candidate key)))
 
-  (defun %position-matches-p (result position)
-    (or (%position-matches-in-stream-p
-         (%normalize-output (getf result :stdout) result)
-         position)
-        (%position-matches-in-stream-p
-         (%normalize-output (getf result :stderr) result)
-         position)))
+(defun %string-list-p (value)
+  (and (listp value) (every #'stringp value)))
 
-  (defun %l7-expectation-matches-p (result expectation
-                                  &optional ignore-crash-log)
-  (labels ((canonical-output-lines (lines)
-             (let ((records nil)
-                   (diagnostic nil))
-               (dolist (line lines)
-                 (cond
-                   ((eql 0 (search "source: $WORK/case.nsh:" line))
-                    (when diagnostic
-                      (push (string-trim '(#\Space #\Tab #\Return)
-                                           diagnostic)
-                            records))
-                    (setf diagnostic
-                          (if (or (search "Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled." line)
-                                  (and (search "Command argument " line)
-                                       (search " is not a string, number, character, or non-nil symbol." line)))
-                              "source: $WORK/case.nsh: E_ARG_TYPE"
-                              (string-trim '(#\Space #\Tab #\Return) line))))
-                   ((and diagnostic
-                         (plusp (length line))
-                         (find (char line 0) '(#\Space #\Tab #\Return)))
-                    (setf diagnostic
-                          (format nil "~a ~a"
-                                  diagnostic
-                                  (string-trim '(#\Space #\Tab #\Return)
-                                               line))))
-                   (t
-                    (when diagnostic
-                      (push (string-trim '(#\Space #\Tab #\Return)
-                                           diagnostic)
-                            records)
-                      (setf diagnostic nil))
-                    (push line records))))
-               (when diagnostic
-                 (push (string-trim '(#\Space #\Tab #\Return)
-                                      diagnostic)
-                       records))
-               (nreverse records))))
-    (let* ((expected-exit (getf expectation :exit))
-           (stdout (%normalize-output (getf result :stdout) result))
-           (stderr (%normalize-output (getf result :stderr) result))
-           (expected-stdout-lines (getf expectation :stdout-lines))
-           (expected-stdout-final-newline (getf expectation :final-newline))
-           (actual-stderr
-             (if ignore-crash-log
-                 (%without-crash-log-lines stderr)
-                 stderr))
-           (expected-stderr-lines (getf expectation :stderr-lines))
-           (expected-single-value (getf expectation :single-value))
-           (expected-line-count (getf expectation :stdout-line-count))
-           (position (getf expectation :position)))
-      (and (eql (getf result :exit)
-                (if (eq expected-exit :success) 0 expected-exit))
-           (or (not (or (member :stdout-lines expectation)
-                        (getf expectation :home)))
-               (if (getf expectation :diagnostic-output)
-                   (equal (canonical-output-lines (%output-lines stdout))
-                          (canonical-output-lines expected-stdout-lines))
-                   (equal (%output-lines stdout) expected-stdout-lines)))
-           (or (not (or (member :final-newline expectation)
-                        (getf expectation :home)))
-               (eql (%output-final-newline-p stdout)
-                    expected-stdout-final-newline))
-           (or (null expected-line-count)
-               (= (length (%output-lines stdout)) expected-line-count))
-           (if (member :stderr-lines expectation)
-               (and (equal (%output-lines actual-stderr)
-                           expected-stderr-lines)
-                    (eql (%output-final-newline-p actual-stderr)
-                         (getf expectation :stderr-final-newline)))
-               (equal actual-stderr ""))
-           (or (null expected-single-value)
-               (= 1 (%substring-occurrences
-                     (format nil "~a~%~a" stdout actual-stderr)
-                     expected-single-value)))
-           (or (null position)
-               (%position-matches-p result position))))))
+(defun %non-empty-strings-p (value)
+  (and value (%string-list-p value) (every #'plusp (mapcar #'length value))))
 
-  (defun %fixture-expectation (case result)
-  (let* ((observed (%field case "observed_v0_7_0"))
-         (stdout (%normalize-output (%field observed "stdout") result))
-         (stderr (%normalize-output (%field observed "stderr") result)))
-    (list :exit (%field observed "exit")
-          :stdout-lines (%output-lines stdout)
-          :final-newline (%output-final-newline-p stdout)
-          :diagnostic-output t
-          :stderr-lines (%output-lines stderr)
-          :stderr-final-newline (%output-final-newline-p stderr))))
+(defun %validate-expectation (expectation where)
+  (unless (and (listp expectation) (evenp (length expectation)))
+    (error "~a: an expectation must be a plist, got ~s" where expectation))
+  (loop for (key) on expectation by #'cddr
+        unless (member key *expectation-keys*)
+          do (error "~a: unknown expectation key ~s" where key))
+  (flet ((need (ok message &rest arguments)
+           (unless ok
+             (error "~a: ~?" where message arguments))))
+    (need (integerp (getf expectation :exit)) ":exit must be an integer")
+    (cond
+      ((not (%plist-key-p expectation :stdout))
+       (need (and (%plist-key-p expectation :error)
+                  (not (%plist-key-p expectation :stdout-final-newline)))
+             ":stdout may be omitted only under :error, without :stdout-final-newline"))
+      ((eq (getf expectation :stdout) :home)
+       (need (not (%plist-key-p expectation :stdout-final-newline))
+             ":stdout :home already fixes the final newline"))
+      (t
+       (need (and (%string-list-p (getf expectation :stdout))
+                  (%plist-key-p expectation :stdout-final-newline)
+                  (typep (getf expectation :stdout-final-newline) 'boolean))
+             ":stdout needs a list of lines and a boolean :stdout-final-newline")))
+    (if (%plist-key-p expectation :stderr)
+        (need (and (%string-list-p (getf expectation :stderr))
+                   (%plist-key-p expectation :stderr-final-newline)
+                   (typep (getf expectation :stderr-final-newline) 'boolean))
+              ":stderr needs a list of lines and a boolean :stderr-final-newline")
+        (need (not (%plist-key-p expectation :stderr-final-newline))
+              ":stderr-final-newline needs :stderr"))
+    (when (%plist-key-p expectation :error)
+      (let ((code (getf expectation :error)))
+        (need (and (stringp code) (eql 0 (search "E_" code)))
+              ":error must be an E_ code string")))
+    (when (%plist-key-p expectation :position)
+      (let ((position (getf expectation :position)))
+        (need (and (listp position)
+                   (= 2 (length position))
+                   (every (lambda (n) (typep n '(integer 1))) position))
+              ":position must be (LINE COL) with positive integers")))
+    (dolist (key '(:contains :absent))
+      (when (%plist-key-p expectation key)
+        (need (%non-empty-strings-p (getf expectation key))
+              "~s must be a non-empty list of non-empty strings" key))))
+  expectation)
 
-  (defun %fixture-result-matches-p (case result
-                                   &optional ignore-crash-log)
-  (%l7-expectation-matches-p
-   result
-   (%fixture-expectation case result)
-   ignore-crash-log))
+(defun %validate-warning (warning where)
+  (when warning
+    (unless (and (listp warning) (evenp (length warning))
+                 (loop for (key) on warning by #'cddr
+                       always (member key '(:code :rewrite)))
+                 (stringp (getf warning :code))
+                 (eql 0 (search "W_" (getf warning :code)))
+                 (typep (getf warning :rewrite) '(or null string)))
+      (error "~a: :warning must be nil or (:code \"W_...\" :rewrite nil-or-string), got ~s"
+             where warning)))
+  warning)
 
-  (defun %rewrite-cue-present-p (text)
-  (let ((markers '("Suggested rewrite:"
-                   "Rewrite:"
-                   "Fix:"
-                   "Example:"
-                   "書き換え案:"
-                   "書き換え案"
-                   "書き換え例:"
-                   "書き換え:"
-                   "提案:"
-                   "例:")))
-    (loop for marker in markers
-          thereis
-            (let ((position (search marker text)))
-              (and position
-                   (let* ((payload-start (+ position (length marker)))
-                          (line-end (or (position #\Newline text
-                                                  :start payload-start)
-                                        (length text)))
-                          (payload (string-trim '(#\Space #\Tab #\Return #\:)
-                                                (subseq text payload-start line-end))))
-                     (or (plusp (length payload))
-                         (let* ((next-start (min (length text)
-                                                 (1+ line-end)))
-                                (next-end (or (position #\Newline text
-                                                        :start next-start)
-                                              (length text))))
-                           (plusp
-                            (length
-                             (string-trim '(#\Space #\Tab #\Return)
-                                          (subseq text next-start next-end))))))))))))
+;;; The v0.7.0 record as an expectation
 
-  (defun %warning-expectation-matches-p (result warning)
-  (let* ((stdout (%normalize-output (getf result :stdout) result))
-         (stderr (%normalize-output (getf result :stderr) result))
-         (combined (format nil "~a~%~a" stdout stderr))
-         (code (getf warning :code))
-         (code-count (%substring-occurrences combined code))
-         (message-match
-           (or (and (getf warning :message-en)
-                    (search (getf warning :message-en) combined))
-               (and (getf warning :message-ja)
-                    (search (getf warning :message-ja) combined))))
-         (rewrite (getf warning :rewrite)))
-    (and (= code-count 1)
-         message-match
-         (or (null rewrite) (search rewrite combined))
-         (%rewrite-cue-present-p combined))))
-)
+(defparameter *argument-type-report-prefix* "source: $WORK/case.nsh: Command argument ")
+(defparameter *argument-type-report-suffix*
+  " is not a string, number, character, or non-nil symbol.")
+(defparameter *v07-type-error-prefix* "source: $WORK/case.nsh: The value ")
+(defparameter *v07-type-error-suffix*
+  " is not of type (OR STRING CHARACTER NUMBER (AND SYMBOL (NOT (EQL NIL))))")
+(defparameter *v07-signalled-line*
+  "source: $WORK/case.nsh: Condition NSHELL.APPLICATION:COMMAND-ARGUMENT-TYPE-ERROR was signalled.")
 
-  (defun %assert-l7-expectation (result expectation)
-  (let* ((expected-exit (getf expectation :exit))
-         (stdout (%normalize-output (getf result :stdout) result))
-         (stderr (%normalize-output (getf result :stderr) result))
-         (expected-stdout-lines
-           (if (member :stdout-lines expectation)
-               (getf expectation :stdout-lines)
-               (if (getf expectation :home)
-                   (list (%normalize-output (getf result :home) result))
-                   nil)))
-         (expected-stdout-final-newline
-           (if (member :final-newline expectation)
-               (getf expectation :final-newline)
-               (not (null (getf expectation :home)))))
-         (single-value (getf expectation :single-value))
-         (line-count (getf expectation :stdout-line-count))
-         (position (getf expectation :position)))
-    (expect (getf result :exit) :to-equal
-            (if (eq expected-exit :success) 0 expected-exit))
-    (when (or (member :stdout-lines expectation)
-              (getf expectation :home))
-      (expect (%output-lines stdout) :to-equal expected-stdout-lines))
-    (when (or (member :final-newline expectation)
-              (getf expectation :home))
-      (expect (%output-final-newline-p stdout) :to-equal
-              expected-stdout-final-newline))
-    (if (member :stderr-lines expectation)
-        (progn
-          (expect (%output-lines stderr) :to-equal
-                  (getf expectation :stderr-lines))
-          (expect (%output-final-newline-p stderr) :to-equal
-                  (getf expectation :stderr-final-newline)))
-        (expect stderr :to-equal ""))
-    (when line-count
-      (expect (length (%output-lines stdout)) :to-equal line-count))
-    (when single-value
-      (expect (%substring-occurrences (format nil "~a~%~a" stdout stderr)
-                                     single-value)
-              :to-equal 1))
-    (when position
-      (expect (%position-matches-p result position) :to-be-truthy))))
+(defun %suffix-p (suffix text)
+  (let ((start (- (length text) (length suffix))))
+    (and (>= start 0) (string= suffix text :start2 start))))
 
-  (defun %l7-row (id)
-  (or (find id *l7-rows* :key (lambda (row) (getf row :probe-id))
-            :test #'string=)
-      (loop for row in *l7-rows*
-            for related = (find id
-                                (append (getf row :additional-probes)
-                                        (getf row :additional-crash-probes))
-                                :key (lambda (probe) (getf probe :probe-id))
-                                :test #'string=)
-            when related
-              return related)))
+(defun %framed-value (text prefix suffix)
+  (and (eql 0 (search prefix text))
+       (%suffix-p suffix text)
+       (<= (+ (length prefix) (length suffix)) (length text))
+       (subseq text (length prefix) (- (length text) (length suffix)))))
 
-  (defun %check-fixture-baseline (id)
+(defun %v07-line-matches-p (expected actual)
+  ;; The one named equivalence between the v0.7.0 record and later builds:
+  ;; commit d17596f2 ("report script syntax and argument type errors without
+  ;; crash logs") replaced SBCL's TYPE-ERROR text for a bad command argument
+  ;; with the COMMAND-ARGUMENT-TYPE-ERROR report
+  ;; (src/application/contracts/l06-value-conversion.lisp:13). The value must
+  ;; stay the same when v0.7.0 recorded it; only the "was signalled." form,
+  ;; which recorded no value, leaves it unchecked.
+  (or (string= expected actual)
+      (let ((actual-value (%framed-value actual *argument-type-report-prefix*
+                                         *argument-type-report-suffix*)))
+        (and actual-value
+             (or (string= expected *v07-signalled-line*)
+                 (equal actual-value
+                        (%framed-value expected *v07-type-error-prefix*
+                                       *v07-type-error-suffix*)))))))
+
+(defun %v07-expectation (case)
+  (let ((record (%v07-observation case)))
+    (list :exit (getf record :exit)
+          :stdout (getf (getf record :stdout) :lines)
+          :stdout-final-newline (getf (getf record :stdout) :final-newline)
+          :stderr (getf (getf record :stderr) :lines)
+          :stderr-final-newline (getf (getf record :stderr) :final-newline))))
+
+(defun %without-crash-log-lines (shape)
+  ;; Crash-log presence is the *crash-probes* guard's job, not the baseline's.
+  (let* ((lines (getf shape :lines))
+         (kept (remove-if (lambda (line) (search *crash-log-marker* line)) lines)))
+    (list :lines kept
+          :final-newline (and kept
+                              (or (getf shape :final-newline)
+                                  (not (equal (car (last kept)) (car (last lines)))))))))
+
+;;; The comparator
+
+(defun %lines-match-p (expected actual line-test)
+  (and (= (length expected) (length actual))
+       (every line-test expected actual)))
+
+(defun %stream-matches-p (expected actual line-test)
+  (and (%lines-match-p (getf expected :lines) (getf actual :lines) line-test)
+       (eq (getf expected :final-newline) (getf actual :final-newline))))
+
+(defun %block-candidates (expected actual line-test)
+  ;; Every way to read ACTUAL as A ++ W ++ B where A ++ B is EXPECTED and W is
+  ;; one non-empty contiguous block of inserted lines.
+  (let* ((expected-lines (getf expected :lines))
+         (actual-lines (getf actual :lines))
+         (size (- (length actual-lines) (length expected-lines))))
+    (when (plusp size)
+      (loop for start from 0 to (length expected-lines)
+            when (and (%lines-match-p (subseq expected-lines 0 start)
+                                      (subseq actual-lines 0 start)
+                                      line-test)
+                      (%lines-match-p (subseq expected-lines start)
+                                      (subseq actual-lines (+ start size))
+                                      line-test)
+                      ;; The final newline belongs to the old output unless
+                      ;; the block is the last thing in the stream.
+                      (or (= start (length expected-lines))
+                          (eq (getf expected :final-newline)
+                              (getf actual :final-newline))))
+              collect (subseq actual-lines start (+ start size))))))
+
+(defun %expected-stream (expectation name run)
+  (ecase name
+    (:stdout
+     (cond ((not (%plist-key-p expectation :stdout)) :uncompared)
+           ((eq (getf expectation :stdout) :home)
+            (list :lines (list (getf run :home)) :final-newline t))
+           (t (list :lines (getf expectation :stdout)
+                    :final-newline (getf expectation :stdout-final-newline)))))
+    (:stderr
+     (cond ((%plist-key-p expectation :stderr)
+            (list :lines (getf expectation :stderr)
+                  :final-newline (getf expectation :stderr-final-newline)))
+           ((%plist-key-p expectation :error) :uncompared)
+           (t (%stream-shape ""))))))
+
+(defun %count-mismatches (check needle expected-count actual-count)
+  (unless (= expected-count actual-count)
+    (list (list :check check :text needle
+                :expected-count expected-count :actual-count actual-count))))
+
+(defun %mismatches (expectation run &key warning (mode :none) v07-record)
+  "Compare RUN with EXPECTATION, an EXPECTATION plist or :unsettled.
+MODE :none forbids warnings, :optional allows one, :required demands one;
+WARNING is the row's (:code :rewrite). V07-RECORD marks an expectation built
+from the v0.7.0 JSON record."
+  (unless (member mode '(:none :optional :required))
+    (error "Unknown warning mode ~s" mode))
+  (unless (eq expectation :unsettled)
+    (%validate-expectation expectation "expectation"))
+  (%validate-warning warning "warning")
+  (when (and (not (eq mode :none)) (null warning))
+    (error "Warning mode ~s needs a warning" mode))
+  (let* ((code (getf warning :code))
+         (rewrite (getf warning :rewrite))
+         (text (getf run :text))
+         (line-test (if v07-record #'%v07-line-matches-p #'string=))
+         (mismatches nil)
+         (blocks nil)
+         (all-compared (not (eq expectation :unsettled))))
+    (flet ((fail (&rest mismatch) (push mismatch mismatches)))
+      (unless (eq expectation :unsettled)
+        (unless (eql (getf expectation :exit) (getf run :exit))
+          (fail :check :exit :expected (getf expectation :exit) :actual (getf run :exit)))
+        (dolist (name '(:stdout :stderr))
+          (let ((expected (%expected-stream expectation name run))
+                (actual (if (and v07-record (eq name :stderr))
+                            (%without-crash-log-lines (getf run name))
+                            (getf run name))))
+            (cond
+              ((eq expected :uncompared) (setf all-compared nil))
+              ((%stream-matches-p expected actual line-test))
+              (t
+               (let ((candidates (and (not (eq mode :none))
+                                      (%block-candidates expected actual line-test))))
+                 (if candidates
+                     (push (cons name candidates) blocks)
+                     (fail :check name :mode mode :expected expected :actual actual)))))))
+        (when (%plist-key-p expectation :error)
+          (let ((error-code (getf expectation :error)))
+            (setf mismatches (append (%count-mismatches :error error-code 1
+                                                        (%token-occurrences text error-code))
+                                     mismatches))))
+        (when (%plist-key-p expectation :position)
+          (let ((token (format nil "case.nsh:~{~d:~d~}" (getf expectation :position))))
+            (setf mismatches (append (%count-mismatches :position token 1
+                                                        (%token-occurrences text token))
+                                     mismatches))))
+        (dolist (needle (getf expectation :contains))
+          (setf mismatches (append (%count-mismatches :contains needle 1
+                                                      (%substring-occurrences text needle))
+                                   mismatches)))
+        (dolist (needle (getf expectation :absent))
+          (setf mismatches (append (%count-mismatches :absent needle 0
+                                                      (%substring-occurrences text needle))
+                                   mismatches))))
+      (unless (eq mode :none)
+        (when (> (length blocks) 1)
+          (fail :check :warning-block :rule "one inserted block across both streams"
+                :blocks blocks))
+        (dolist (entry blocks)
+          (unless (some (lambda (lines)
+                          (let ((block-text (format nil "~{~a~%~}" lines)))
+                            (and (plusp (%token-occurrences block-text code))
+                                 (or (null rewrite) (search rewrite block-text)))))
+                        (cdr entry))
+            (fail :check (car entry) :mode mode
+                  :rule "the inserted block must contain the code and :rewrite"
+                  :code code :rewrite rewrite :blocks (cdr entry))))
+        (when (or (eq mode :required) blocks)
+          (setf mismatches (append (%count-mismatches :warning-code code 1
+                                                      (%token-occurrences text code))
+                                   mismatches))
+          (when (and rewrite (not (search rewrite text)))
+            (fail :check :warning-rewrite :expected rewrite :actual "absent")))
+        (when (and (eq mode :required) all-compared (null blocks))
+          (fail :check :warning-block :code code
+                :expected "one inserted block" :actual "none"))))
+    (nreverse mismatches)))
+
+;;; Assertion
+
+(defun %assert-no-mismatches (mismatches run)
+  (expect (and mismatches
+               (append mismatches
+                       (list (list :normalized-actual
+                                   :exit (getf run :exit)
+                                   :stdout (getf run :stdout)
+                                   :stderr (getf run :stderr)))))
+          :to-equal nil))
+
+;;; Row lookup and checks called by the generated tests
+
+(defvar *l7-rows*)
+(defvar *crash-probes*)
+
+(defun %l7-row (number)
+  (or (find number *l7-rows* :key (lambda (row) (getf row :row)))
+      (error "No L7.1 row ~a" number)))
+
+(defun %v07-row-for-probe (id)
+  (find-if (lambda (row)
+             (and (string= id (getf row :probe))
+                  (eq :v07 (getf (getf row :v08) :expect))))
+           *l7-rows*))
+
+(defun %check-baseline (id)
   (let* ((case (%fixture-case id))
-         (result (%run-probe (%field case "src") case)))
-    (expect (%fixture-result-matches-p case result t)
-            :to-be-truthy)))
+         (warning (getf (getf (%v07-row-for-probe id) :v08) :warning))
+         (run (%run-probe nil case)))
+    (%assert-no-mismatches
+     (%mismatches (%v07-expectation case) run
+                  :warning warning
+                  :mode (if warning :optional :none)
+                  :v07-record t)
+     run)))
 
-  (defun %check-l7-v08 (id)
-  (let* ((row (%l7-row id))
-         (case (%fixture-case id))
-         (baseline (%run-probe (%field case "src") case))
-         (expectation (getf row :v08)))
-    (unless (and expectation (not (eq expectation :observed)))
-      (error "L7 row for probe ~a has no v0.8 expectation" id))
-    (unless (or (getf row :v07-baseline-skip)
-                (%fixture-result-matches-p case baseline t))
-      (return-from %check-l7-v08 nil))
-    (%assert-l7-expectation
-     (%run-probe (or (getf row :source) (%field case "src")) case)
-     expectation)))
+(defun %check-v08 (number)
+  (let* ((row (%l7-row number))
+         (case (%fixture-case (getf row :probe)))
+         (v08 (getf row :v08))
+         (expect (getf v08 :expect))
+         (warning (getf v08 :warning))
+         (run (%run-probe (getf row :input) case)))
+    (%assert-no-mismatches
+     (if (eq expect :v07)
+         (%mismatches (%v07-expectation case) run
+                      :warning warning
+                      :mode (if warning :required :none)
+                      :v07-record t)
+         (%mismatches expect run
+                      :warning warning
+                      :mode (if warning :required :none)))
+     run)))
 
-  (defun %check-l7-next-version (id &optional (kind :next-version))
-  (let* ((case (%fixture-case id))
-         (row (%l7-row id))
-         (fixture-source (%field case "src")))
-    (case kind
-      (:next-version
-       (unless (and row (getf row :v09))
-         (error "L7 row for probe ~a has no next-version expectation" id))
-       (let ((baseline (%run-probe fixture-source case)))
-         (unless (or (getf row :v07-baseline-skip)
-                   (%fixture-result-matches-p case baseline t))
-           (return-from %check-l7-next-version nil)))
-       (let* ((next-source
-                (if (eq (getf row :v09-source) :fixture)
-                    fixture-source
-                    (or (getf row :v09-source)
-                        (getf row :source)
-                        fixture-source)))
-              (result (%run-probe next-source case)))
-         (%assert-l7-expectation result (getf row :v09))))
-      (:warning
-       (unless (and row (getf row :warning))
-         (error "L7 row for probe ~a has no warning expectation" id))
-       (let ((baseline (%run-probe fixture-source case)))
-         (unless (or (getf row :v07-baseline-skip)
-                   (%fixture-result-matches-p case baseline))
-           (return-from %check-l7-next-version nil)))
-       (let* ((warning-source (or (getf row :warning-source) fixture-source))
-              (result (%run-probe warning-source case)))
-         (unless (or (getf row :v07-baseline-skip)
-                   (%fixture-result-matches-p case result))
-           (return-from %check-l7-next-version nil))
-         (expect (%warning-expectation-matches-p
-                  result (getf row :warning))
-                 :to-be-truthy)))
-      (:crash-expectation
-       (unless (and row (getf row :crash-expectation))
-         (error "L7 row for probe ~a has no crash expectation" id))
-       (let* ((crash-source (or (getf row :crash-source) fixture-source))
-              (result (%run-probe crash-source case)))
-         (%assert-l7-expectation result (getf row :crash-expectation))))
-      (:crash
-       (let* ((crash-source (or (getf row :crash-source) fixture-source))
-              (result (%run-probe crash-source case)))
-         (expect (%substring-occurrences
-                  (%normalize-output (getf result :stderr) result)
-                  "nshell: crash log:")
-                 :to-equal 0)))
-      (otherwise
-       (error "Unknown L7 expectation kind ~a" kind)))))
+(defun %check-v09 (number)
+  (let* ((row (%l7-row number))
+         (v09 (or (getf row :v09) (error "L7.1 row ~a has no :v09" number)))
+         (run (%run-probe (getf v09 :input) (%fixture-case (getf row :probe)))))
+    (%assert-no-mismatches (%mismatches (getf v09 :expect) run) run)))
 
-  (defun %probe-ids-at-expansion ()
-    (let ((cases (%fixture-cases)))
-      (unless (= 151 (length cases))
-        (error "Expected 151 language probes, found ~d" (length cases)))
-      (mapcar (lambda (case) (%field case "id")) cases)))
+(defun %check-no-crash-log (id)
+  (let* ((entry (or (find id *crash-probes*
+                          :key (lambda (entry) (getf entry :probe))
+                          :test #'string=)
+                    (error "No crash probe ~a" id)))
+         (run (%run-probe (getf entry :input) (%fixture-case id))))
+    (expect (remove-if-not (lambda (line) (search *crash-log-marker* line))
+                           (%output-lines (getf run :text)))
+            :to-equal nil)))

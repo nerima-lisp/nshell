@@ -112,9 +112,7 @@
                  (<= (nshell.presentation:input-state-cursor-pos new-state)
                      (length new-line))))))))
 
-  (it "pbt-input-state-alt-t-preserves-length-and-characters"
-    "Word transpose reorders existing characters and keeps the cursor in bounds."
-    (check-property (:trials 50)
+  (it "pbt-input-state-alt-t-preserves-length-and-characters" "Word transpose reorders existing characters and keeps the cursor in bounds." (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-t" "transpose-words")) (check-property (:trials 50)
         ((line (gen-shell-command :min-words 2 :max-words 5
                                   :max-word-length 8)
                #'shrink-prompt-text))
@@ -130,11 +128,9 @@
                           (sort (copy-seq new-line) #'char<))
                  (<= 0 (nshell.presentation:input-state-cursor-pos new-state))
                  (<= (nshell.presentation:input-state-cursor-pos new-state)
-                     (length new-line))))))))
+                     (length new-line)))))))))
 
-  (it "pbt-input-state-alt-case-preserves-length-and-cursor-bounds"
-    "Word case transforms keep the line shape stable and the cursor in bounds."
-    (check-property (:trials 50)
+  (it "pbt-input-state-alt-case-preserves-length-and-cursor-bounds" "Word case transforms keep the line shape stable and the cursor in bounds." (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-u" "upcase-word")) (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-l" "downcase-word")) (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-c" "capitalize-word")) (check-property (:trials 50)
         ((line (gen-shell-command :min-words 1 :max-words 5
                                   :max-word-length 8)
                #'shrink-prompt-text)
@@ -153,7 +149,7 @@
                   (and (member output '(:suggest-update :none) :test #'eq)
                        (= (length line) (length new-line))
                        (<= 0 new-cursor)
-                       (<= new-cursor (length new-line)))))))))
+                       (<= new-cursor (length new-line))))))))))
 
   (it "pbt-input-state-undo-redo-roundtrips-typed-line"
     "Undo walks typed edits back to an empty line; redo restores the line."

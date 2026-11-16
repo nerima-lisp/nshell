@@ -1,15 +1,13 @@
 (in-package #:nshell/test)
 
 (describe "input-state-tests"
-  (it "input-state-alt-t-participates-in-undo"
-    (let ((state (input-state :buffer "echo one two" :cursor-pos 12)))
+  (it "input-state-alt-t-participates-in-undo" (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-t" "transpose-words")) (let ((state (input-state :buffer "echo one two" :cursor-pos 12)))
       (with-reduced-input-state (transposed) (reduce-once state :alt-t)
         (with-reduced-input-state (undone output) (reduce-once transposed :ctrl-underscore)
           (is-input-state undone :buffer "echo one two" :cursor-pos 12)
-          (expect :suggest-update :to-be output)))))
+          (expect :suggest-update :to-be output))))))
 
-  (it "input-state-alt-u-upcases-word-at-cursor"
-    (let ((state (completion-session-state
+  (it "input-state-alt-u-upcases-word-at-cursor" (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-u" "upcase-word")) (let ((state (completion-session-state
                   :buffer "echo hello world"
                   :cursor-pos 5
                   :completion-index 2
@@ -21,7 +19,7 @@
           (:buffer "echo HELLO world"
            :cursor-pos 10
            :completion-index -1
-           :suggestion nil))))
+           :suggestion nil)))))
 
   ;; Every case here applies a single alt-case reduction and checks the
   ;; resulting buffer/cursor; only which key, which case transform, and what
@@ -34,29 +32,23 @@
              "echo \"Hello world\" tail" 18)
             ("treats shell operators as word boundaries"
              "echo one|two" 8 :alt-u
-             "echo one|TWO" 12))
-      "input-state-alt-case ~A"
-      (description buffer cursor key expected-buffer expected-cursor)
-    (declare (ignore description))
-    (let ((state (input-state :buffer buffer :cursor-pos cursor)))
+             "echo one|TWO" 12)) "input-state-alt-case ~A" (description buffer cursor key expected-buffer expected-cursor) (declare (ignore description)) (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-u" "upcase-word")) (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-l" "downcase-word")) (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-c" "capitalize-word")) (let ((state (input-state :buffer buffer :cursor-pos cursor)))
       (with-expected-input-state-reduction (new-state output)
           state
           (reduce-once state key)
           :suggest-update
-          (:buffer expected-buffer :cursor-pos expected-cursor))))
+          (:buffer expected-buffer :cursor-pos expected-cursor)))))
 
-  (it "input-state-alt-case-noops-without-word"
-    (with-expected-noop-input-state-reductions (new-state output)
+  (it "input-state-alt-case-noops-without-word" (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-u" "upcase-word")) (with-expected-noop-input-state-reductions (new-state output)
         :alt-u
         (list (input-state :buffer "" :cursor-pos 0)
-              (input-state :buffer "   |" :cursor-pos 4))))
+              (input-state :buffer "   |" :cursor-pos 4)))))
 
-  (it "input-state-alt-u-participates-in-undo"
-    (let ((state (input-state :buffer "echo hello" :cursor-pos 5)))
+  (it "input-state-alt-u-participates-in-undo" (with-fresh-input-dispatch-bindings (expect :ok :to-be (nshell.presentation::input-dispatch-set-binding "alt-u" "upcase-word")) (let ((state (input-state :buffer "echo hello" :cursor-pos 5)))
       (with-reduced-input-state (upcased) (reduce-once state :alt-u)
         (with-reduced-input-state (undone output) (reduce-once upcased :ctrl-underscore)
           (is-input-state undone :buffer "echo hello" :cursor-pos 5)
-          (expect :suggest-update :to-be output)))))
+          (expect :suggest-update :to-be output))))))
 
   (it "input-state-ctrl-underscore-undoes-last-edit"
     (let ((state (apply-key-events-to-input-state

@@ -34,10 +34,13 @@
       (expect :cycle-completion :to-equal (%dispatch-action-kind-for-key :tab))
       (expect 1 :to-equal (%dispatch-action-value-for-key :tab))))
 
-  (it "seeded-table-matches-the-historical-action-for-alt-e"
+  (it "seeded-table-keeps-alt-e-and-unbinds-alt-word-actions"
     (with-fresh-input-dispatch-bindings
       (expect :emit :to-equal (%dispatch-action-kind-for-key :alt-e))
-      (expect :edit-command :to-equal (%dispatch-action-value-for-key :alt-e))))
+      (expect :edit-command :to-equal (%dispatch-action-value-for-key :alt-e))
+      (dolist (key '(:alt-c :alt-l :alt-u :alt-t))
+        (expect :none :to-be
+                (nshell.presentation::input-dispatch-binding-action-name key)))))
 
   (it "seeded-table-matches-the-historical-action-for-right"
     (with-fresh-input-dispatch-bindings

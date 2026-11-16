@@ -61,6 +61,23 @@ NAME.ran in the directory, so a test can tell whether it started."
          (expect (%full-screen-started-p directory "first") :to-be-falsy)
          (expect (%full-screen-started-p directory "less") :to-be-falsy)))))
 
+  (it "refuses a full-screen program started in the background"
+    (with-noninteractive-test-state ()
+      (%full-screen-call-with-programs
+       '("less" "first")
+       (lambda (directory)
+         (loop for (input fix) in '(("less NOTES.txt &" "cat NOTES.txt &")
+                                    ("first | less &" "first | cat &"))
+               do (let ((envelope (json-command input)))
+                    (expect (json-at envelope "status") :to-equal 6)
+                    (expect (json-at envelope "error" "code")
+                            :to-equal "E_INTERACTIVE_PROGRAM")
+                    (expect (json-at envelope "error" "fixes" 0 "input") :to-equal fix)))
+         ;; A background stand-in that did start has written its file by now.
+         (sleep 0.5)
+         (expect (%full-screen-started-p directory "first") :to-be-falsy)
+         (expect (%full-screen-started-p directory "less") :to-be-falsy)))))
+
   (it "suggests the noninteractive form of man and top"
     (with-noninteractive-test-state ()
       (%full-screen-call-with-programs

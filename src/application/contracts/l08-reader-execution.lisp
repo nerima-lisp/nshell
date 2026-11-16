@@ -1024,6 +1024,9 @@ running under PARENT-KIND, each resolved as the executor resolved it
                context :stage-kinds (mapcar #'cons command-nodes dispatch-kinds)))))
 
 (defun %reader-gate-evaluated-stages (context evaluated-stages parent-kind)
+  "The execution gate every stage a reader line runs passes, in the foreground
+or in the background: %ASSISTANT-EXECUTION-GATE, the AI gate and the
+full-screen check together. Return the refusal (MESSAGE STATUS), or NIL."
   (when (%execution-gate-active-p)
     (%reader-assistant-gate
      context
@@ -1243,11 +1246,7 @@ running under PARENT-KIND, each resolved as the executor resolved it
                          (nshell.domain.parsing:ast-node-span command))
                    collect (%reader-background-command context stage)))
            (refusal
-             (when (%assistant-gate-active-p)
-               ;; Only :external stages reach this point.
-               (%reader-assistant-gate
-                context background-commands gate-parent-kind
-                (mapcar (constantly :external) background-commands))))
+             (%reader-gate-evaluated-stages context evaluated-stages gate-parent-kind))
            (command-line (nshell.domain.parsing:ast-node->command-line ast))
            (processes
              (cond

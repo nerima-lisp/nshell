@@ -234,7 +234,7 @@ optional decimal fraction, or NIL."
        (format nil "--timeout must be a positive number of seconds, got ~s"
                timeout)))))
 
-(defun %run-json-invocation (invocation)
+(defun %run-json-invocation (invocation errexit-p)
   "Print the envelope of the --command run and return its status."
   (let ((timeout (cl-cli:option-value invocation :timeout)))
     (multiple-value-bind (json status)
@@ -245,6 +245,7 @@ optional decimal fraction, or NIL."
                       nshell.feature.machine:+default-json-timeout-seconds+)
          :private (not (null (cl-cli:option-value invocation :private)))
          :environment-agent-p (%env-boolean-p "NSHELL_AGENT")
+         :errexit-p errexit-p
          :script-args (cl-cli:positional-value invocation :command-args))
       (write-line json *standard-output*)
       (finish-output *standard-output*)
@@ -295,7 +296,7 @@ optional decimal fraction, or NIL."
                  shell-command command-args
                  (nshell.infrastructure.acl:current-environment-entries))))
            ((cl-cli:option-value invocation :json)
-            (%run-json-invocation invocation))
+            (%run-json-invocation invocation errexit-p))
            ((cl-cli:option-value invocation :command)
             ;; --command executes nshell syntax; -c is reserved for /bin/sh.
             (nshell.presentation:run-repl-batch

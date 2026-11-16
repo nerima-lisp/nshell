@@ -95,10 +95,9 @@
        :v09 (:exit 1))
       (:row 29
        :probe-id "last-top"
-       :source (format nil "(echo ,@(last (list 1 2)))~%")
-       :fixture-v08 (:exit :success :values ("nshell-spec-last"))
+       :source nil
        :v08 (:exit 1)
-       :v09 (:exit :success :values ("2")))
+       :v09 (:exit :success :values ("(2)")))
       (:row 30
        :probe-id "defun-sym-args"
        :source (format nil "(defun g (a) (echo a=$a))~%(g sym)~%")

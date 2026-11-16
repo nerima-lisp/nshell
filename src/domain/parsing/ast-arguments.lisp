@@ -198,3 +198,26 @@
             (mapcar (function ast-node->command-line)
                     (pipeline-node-commands ast))))
    (t "")))
+
+(defun command-node-assignment-words (node)
+  "Return the NAME=value words of NODE when it assigns shell variables and runs
+no command, else NIL.  A reader node keeps its assignments apart and has an
+empty command word; a parsed line has them as unquoted command and argument
+words.  A quoted word or a forced (^...) command always names a command.  The
+executors and the AI safety classifier both decide by this function."
+  (when (and (command-node-p node)
+             (not (command-node-force-external-p node))
+             (null (command-node-command-quote-style node)))
+    (let ((command (command-node-command node))
+          (args (command-node-args node))
+          (assignments (command-node-environment-assignments node)))
+      (flet ((assignment-arg-p (arg)
+               (and (null (arg-quote-style arg))
+                    (shell-assignment-word-p (arg-value arg)))))
+        (cond
+          ((string= command "")
+           (and (null args) (mapcar #'arg-value assignments)))
+          ((and (null assignments)
+                (shell-assignment-word-p command)
+                (every #'assignment-arg-p args))
+           (cons command (mapcar #'arg-value args))))))))

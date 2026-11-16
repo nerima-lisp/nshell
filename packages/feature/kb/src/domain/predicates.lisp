@@ -59,9 +59,15 @@ filesystem is not consulted."
 
 (defun harmless-environment-name-p (name)
   "True for environment names that only change locale, time zone, or
-terminal presentation, so assigning them cannot change what a command runs."
-  (or (member name '("LANG" "TZ" "NO_COLOR" "TERM" "COLUMNS") :test #'equal)
-      (string-prefix-p "LC_" name)))
+terminal presentation, so assigning them cannot change what a command runs.
+The name must equal a listed one; LC_ needs a tail of A-Z and `_'."
+  (and (stringp name)
+       (or (member name '("LANG" "TZ" "NO_COLOR" "TERM" "COLUMNS") :test #'string=)
+           (and (> (length name) 3)
+                (string-prefix-p "LC_" name)
+                (every (lambda (character)
+                         (or (char<= #\A character #\Z) (char= character #\_)))
+                       (subseq name 3))))))
 
 (defun contains-p (needle word)
   (and (stringp word) (search needle word) t))
@@ -69,71 +75,157 @@ terminal presentation, so assigning them cannot change what a command runs."
 (defun force-push-option-p (word)
   (or (equal word "-f") (string-prefix-p "--force" word)))
 
-(defun find-exec-action-p (word)
-  (and (member word '("-exec" "-ok" "-execdir" "-okdir") :test #'equal) t))
+;;; Closed-world argument specs (D-P1-5 2.2, 2.3).  A spec is the plist of
+;;; one +safe-command-specs+ row.  The matchers return the words the spec
+;;; does not allow, so NIL means every word matched.
 
-(defun find-write-action-p (word)
-  (or (equal word "-delete")
-      (some (lambda (prefix) (string-prefix-p prefix word))
-            '("-fprint" "-fprintf" "-fls"))))
+(defun control-character-p (character)
+  "True for C0 and C1 control characters, which a terminal may act on."
+  (let ((code (char-code character)))
+    (or (< code 32) (<= 127 code 159))))
 
-(defun ripgrep-preprocessor-option-p (word)
-  (or (string-prefix-p "--pre" word) (equal word "--search-zip")))
+(defun git-format-value-p (value)
+  "True for a --format or --pretty value that cannot verify signatures.
+%G placeholders run gpg, gpgsm, or ssh-keygen on the commit data."
+  (not (search "%G" value)))
 
-(defparameter +read-only-git-options+
-  '(("log" "--oneline" "--decorate" "--stat" "--name-only" "--name-status"
-     "--graph" "--all" "--follow" "--no-merges" "-p" "-n" "--")
-    ("show" "--stat" "--patch" "-p" "--name-only" "--name-status" "--pretty"
-     "--format" "--no-patch" "--")
-    ("status" "-s" "--short" "-b" "--branch" "--porcelain" "--long" "-v"
-     "--verbose" "--")
-    ("diff" "--stat" "--shortstat" "--numstat" "--cached" "--staged"
-     "--name-only" "--name-status" "-p" "--patch" "--no-ext-diff"
-     "--no-textconv" "--"))
-  "Options each read-only git subcommand accepts.  An option outside these
-lists (--output, --ext-diff, -c ...) leaves the command to confirm.")
+(defun %spec-value-p (type value)
+  (and (stringp value)
+       (ecase type
+         (:any t)
+         (:count (and (plusp (length value)) (every #'digit-char-p value)))
+         (:git-format (git-format-value-p value)))))
 
-(defparameter +read-only-git-option-prefixes+
-  '(("log" "--pretty=" "--format=")
-    ("show" "--pretty=" "--format=")
-    ("status" "--porcelain=")
-    ("diff")))
+(defun read-spec-options (spec words &key (permute t))
+  "Read WORDS with SPEC's :FLAGS, :VALUE-FLAGS, :LONG, :VALUE-LONG, and
+:EXACT.  Return the operands, the words SPEC does not allow, and the words
+left unread.  With PERMUTE, options may follow operands and only `--' ends
+them; without it, the first operand or `--' ends the options and it and the
+rest are left unread.  Long names match exactly, never by prefix."
+  (let ((flags (getf spec :flags ""))
+        (value-flags (getf spec :value-flags))
+        (long (getf spec :long))
+        (value-long (getf spec :value-long))
+        (exact (getf spec :exact))
+        (operands nil)
+        (mismatches nil))
+    (flet ((check-value (word type value)
+             (unless (%spec-value-p type value)
+               (push (if value (format nil "~a ~a" word value) word) mismatches))))
+      (loop while words
+            do (let ((word (pop words)))
+                 (cond
+                   ((string= word "--")
+                    (if permute
+                        (setf operands (revappend words operands)
+                              words nil)
+                        (return-from read-spec-options
+                          (values (nreverse operands) (nreverse mismatches)
+                                  (cons word words)))))
+                   ((member word exact :test #'string=))
+                   ((string-prefix-p "--" word)
+                    (let* ((equals (position #\= word))
+                           (name (subseq word 0 equals))
+                           (type (second (assoc name value-long :test #'string=))))
+                      (cond
+                        ((and (null equals) (member name long :test #'string=)))
+                        ((and type equals)
+                         (check-value word type (subseq word (1+ equals))))
+                        (type (check-value word type (pop words)))
+                        (t (push word mismatches)))))
+                   ((option-word-p word)
+                    (loop for index from 1 below (length word)
+                          for character = (char word index)
+                          for type = (second (assoc (string character) value-flags
+                                                    :test #'string=))
+                          do (cond
+                               ((find character flags))
+                               (type
+                                (check-value word type
+                                             (if (< (1+ index) (length word))
+                                                 (subseq word (1+ index))
+                                                 (pop words)))
+                                (return))
+                               (t (push word mismatches) (return)))))
+                   (permute (push word operands))
+                   (t
+                    (return-from read-spec-options
+                      (values (nreverse operands) (nreverse mismatches)
+                              (cons word words))))))))
+    (values (nreverse operands) (nreverse mismatches) nil)))
 
-(defun %read-only-git-branch-arguments-p (options)
-  ;; A bare name creates a branch; -l creates its reflog, not a listing.
-  (or (null options)
-      (and (equal (first options) "--list")
-           (loop with patterns-only = nil
-                 for word in (rest options)
-                 always (cond
-                          (patterns-only t)
-                          ((string= word "--") (setf patterns-only t))
-                          (t (not (string-prefix-p "-" word))))))))
+(defun %option-spec-mismatches (spec arguments)
+  (multiple-value-bind (operands mismatches) (read-spec-options spec arguments)
+    (let* ((options (ldiff arguments (member "--" arguments :test #'string=)))
+           (limit (if (some (lambda (word)
+                              (member word (getf spec :listing-options)
+                                      :test #'string=))
+                            options)
+                      :any
+                      (getf spec :positionals :any))))
+      (append mismatches
+              (and (integerp limit) (nthcdr limit operands))))))
 
-(defun read-only-git-arguments-p (arguments)
-  "True when ARGUMENTS (after `git') stay inside the read-only grammar."
-  (let ((subcommand (first arguments))
-        (options (rest arguments)))
+(defun %subcommand-spec-mismatches (spec arguments)
+  ;; Words before the subcommand are global options (git -c, -C, ...).
+  (let ((entry (assoc (first arguments) (getf spec :subcommands) :test #'equal)))
     (cond
-      ((not (stringp subcommand)) nil)
-      ((string= subcommand "branch")
-       (%read-only-git-branch-arguments-p options))
-      ((string= subcommand "remote")
-       ;; Only the no-subcommand listing grammar is read-only.
-       (every (lambda (word) (member word '("-v" "--verbose") :test #'equal))
-              options))
-      (t
-       (let ((allowed (rest (assoc subcommand +read-only-git-options+
-                                   :test #'string=)))
-             (prefixes (rest (assoc subcommand +read-only-git-option-prefixes+
-                                    :test #'string=))))
-         (and (assoc subcommand +read-only-git-options+ :test #'string=)
-              (every (lambda (word)
-                       (or (not (string-prefix-p "-" word))
-                           (member word allowed :test #'string=)
-                           (some (lambda (prefix) (string-prefix-p prefix word))
-                                 prefixes)))
-                     options)))))))
+      ((null arguments) (list "(no subcommand)"))
+      ((null entry) (list (first arguments)))
+      (t (%option-spec-mismatches (rest entry) (rest arguments))))))
+
+(defun %find-spec-mismatches (spec arguments)
+  ;; `--' is skipped only as the first word.  BSD and GNU find still read an
+  ;; expression after it, so the primaries are checked as before.
+  (let ((words (if (equal (first arguments) "--") (rest arguments) arguments))
+        (mismatches nil))
+    (loop while (member (first words) (getf spec :leading-options) :test #'equal)
+          do (pop words))
+    (loop while (and words
+                     (not (option-word-p (first words)))
+                     (not (member (first words) '("!" "(" ")") :test #'string=)))
+          do (pop words))
+    (loop while words
+          do (let ((word (pop words)))
+               (cond
+                 ((member word (getf spec :primaries) :test #'string=))
+                 ((member word (getf spec :value-primaries) :test #'string=)
+                  (unless words (push word mismatches))
+                  (pop words))
+                 (t (push word mismatches)))))
+    (nreverse mismatches)))
+
+(defun %echo-spec-mismatches (name arguments)
+  ;; The builtins print a control character or turn `\e' and `\0NNN' into
+  ;; one, which can drive the terminal (OSC 52, OSC 133).
+  (let ((mismatches
+          (remove-if-not (lambda (word)
+                           (or (find #\\ word) (some #'control-character-p word)))
+                         arguments)))
+    (if (string= name "echo")
+        (append (remove-if (lambda (word)
+                             (or (not (option-word-p word)) (string= word "-n")))
+                           arguments)
+                mismatches)
+        (let ((format (if (equal (first arguments) "--")
+                          (second arguments)
+                          (first arguments))))
+          (if (and format (option-word-p format))
+              (cons format mismatches)
+              mismatches)))))
+
+(defun spec-argument-mismatches (spec-row arguments)
+  "Return the words of ARGUMENTS that SPEC-ROW, a (NAME . SPEC) row of the
+spec table, does not allow.  NIL means the arguments match the spec."
+  (destructuring-bind (name &rest spec) spec-row
+    (remove-duplicates
+     (case (getf spec :grammar)
+       (:find (%find-spec-mismatches spec arguments))
+       (:echo (%echo-spec-mismatches name arguments))
+       (t (if (getf spec :subcommands)
+              (%subcommand-spec-mismatches spec arguments)
+              (%option-spec-mismatches spec arguments))))
+     :test #'string= :from-end t)))
 
 (defun edit-distance (left right)
   "Optimal string alignment distance: insertions, deletions, substitutions,

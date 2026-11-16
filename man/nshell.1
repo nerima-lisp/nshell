@@ -15,6 +15,9 @@ nshell \- an interactive shell with an S-expression command language
 .RB [ \-\-no\-history ]
 .RB [ \-\-private ]
 .RB [ \-\-mcp ]
+.RB [ \-\-json
+.RB [ \-\-timeout
+.IR SEC ]]
 .RB [ \-c | \-\-shell-command
 .IR SHELL_COMMAND
 .RI [ ARGS .\|.\|.]]
@@ -144,6 +147,37 @@ and audit persistence.
 .TP
 .B \-\-mcp
 Run the standard-input/standard-output MCP server.
+.TP
+.B \-\-json
+With
+.BR \-\-command ,
+run COMMAND once and print one JSON response envelope on a single line of
+standard output instead of the command's output. The exit status is the
+envelope's
+.BR status .
+Output over 32 KiB keeps its first and last 10 lines; the full text is saved
+under
+.I $XDG_CACHE_HOME/nshell/out/
+unless
+.B \-\-private
+is given. When
+.B NSHELL_AGENT=1
+is set, input classified confirm or block is not run and exits 3 or 4.
+.B \-\-json
+requires
+.B \-\-command
+and cannot be combined with
+.BR \-c ,
+.BR \-\-mcp ,
+or
+.BR \-i .
+.TP
+.BI \-\-timeout " SEC"
+With
+.BR \-\-json ,
+stop the whole run after SEC seconds (a positive number; default 120). Every
+process the run started is stopped with its process group, and the envelope
+reports E_TIMEOUT with exit status 124 and the output produced so far.
 .SH SUBCOMMANDS
 A subcommand name given as the first argument takes precedence over a script
 of the same name. To run such a script, give a path, as in

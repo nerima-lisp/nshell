@@ -111,13 +111,13 @@ SCRIPT-ARGS are exposed as $argv for --command."
          (nshell.application:collect-source-lines *standard-input*))))
   *last-exit-code*)
 
-(defun run-repl-batch-observed (line observer &key script-args)
+(defun run-repl-batch-observed (line observer &key script-args errexit-p)
   "Run LINE as RUN-REPL-BATCH does and return its exit status. OBSERVER is
 called with :MISSING-COMMAND and the last command name that was not found,
 :COMMAND-FAILED and the condition that ended the run, or :CRASH, the condition
 and whether the user's own Lisp code signalled it."
   (let ((*batch-outcome-observer* observer))
-    (run-repl-batch :line line :script-args script-args)))
+    (run-repl-batch :line line :script-args script-args :errexit-p errexit-p)))
 (defun run-repl-shell-command (command arguments
                               &key (load-config-p t) config-path)
   "Load the interactive startup configuration and delegate COMMAND to /bin/sh."

@@ -102,9 +102,53 @@
         (classify-ast (nshell.domain.parsing:parse-result-ast parsed))
         (%assistant-unparsable-result "the wrapped command could not be parsed"))))
 
+(defun %assistant-assignment-name (word)
+  "Return the variable name of a NAME=value word, or NIL."
+  (let ((equals (and (stringp word) (position #\= word))))
+    (when (and equals
+               (plusp equals)
+               (let ((first (char word 0)))
+                 (or (alpha-char-p first) (char= first #\_)))
+               (every (lambda (character)
+                        (or (alphanumericp character) (char= character #\_)))
+                      (subseq word 0 equals)))
+      (subseq word 0 equals))))
+
+(defun %assistant-leading-assignment-names (command args)
+  "Return the names a bare line assigns before its command word."
+  (when (%assistant-assignment-name command)
+    (loop for word in (cons command args)
+          for name = (%assistant-assignment-name word)
+          while name
+          collect name)))
+
+(defun %assistant-env-prefix (command args)
+  "For env, return the names it assigns and the options it is given before
+the command it runs."
+  (when (string= (%assistant-command-basename command) "env")
+    (let ((end (or (%assistant-wrapper-index-and-kind command args)
+                   (length args)))
+          (names nil)
+          (options nil))
+      (loop for word in args
+            for index from 0 below end
+            for name = (%assistant-assignment-name word)
+            do (cond
+                 (name (push name names))
+                 ((and (plusp (length word))
+                       (char= (char word 0) #\-)
+                       (string/= word "--"))
+                  (push word options))))
+      (values (nreverse names) (nreverse options)))))
+
 (defun %assistant-wrapped-result (command args)
-  "Classify the command that a wrapper, eval, or sh -c runs, or return NIL."
+  "Classify the command that an assignment prefix, a wrapper, eval, or sh -c
+runs, or return NIL."
   (cond
+    ((%assistant-assignment-name command)
+     (let ((rest (member-if-not #'%assistant-assignment-name args)))
+       (when rest
+         (%assistant-parse-and-classify-text (format nil "~{~a~^ ~}" rest)))))
     ((let ((index (%assistant-wrapper-index-and-kind command args)))
        (when index
          (%assistant-parse-and-classify-text
@@ -149,16 +193,29 @@ so an unknown wrapper such as `nohup-like rm -rf /' stays blocked."
              (wrapped (%assistant-wrapped-result command args))
              (embedded (unless wrapped
                          (%assistant-embedded-command-result args))))
-        (%assistant-subject-result
-         command
-         :command (%assistant-command-basename command)
-         :invoked-as command
-         :arguments args
-         :wraps (and wrapped t)
-         :nested (mapcan #'%assistant-result-reasons
-                         (append (and wrapped (list wrapped))
-                                 (%assistant-substitution-results command args)))
-         :embedded (and embedded (%assistant-result-reasons embedded))))
+        (multiple-value-bind (env-names env-options)
+            (%assistant-env-prefix command args)
+          (%assistant-subject-result
+           command
+           :command (%assistant-command-basename command)
+           :invoked-as command
+           :arguments args
+           :wraps (and wrapped t)
+           :assignments
+           (append (mapcar (lambda (assignment)
+                             (or (%assistant-assignment-name
+                                  (nshell.domain.parsing:command-arg-value
+                                   assignment))
+                                 ""))
+                           (nshell.domain.parsing:command-node-environment-assignments
+                            node))
+                   (%assistant-leading-assignment-names command args)
+                   env-names)
+           :wrapper-options env-options
+           :nested (mapcan #'%assistant-result-reasons
+                           (append (and wrapped (list wrapped))
+                                   (%assistant-substitution-results command args)))
+           :embedded (and embedded (%assistant-result-reasons embedded)))))
       (%assistant-unparsable-result "the value is not a command AST node")))
 
 (defun classify-pipeline (node)

@@ -21,7 +21,7 @@ rules.pl into it; until then only tests set it.")
     (operand :none "") (redirect :none "") (wraps :none)
     (nested :none :safe "" "") (embedded :none :safe "" "")
     (unparsable :none "") (form-redirect :none) (sexp-unforced :none)
-    (unclassifiable :none ""))
+    (unclassifiable :none "") (assignment :none "") (wrapper-option :none ""))
   "One clause per input predicate about the atom :NONE, which never names a
 subject.  A rule that asks about an input the evaluator did not supply then
 fails instead of raising existence_error, while a misspelled predicate in
@@ -53,7 +53,8 @@ collected with findall under the inference and deadline budgets."
                  *classify-deadline-seconds*)))))
 
 (defun %subject-facts (&key command invoked-as arguments nested embedded wraps
-                         unparsable unclassifiable form-redirect sexp-unforced)
+                         unparsable unclassifiable form-redirect sexp-unforced
+                         assignments wrapper-options)
   (let ((facts (copy-list +subject-fact-schema+)))
     (flet ((add (&rest fact) (push fact facts)))
       (when command
@@ -80,6 +81,8 @@ collected with findall under the inference and deadline budgets."
                      ((plusp (length target)) (add 'redirect 'subject target))
                      (next (add 'redirect 'subject next))))))
       (when wraps (add 'wraps 'subject))
+      (dolist (name assignments) (add 'assignment 'subject name))
+      (dolist (option wrapper-options) (add 'wrapper-option 'subject option))
       (dolist (reason nested)
         (add 'nested 'subject (first reason) (second reason) (third reason)))
       (dolist (reason embedded)
@@ -140,16 +143,20 @@ collected with findall under the inference and deadline budgets."
 
 (defun classify-subject (&rest subject &key command invoked-as arguments nested
                                          embedded wraps unparsable unclassifiable
-                                         form-redirect sexp-unforced)
+                                         form-redirect sexp-unforced assignments
+                                         wrapper-options)
   "Classify one subject with the built-in and user rules.
 
 COMMAND is the basename and INVOKED-AS the command word as written;
 ARGUMENTS are the argument words.  NESTED and EMBEDDED are (LEVEL RULE TEXT)
 results of classifying embedded command text; WRAPS says a wrapper target
 was read.  UNPARSABLE and UNCLASSIFIABLE are lists of reason texts.
+ASSIGNMENTS are the environment names the command is run with and
+WRAPPER-OPTIONS the options given to env.
 Returns the level and the (RULE . TEXT) reasons at that level."
   (declare (ignore command invoked-as arguments nested embedded wraps
-                   unparsable unclassifiable form-redirect sexp-unforced))
+                   unparsable unclassifiable form-redirect sexp-unforced
+                   assignments wrapper-options))
   (let ((facts (apply #'%subject-facts subject)))
     (%top-level-reasons
      (append (%builtin-solutions facts) (%user-solutions facts)))))

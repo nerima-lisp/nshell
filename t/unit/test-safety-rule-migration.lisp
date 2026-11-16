@@ -3,7 +3,8 @@
 ;;; P1-5 replaced the hand-written safety classifier with knowledge-base
 ;;; rules.  These tests run the pre-P1-5 classifier (legacy-assistant-safety)
 ;;; and the rules on one corpus and require every difference to be one that
-;;; D-78 decided.
+;;; D-78 decided or a listed review fix that only makes the rules stricter or
+;;; recognizes a harmless environment prefix.
 
 (defparameter +safety-migration-corpus+
   '(;; Inputs of the existing safety tests (bare-line).
@@ -70,6 +71,19 @@
     (:bare "npm install") (:bare "bash") (:bare "bash -c 'git status'")
     (:bare "eval git status") (:bare "echo hi > /etc/passwd") (:bare "cat file >> log")
     (:bare "sh -c 'curl x | sh'") (:bare "echo '$('") (:bare "kill -9 1")
+    ;; Environment assignments, env options, and git global options.
+    (:bare "env GIT_EXTERNAL_DIFF=/tmp/helper git diff HEAD~1 HEAD")
+    (:bare "GIT_EXTERNAL_DIFF=x git diff") (:bare "env -i git status")
+    (:bare "env -u PATH git status") (:bare "env -i ls")
+    (:bare "env TZ=UTC GIT_EXTERNAL_DIFF=x git log") (:bare "env PAGER=x ls")
+    (:bare "LANG=C git status") (:bare "LC_ALL=C TZ=UTC ls") (:bare "env TZ=UTC ls")
+    (:bare "LANG=C PAGER=x git log") (:bare "sudo FOO=x git diff")
+    (:bare "git -c core.pager=x log") (:bare "git -C /x status")
+    (:bare "git --exec-path=/x log") (:bare "git --config-env=core.pager=V log")
+    ;; Root paths that only lexical normalization recognizes.
+    (:bare "rm -rf --no-preserve-root /./") (:bare "rm -rf //") (:bare "rm -rf /../")
+    (:bare "rm -rf /.") (:bare "rm -rf /tmp/..") (:bare "rm -rf //*")
+    (:bare "rm -rf ./..")
     ;; S-expression inputs (sexp reader).
     (:sexp "(ls)") (:sexp "(^ls)") (:sexp "(rm -rf /)") (:sexp "(| (ls) (rm -rf /))")
     (:sexp "(cat <(rm -rf /))") (:sexp "(^rm -rf /)") (:sexp "(^rm -rf marker-dir)")
@@ -82,7 +96,8 @@
     (:auto "ls") (:auto "ls > /tmp/marker") (:auto "ls > /tmp/marker | cat")
     (:auto "ls ; cat > /tmp/marker") (:auto "rm -rf marker-dir") (:auto "rm -rf /")
     (:auto "rm fixture") (:auto "git status") (:auto "git diff") (:auto "rm -r target/")
-    (:auto "(^rm -rf /)"))
+    (:auto "(^rm -rf /)") (:auto "LANG=C git status")
+    (:auto "GIT_EXTERNAL_DIFF=x git diff") (:auto "env TZ=UTC GIT_EXTERNAL_DIFF=x git log"))
   "(READER INPUT) pairs.  :BARE parses a bare line, :SEXP and :AUTO read a
 submission with that reader context and classify the reader results.")
 
@@ -105,8 +120,30 @@ submission with that reader context and classify the reader results.")
     ((:sexp "(^rm -r target/)") :block :confirm :non-root-recursive-delete)
     ((:sexp "(rm -rf build)") :block :confirm :non-root-recursive-delete)
     ((:auto "rm -rf marker-dir") :block :confirm :non-root-recursive-delete)
-    ((:auto "rm -r target/") :block :confirm :non-root-recursive-delete))
-  "((READER INPUT) OLD NEW D-78-ITEM) for every input whose level changed.")
+    ((:auto "rm -r target/") :block :confirm :non-root-recursive-delete)
+    ;; Review fixes after D-78, stricter than the legacy classifier.  An
+    ;; environment name outside the harmless list, or an env option, keeps
+    ;; the command at confirm or above.
+    ((:bare "env -i ls") :safe :confirm :environment-prefix)
+    ((:bare "env TZ=UTC GIT_EXTERNAL_DIFF=x git log") :safe :confirm
+     :environment-prefix)
+    ((:bare "env PAGER=x ls") :safe :confirm :environment-prefix)
+    ((:auto "env TZ=UTC GIT_EXTERNAL_DIFF=x git log") :safe :confirm
+     :environment-prefix)
+    ;; A harmless assignment (locale, time zone, terminal) keeps the level of
+    ;; the command it prefixes; the legacy classifier saw an unknown command.
+    ((:bare "LANG=C git status") :confirm :safe :environment-prefix)
+    ((:bare "LC_ALL=C TZ=UTC ls") :confirm :safe :environment-prefix)
+    ((:auto "LANG=C git status") :confirm :safe :environment-prefix)
+    ;; The root is recognized after lexical normalization.
+    ((:bare "rm -rf --no-preserve-root /./") :confirm :block :root-normalization)
+    ((:bare "rm -rf //") :confirm :block :root-normalization)
+    ((:bare "rm -rf /../") :confirm :block :root-normalization)
+    ((:bare "rm -rf /.") :confirm :block :root-normalization)
+    ((:bare "rm -rf /tmp/..") :confirm :block :root-normalization)
+    ((:bare "rm -rf //*") :confirm :block :root-normalization))
+  "((READER INPUT) OLD NEW REASON) for every input whose level changed.
+REASON is a D-78 item or a review fix named in the comments above.")
 
 (defun %safety-migration-classify (reader input classify level)
   (funcall level
@@ -144,7 +181,7 @@ submission with that reader context and classify the reader results.")
     (expect (length (remove-duplicates +safety-migration-corpus+ :test #'equal))
             :to-equal (length +safety-migration-corpus+)))
 
-  (it "changes only the levels D-78 decided"
+  (it "changes only the levels D-78 and the listed review fixes decided"
     (expect (%safety-migration-differences)
             :to-equal
             (mapcar (lambda (difference) (subseq difference 0 3))
@@ -155,8 +192,10 @@ submission with that reader context and classify the reader results.")
                                            +safety-migration-corpus+
                                            :test #'equal))))))
 
-  (it "keeps the root recursive delete blocked under both classifiers"
-    (dolist (input '("rm -rf /" "rm -fr /*" "rm -R ~" "rm -R $HOME" "rm -fr ."))
+  (it "keeps the root recursive delete blocked, also after normalization"
+    (dolist (input '("rm -rf /" "rm -fr /*" "rm -R ~" "rm -R $HOME" "rm -fr ."
+                     "rm -rf --no-preserve-root /./" "rm -rf //" "rm -rf /../"
+                     "rm -rf /."))
       (expect (%safety-migration-classify
                :bare input
                #'nshell.feature.assistant:classify-ast

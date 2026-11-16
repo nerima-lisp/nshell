@@ -296,13 +296,16 @@ first, as (SOURCE ORIGIN APPROVAL)."
 
   ;; The alias target is a missing command: classified confirm, and running
   ;; it only reports "command not found" (exit 127).
-  (it "stops-at-the-gate-when-an-alias-turns-a-safe-proposal-into-confirm"
+  ;; Enter classifies in the context the line runs in, so it sees the alias
+  ;; as the gate does and asks for the second Enter before running anything.
+  (it "asks-for-confirmation-when-an-alias-turns-a-safe-proposal-into-confirm"
     (with-repl-test-state
       (repl-test-define-alias "ls" "nshell-approval-test-missing-command -r somedir")
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "ls")))
         (with-approval-gate-execution ()
+          (setf nshell.presentation::*last-exit-code* 0)
           (%approval-press-enter)
-          (expect 126 :to-equal nshell.presentation::*last-exit-code*)
+          (expect 0 :to-equal nshell.presentation::*last-exit-code*)
           (expect '("ls" . :pending) :to-equal
                   nshell.presentation::*assistant-command-approval*)
           (expect "ls" :to-equal (%approval-buffer))
@@ -315,7 +318,7 @@ first, as (SOURCE ORIGIN APPROVAL)."
   ;; The alias target is a fixture script that drains its input and exits 42.
   ;; A missing command would not do: a pipeline that spawns one fails, and
   ;; whether the echo stage or the spawn fails first depends on timing.
-  (it "stops-at-the-gate-when-an-alias-in-a-pipeline-turns-confirm"
+  (it "asks-for-confirmation-when-an-alias-in-a-pipeline-turns-confirm"
     (host-kit:with-temporary-directory (directory)
       (let ((target (merge-pathnames "approval-test-pipeline-target" directory)))
         (with-open-file (stream target :direction :output :if-exists :supersede)
@@ -326,8 +329,9 @@ first, as (SOURCE ORIGIN APPROVAL)."
           (let ((nshell.presentation::*input-state*
                   (%approval-proposal-state "echo hi | ls")))
             (with-approval-gate-execution ()
+              (setf nshell.presentation::*last-exit-code* 0)
               (%approval-press-enter)
-              (expect 126 :to-equal nshell.presentation::*last-exit-code*)
+              (expect 0 :to-equal nshell.presentation::*last-exit-code*)
               (expect '("echo hi | ls" . :pending) :to-equal
                       nshell.presentation::*assistant-command-approval*)
               (%approval-press-enter)

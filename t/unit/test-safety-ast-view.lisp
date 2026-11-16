@@ -85,14 +85,16 @@ nodes run as reader stages."
   ;; (%assistant-classify-reader-result passes :READER).
   (multiple-value-bind (argv names words writes problems results redirects resolution)
       (nshell.feature.assistant::%assistant-command-parts
-       node (if (eq path :reader) :reader :bare-line))
+       node (if (eq path :reader) :reader :bare-line)
+       (nshell.application:assistant-command-resolver (make-test-shell-context)))
     (declare (ignore words writes problems results redirects))
     (list names argv resolution)))
 
 (defun %safety-view-bare-resolution (context node)
-  ;; %execute-command-by-name-in-context runs a function or a registered
-  ;; builtin in this process and anything else as an external command.
-  (if (nshell.application::%shell-internal-command-p context node) :builtin :external))
+  ;; %execute-command-by-name-in-context runs what this resolution names.
+  (%safety-view-kind
+   (nshell.application::%resolve-command-by-name
+    context (nshell.domain.parsing:command-node-command node))))
 
 (defun %safety-view-executor (context path node)
   "The names, command words, and resolution (builtin or external) the
@@ -127,8 +129,9 @@ stubbed so no substitution runs."
                (cons (nshell.domain.parsing:command-node-command node)
                      (nshell.domain.parsing:command-node-arg-values node))
                (handler-case
-                   (nth-value 0 (nshell.application::%resolve-command-stage-binding
-                                 context node))
+                   (%safety-view-kind
+                    (nth-value 0 (nshell.application::%resolve-command-stage-binding
+                                  context node)))
                  (error () :unresolved))))))))
 
 (describe "safety classifier sees commands as the executor runs them"
@@ -241,10 +244,8 @@ when the executor dispatches no stage for it."
             (let ((command (nshell.application:evaluated-command-stage-command-node stage)))
               (list (%safety-view-gate-classifier
                      (lambda ()
-                       (nshell.application::%reader-assistant-gate
-                        context
-                        (list (nshell.application::%reader-gate-command-node context stage))
-                        nil)))
+                       (nshell.application::%reader-gate-evaluated-stages
+                        context (list stage) nil)))
                     (list (mapcar #'car
                                   (nshell.application:evaluated-command-stage-environment-assignments
                                    stage))
@@ -254,8 +255,9 @@ when the executor dispatches no stage for it."
                                  (nshell.application:evaluated-command-stage-arguments stage)))
                           (%safety-view-normal-redirects
                            (nshell.domain.parsing:command-node-redirects command))
-                          (nshell.application:evaluated-command-stage-dispatch-kind
-                           stage)))))))))
+                          (%safety-view-kind
+                           (nshell.application:evaluated-command-stage-dispatch-kind
+                            stage))))))))))
 
 (describe "safety classifier sees a stage at the gate as the executor runs it"
   (it "agrees on the names, command words, redirects, and resolution of every gated stage"
@@ -293,10 +295,8 @@ when the executor dispatches no stage for it."
             (nshell.application::*execution-gate-parent-kind* nil)
             (nshell.application:*execution-gate-stopped-p* nil))
         (expect (second
-                 (nshell.application::%reader-assistant-gate
-                  context
-                  (list (nshell.application::%reader-gate-command-node context stage))
-                  nil))
+                 (nshell.application::%reader-gate-evaluated-stages
+                  context (list stage) nil))
                 :to-equal 126)))))
 
 ;;; R-P1-5: the executor runs a registered shell function or an alias before
@@ -395,9 +395,11 @@ echo, ls, and git, and aliases of those names to other commands."
 
 (defun %safety-view-recorded-resolutions (thunk)
   "Call THUNK and return the resolution of every outermost command the
-classifier split meanwhile."
+classifier split meanwhile.  The node an alias expands to is classified
+right after its alias and is not counted again."
   (let ((original (symbol-function 'nshell.feature.assistant::%assistant-command-parts))
         (depth 0)
+        (skip nil)
         (seen nil))
     (with-temporary-function
         ('nshell.feature.assistant::%assistant-command-parts
@@ -406,7 +408,11 @@ classifier split meanwhile."
                           (incf depth)
                           (unwind-protect (multiple-value-list (apply original arguments))
                             (decf depth)))))
-             (when (zerop depth) (push (eighth parts) seen))
+             (when (zerop depth)
+               (if skip
+                   (setf skip nil)
+                   (push (eighth parts) seen))
+               (when (ninth parts) (setf skip t)))
              (values-list parts))))
       (let ((nshell.application:*execution-origin* :proposal)
             (nshell.application:*execution-approval* :confirm)

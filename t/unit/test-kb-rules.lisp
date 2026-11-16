@@ -4,7 +4,7 @@
   (let ((parsed (nshell.domain.parsing:parse-command-line line)))
     (unless (nshell.domain.parsing:parse-complete-p parsed)
       (error "test input does not parse: ~S" line))
-    (nshell.feature.assistant:classify-ast
+    (%test-classify-ast
      (nshell.domain.parsing:parse-result-ast parsed))))
 
 (defun %kb-rule-names (result)

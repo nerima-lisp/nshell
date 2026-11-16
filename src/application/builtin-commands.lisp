@@ -204,11 +204,14 @@
 
 (define-builtin %builtin-exec (context args) (context)
   (if args
-      (let ((gate (%assistant-execution-gate
-                   context
-                   (%assistant-command-stage-node
-                    (nshell.domain.parsing:make-command-node
-                     (first args) (rest args))))))
+      (let* ((node (%assistant-command-stage-node
+                    (nshell.domain.parsing:make-command-node (first args) (rest args))))
+             ;; %exec-and-exit runs the external program.
+             (gate (%assistant-execution-gate
+                    context node
+                    :path :stage
+                    :resolve (assistant-command-resolver
+                              context :stage-kinds (list (cons node :external))))))
         (if gate
             (values (first gate) (second gate))
             (progn

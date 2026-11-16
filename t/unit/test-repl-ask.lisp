@@ -343,11 +343,11 @@
                         nil)
                   (lambda () :next-key)))
                ('nshell.feature.assistant:classify-ast
-                (lambda (ast)
+                (lambda (ast &rest options)
                   (when (and (consp ast)
                              (every #'nshell.domain.parsing:reader-result-p ast))
                     (incf classification-count))
-                  (funcall original-classify ast))))
+                  (apply original-classify ast options))))
             (labels ((process-tab ()
                        (let ((redraw-count prompt-redraw-count)
                              (continuation

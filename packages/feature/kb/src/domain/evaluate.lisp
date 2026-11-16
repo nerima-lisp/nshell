@@ -151,42 +151,42 @@ For a query, an eighth value gives the row's :QUERY-OPTIONS."
          (spec (rest row))
          (runs (getf spec :runs :external)))
     (cond
-     ((and row (rest arguments)
-           (member (first arguments) (getf spec :query-options) :test #'equal))
-      (values nil nil nil nil nil nil nil (getf spec :query-options)))
-     (row
-      (case (getf spec :source)
-        (:eval
-         (if (= (length arguments) 1)
-             (values :opaque nil nil nil nil (first arguments))
-           (values :opaque arguments nil nil nil nil :by-name)))
-        (:dash-c
-         (let ((script (%dash-c-script arguments)))
-           (when script
-             (values :opaque nil nil nil nil script))))
-        (t
-         (multiple-value-bind (command names options)
-             (%wrapper-command spec arguments)
-           (let ((env-options (and (getf spec :opaque-on-options) options)))
-             (cond
-              ((or (string/= word name)
-                   (eq (getf spec :wrapper) :opaque)
-                   env-options)
-               (values :opaque command nil names env-options nil runs))
-              (command
-               (let ((own-words (remove-if (if (getf spec :assignments)
-                                               #'%assignment-word-p
-                                             (constantly nil))
-                                           (ldiff arguments command))))
-                 (values :transparent
-                         command
-                         (%option-spec-mismatches
-                          (list* :positionals (getf spec :operands 0) spec)
-                          own-words)
-                         names
-                         nil
-                         nil
-                         runs))))))))))))
+      ((and row (rest arguments)
+            (member (first arguments) (getf spec :query-options) :test #'equal))
+       (values nil nil nil nil nil nil nil (getf spec :query-options)))
+      (row
+       (case (getf spec :source)
+         (:eval
+          (if (= (length arguments) 1)
+              (values :opaque nil nil nil nil (first arguments))
+              (values :opaque arguments nil nil nil nil :by-name)))
+         (:dash-c
+          (let ((script (%dash-c-script arguments)))
+            (when script
+              (values :opaque nil nil nil nil script))))
+         (t
+          (multiple-value-bind (command names options)
+              (%wrapper-command spec arguments)
+            (let ((env-options (and (getf spec :opaque-on-options) options)))
+              (cond
+                ((or (string/= word name)
+                     (eq (getf spec :wrapper) :opaque)
+                     env-options)
+                 (values :opaque command nil names env-options nil runs))
+                (command
+                 (let ((own-words (remove-if (if (getf spec :assignments)
+                                                 #'%assignment-word-p
+                                               (constantly nil))
+                                             (ldiff arguments command))))
+                   (values :transparent
+                           command
+                           (%option-spec-mismatches
+                            (list* :positionals (getf spec :operands 0) spec)
+                            own-words)
+                           names
+                           nil
+                           nil
+                           runs))))))))))))
 
 (defun %mismatch-text (words)
   (format nil "arguments outside the command's allowed form: ~{~a~^, ~}" words))

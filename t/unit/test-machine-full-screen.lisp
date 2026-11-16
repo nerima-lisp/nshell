@@ -99,3 +99,47 @@ NAME.ran in the directory, so a test can tell whether it started."
          (expect (%noninteractive-batch-output "less NOTES.txt")
                  :to-equal (format nil "ran less~%"))
          (expect (%full-screen-started-p directory "less") :to-be-truthy))))))
+
+(defun %full-screen-alternate-screen-run (script &key (wrap "~A"))
+  "Run the sh SCRIPT under --json with a 20 s deadline, after it records its
+pid, as the command WRAP makes of `sh -c 'SCRIPT'`. Return the envelope, the
+seconds the run took, and whether the sh process is gone afterwards."
+  (host-kit:with-temporary-directory (directory)
+    (let* ((pid-file (sb-ext:native-namestring (merge-pathnames "pid" directory)))
+           (command (format nil "sh -c 'echo $$ > ~A; ~A'" pid-file script)))
+      (multiple-value-bind (envelope status seconds)
+          (json-command (format nil wrap command) :timeout 20)
+        (declare (ignore status))
+        (let ((pid (parse-integer (uiop:read-file-string pid-file) :junk-allowed t)))
+          (values envelope seconds (null (json-wait-until-dead (list pid) 5))))))))
+
+(describe "machine alternate screen"
+  (it "stops a program that switches to the alternate screen, well before the deadline"
+    (with-noninteractive-test-state ()
+      (dolist (wrap '("~A" "~A | cat"))
+        (multiple-value-bind (envelope seconds stopped-p)
+            (%full-screen-alternate-screen-run
+             "printf \"before\\n\"; printf \"\\033[?1049h\"; sleep 30" :wrap wrap)
+          (expect (json-at envelope "status") :to-equal 6)
+          (expect (json-at envelope "error" "code") :to-equal "E_INTERACTIVE_PROGRAM")
+          (expect (json-at envelope "stdout" "text") :to-equal (format nil "before~%"))
+          (expect seconds :to-be-less-than 5)
+          (expect stopped-p :to-be-truthy)))))
+
+  (it "finds the sequence when it arrives in two writes"
+    (with-noninteractive-test-state ()
+      (multiple-value-bind (envelope seconds stopped-p)
+          (%full-screen-alternate-screen-run
+           "printf \"\\033[?10\"; sleep 0.3; printf \"49h\"; sleep 30")
+        (expect (json-at envelope "error" "code") :to-equal "E_INTERACTIVE_PROGRAM")
+        (expect seconds :to-be-less-than 5)
+        (expect stopped-p :to-be-truthy))))
+
+  (it "lets other escape sequences through"
+    (with-noninteractive-test-state ()
+      (multiple-value-bind (envelope seconds)
+          (%full-screen-alternate-screen-run
+           "printf \"\\033[?1049l\\033[?1000h\\033[31mred\\033[0m\\n\"")
+        (expect (json-at envelope "status") :to-equal 0)
+        (expect (json-at envelope "stdout" "text") :to-equal (format nil "red~%"))
+        (expect seconds :to-be-less-than 5)))))

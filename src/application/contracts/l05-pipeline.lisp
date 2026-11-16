@@ -13,7 +13,8 @@
    *exec-exit-function*
    *full-screen-program-guard*
    nshell.infrastructure.acl:*process-group-log*
-   nshell.infrastructure.acl:*detach-child-standard-input*))
+   nshell.infrastructure.acl:*detach-child-standard-input*
+   nshell.infrastructure.acl:*process-output-watch*))
 
 (define-condition byte-stream-execution-error (error)
   ((operation :initarg :operation :reader byte-stream-execution-error-operation)
@@ -252,6 +253,7 @@ execution errors that wrap it on the way out."
         (process-group-log nshell.infrastructure.acl:*process-group-log*)
         (detach-child-standard-input
           nshell.infrastructure.acl:*detach-child-standard-input*)
+        (process-output-watch nshell.infrastructure.acl:*process-output-watch*)
         (positional-args
           (copy-list nshell.domain.expansion:*positional-args*))
         (upstream-stage-p
@@ -280,7 +282,8 @@ execution errors that wrap it on the way out."
                    (*full-screen-program-guard* full-screen-program-guard)
                    (nshell.infrastructure.acl:*process-group-log* process-group-log)
                    (nshell.infrastructure.acl:*detach-child-standard-input*
-                     detach-child-standard-input))
+                     detach-child-standard-input)
+                   (nshell.infrastructure.acl:*process-output-watch* process-output-watch))
                (unwind-protect
                     (handler-case
                         (let ((*standard-input*

@@ -4,7 +4,8 @@
 ;;; through the batch path and describe the run as one envelope.
 ;;;
 ;;; The run happens in a worker thread so the calling thread can enforce the
-;;; whole-run deadline (D-72). At the deadline the caller parks the worker
+;;; whole-run deadline (D-72), and stop the run early when a program switches
+;;; to the alternate screen (ux/U6). At either the caller parks the worker
 ;;; inside an interrupt, stops every process the run spawned as whole process
 ;;; groups while nothing can start a new one, lets the output copiers drain,
 ;;; and then releases the worker, which unwinds out of the batch run instead of
@@ -63,6 +64,10 @@ SBCL thread otherwise sees only global values.")
 (defstruct (json-run (:constructor %make-json-run))
   (status nil)
   (condition nil)
+  ;; Signalled when the worker ends and when a program switches to the
+  ;; alternate screen.
+  (wake (sb-thread:make-semaphore))
+  (alternate-screen-p nil)
   (user-code-p nil)
   (missing-command nil)
   (timed-out-p nil)
@@ -123,6 +128,7 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
       ;; Every gate refusal of the run, nested ones and pipeline stages too.
       (bind 'nshell.application::*execution-gate-refusal* (json-run-gate-refusal run))
       (bind 'nshell.application::*full-screen-program-guard* (%full-screen-program-guard run))
+      (bind 'nshell.infrastructure.acl:*process-output-watch* (%alternate-screen-watch run))
       (when agent-p
         ;; As after Enter on a safe AI proposal: the gate runs what classifies
         ;; :safe where it runs and refuses the rest, since no one can approve.
@@ -137,6 +143,14 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
         (unless (car refused)
           (setf (car refused) (cons command arguments)))
         t))))
+
+(defun %alternate-screen-watch (run)
+  (lambda ()
+    (let ((scan (make-alternate-screen-scanner)))
+      (lambda (buffer end)
+        (when (and (not (json-run-alternate-screen-p run)) (funcall scan buffer end))
+          (setf (json-run-alternate-screen-p run) t)
+          (sb-thread:signal-semaphore (json-run-wake run)))))))
 
 (defun %observe (run)
   (lambda (kind value &rest details)
@@ -206,18 +220,21 @@ Return true when the worker has exited."
       (let ((worker
               (sb-thread:make-thread
                (lambda ()
-                 (progv symbols values
-                   (catch tag
-                     (setf (json-run-status run)
-                           (nshell.presentation:run-repl-batch-observed
-                            input (%observe run)
-                            :script-args script-args :errexit-p errexit-p)))))
+                 (unwind-protect
+                      (progv symbols values
+                        (catch tag
+                          (setf (json-run-status run)
+                                (nshell.presentation:run-repl-batch-observed
+                                 input (%observe run)
+                                 :script-args script-args :errexit-p errexit-p))))
+                   (sb-thread:signal-semaphore (json-run-wake run))))
                :name "nshell json command")))
-        (sb-thread:join-thread worker :default nil :timeout timeout)
-        (when (sb-thread:thread-alive-p worker)
-          (setf (json-run-timed-out-p run) t
-                (json-run-worker-alive-p run)
-                (not (%park-and-stop worker tag before (json-run-group-log run)))))))
+        (let ((woken-p (sb-thread:wait-on-semaphore (json-run-wake run) :timeout timeout)))
+          (if (or (not woken-p) (json-run-alternate-screen-p run))
+              (setf (json-run-timed-out-p run) (not woken-p)
+                    (json-run-worker-alive-p run)
+                    (not (%park-and-stop worker tag before (json-run-group-log run))))
+              (sb-thread:join-thread worker :default nil)))))
     run))
 
 ;;; Envelope
@@ -331,6 +348,9 @@ did."
       ((json-run-timed-out-p run)
        (values "E_TIMEOUT" nil (format nil "the run exceeded its ~A s deadline"
                                        (%seconds-text timeout))))
+      ((json-run-alternate-screen-p run)
+       (values "E_INTERACTIVE_PROGRAM" nil
+               "a program switched the terminal to its alternate screen; the run was stopped"))
       (full-screen
        (values "E_INTERACTIVE_PROGRAM" nil
                (format nil "~A is a full-screen program; it was not started"

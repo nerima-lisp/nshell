@@ -39,23 +39,20 @@ $XDG_CACHE_HOME/nshell/out/ when XDG_CACHE_HOME is absolute, otherwise
                  (error condition))))
         while slash))
 
-(defun %private-directory-fd-p (fd)
-  (let ((stat (sb-posix:fstat fd)))
-    (and (= (logand (sb-posix:stat-mode stat) sb-posix:s-ifmt) sb-posix:s-ifdir)
-         (= (sb-posix:stat-uid stat) (sb-posix:geteuid)))))
-
-(defun %secure-directory (path)
-  "Make PATH, which must be a real directory owned by this user, mode 0700.
-Return true when it is, without following a symlink at PATH."
+(defun %private-directory-p (path)
+  "Return true when PATH is a real directory owned by this user that group and
+other cannot access. A symlink at PATH is refused, not followed. PATH's mode is
+never changed: a directory with group or other bits is refused."
   (handler-case
       (let ((fd (sb-posix:open (%without-trailing-slash path)
                                (logior sb-posix:o-rdonly sb-posix:o-nofollow
                                        sb-posix:o-directory))))
         (unwind-protect
-             (and (%private-directory-fd-p fd)
-                  (progn (sb-posix:fchmod fd #o700)
-                         (zerop (logand (sb-posix:stat-mode (sb-posix:fstat fd))
-                                        #o077))))
+             (let ((stat (sb-posix:fstat fd)))
+               (and (= (logand (sb-posix:stat-mode stat) sb-posix:s-ifmt)
+                       sb-posix:s-ifdir)
+                    (= (sb-posix:stat-uid stat) (sb-posix:geteuid))
+                    (zerop (logand (sb-posix:stat-mode stat) #o077))))
           (sb-posix:close fd)))
     (sb-posix:syscall-error () nil)))
 
@@ -65,9 +62,9 @@ or NIL when ROOT or the new directory is not private to this user."
   (handler-case
       (let ((root (concatenate 'string (%without-trailing-slash root) "/")))
         (%ensure-directories (%without-trailing-slash root))
-        (when (%secure-directory root)
+        (when (%private-directory-p root)
           (let ((directory (sb-posix:mkdtemp (concatenate 'string root "s_XXXXXX"))))
-            (if (%secure-directory directory)
+            (if (%private-directory-p directory)
                 (%make-output-session (subseq directory (length root))
                                       (concatenate 'string directory "/"))
                 (progn (ignore-errors (sb-posix:rmdir directory))
@@ -168,8 +165,9 @@ place when it holds a subdirectory, which no session creates."
     t))
 
 (defun prune-output-sessions (&key (root (output-store-root)) (keep 50) except)
-  "Delete this user's session directories under ROOT beyond the KEEP newest by
-mtime, never EXCEPT (an OUTPUT-SESSION). Return the deleted directories and,
+  "Delete this user's session directories under ROOT so that at most KEEP
+remain, newest by mtime first. EXCEPT (an OUTPUT-SESSION) is never deleted and
+counts as one of the KEEP. Return the deleted directories and,
 as a second value, a list of (directory . condition) for those that could not
 be deleted."
   (let ((root (%without-trailing-slash root))
@@ -202,9 +200,13 @@ be deleted."
                              (or (> (cdr left) (cdr right))
                                  (and (= (cdr left) (cdr right))
                                       (string> (car left) (car right)))))))
-      (dolist (session (nthcdr keep sessions))
-        (let ((directory (car session)))
-          (unless (equal directory except-directory)
+      ;; EXCEPT counts toward KEEP, so at most KEEP sessions remain in total.
+      (let* ((except-present-p (and except-directory
+                                    (assoc except-directory sessions :test #'equal)))
+             (others (remove except-directory sessions :key #'car :test #'equal))
+             (keep-others (if except-present-p (max 0 (1- keep)) keep)))
+        (dolist (session (nthcdr keep-others others))
+          (let ((directory (car session)))
             (handler-case
                 (if (%delete-session-directory directory)
                     (push directory deleted)

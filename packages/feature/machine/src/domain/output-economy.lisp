@@ -142,7 +142,8 @@ TEXT does not end in a newline."
                                         (tail-lines +default-tail-lines+))
   "Return the part of cleaned TEXT a response shows, and whether it was cut.
 Over MAX-BYTES, keep HEAD-LINES lines from the start and TAIL-LINES from the
-end, each part cut to MAX-BYTES/2 bytes, joined by an omission marker line."
+end, each part cut to MAX-BYTES/2 bytes, joined by an omission marker line. A
+single line keeps up to MAX-BYTES/2 bytes from each end."
   (let ((total-bytes (%utf-8-length text)))
     (when (<= total-bytes max-bytes)
       (return-from economize-output-text (values text nil)))
@@ -154,11 +155,16 @@ end, each part cut to MAX-BYTES/2 bytes, joined by an omission marker line."
            (head-count (min head-lines (- count tail-count)))
            (omitted-lines (- count head-count tail-count))
            (part-limit (floor max-bytes 2))
+           ;; A single line cannot be split into head and tail lines, so its
+           ;; two ends are kept by bytes instead.
+           (single-line-p (and (= count 1) (plusp head-lines) (plusp tail-lines)))
            (head (%utf-8-prefix
                   (apply #'concatenate 'string (subseq lines 0 head-count))
                   part-limit))
            (tail (%utf-8-suffix
-                  (apply #'concatenate 'string (last lines tail-count))
+                  (if single-line-p
+                      (subseq text (length head))
+                      (apply #'concatenate 'string (last lines tail-count)))
                   part-limit))
            (marker (if (plusp omitted-lines)
                        (format nil "… ~:D lines omitted …~%" omitted-lines)

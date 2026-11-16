@@ -76,6 +76,15 @@ not exist yet."
           (expect (machine-store-exists-p (concatenate 'string root "x"))
                   :to-be-null)))))
 
+  (it "refuses an existing root that group or other can access, leaving its mode"
+    (with-machine-store-root (root)
+      (let ((directory (string-right-trim "/" root)))
+        (sb-posix:mkdir directory #o700)
+        (sb-posix:chmod directory #o755)
+        (expect (nshell.feature.machine:open-output-session :root root) :to-be-null)
+        (expect (machine-store-mode root) :to-be #o755)
+        (expect (nshell.feature.machine::%directory-entries directory) :to-be-null))))
+
   (it "returns NIL for a symlinked root"
     (with-machine-store-root (root)
       (let ((target (concatenate 'string (string-right-trim "/" root) "-target")))
@@ -94,7 +103,7 @@ not exist yet."
                 :to-be-null)
         (expect (machine-store-exists-p victim) :to-be-null))))
 
-  (it "prunes to the 50 newest sessions and never the excepted one"
+  (it "keeps at most 50 sessions in total, counting the excepted one"
     (with-machine-store-root (root)
       (let* ((current (nshell.feature.machine:open-output-session :root root))
              (current-directory
@@ -107,12 +116,31 @@ not exist yet."
         (sb-posix:utimes current-directory 1 1)
         (let ((deleted (nshell.feature.machine:prune-output-sessions
                         :root root :except current)))
-          (expect (length deleted) :to-be 10)
+          (expect (length deleted) :to-be 11)
           (expect (sort (copy-list deleted) #'string<)
-                  :to-equal (subseq paths 0 10))
-          (expect (count-if #'machine-store-exists-p paths) :to-be 50)
-          (expect (every #'machine-store-exists-p (subseq paths 10)) :to-be-truthy)
-          (expect (machine-store-exists-p current-directory) :to-be-truthy)))))
+                  :to-equal (subseq paths 0 11))
+          (expect (every #'machine-store-exists-p (subseq paths 11)) :to-be-truthy)
+          (expect (machine-store-exists-p current-directory) :to-be-truthy)
+          (expect (length (nshell.feature.machine::%directory-entries
+                           (string-right-trim "/" root)))
+                  :to-be 50)))))
+
+  (it "keeps 50 sessions in total when every mtime ties"
+    (with-machine-store-root (root)
+      (let ((current (nshell.feature.machine:open-output-session :root root)))
+        (loop for index from 0 below 60
+              do (machine-store-make-session
+                  root (machine-store-session-name index) 1000000))
+        (sb-posix:utimes (string-right-trim
+                          "/" (nshell.feature.machine:output-session-directory current))
+                         1000000 1000000)
+        (nshell.feature.machine:prune-output-sessions :root root :except current)
+        (expect (length (nshell.feature.machine::%directory-entries
+                         (string-right-trim "/" root)))
+                :to-be 50)
+        (expect (machine-store-exists-p
+                 (nshell.feature.machine:output-session-directory current))
+                :to-be-truthy))))
 
   (it "leaves other names, symlinks and directories with subdirectories alone"
     (with-machine-store-root (root)

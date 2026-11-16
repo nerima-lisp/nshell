@@ -109,17 +109,32 @@
                 text :max-bytes 8 :head-lines 1 :tail-lines 1))
               :to-equal "… 1,234,567 lines omitted …")))
 
-  (it "cuts a single huge line to half the limit on each side with a bytes marker"
-    (let* ((text (make-string 100000 :initial-element #\x))
+  (it "keeps both ends of a single huge line with a bytes marker"
+    (let* ((text (concatenate 'string
+                              (make-string 50000 :initial-element #\a)
+                              (make-string 50000 :initial-element #\z)
+                              (string #\Newline)))
            (shown (nshell.feature.machine:economize-output-text text :max-bytes 1000))
            (marker (machine-economy-marker-line shown)))
-      (expect marker :to-equal "… 99,500 bytes omitted …")
+      (expect (uiop:split-string shown :separator '(#\Newline))
+              :to-equal (list (make-string 500 :initial-element #\a)
+                              "… 99,001 bytes omitted …"
+                              (make-string 499 :initial-element #\z)
+                              ""))
       (expect (search "lines omitted" shown) :to-be-null)
       (expect (<= (machine-economy-utf-8-length shown)
                   (+ 1000 (machine-economy-utf-8-length marker) 2))
-              :to-be-truthy)
-      (expect (subseq shown 0 500) :to-equal (make-string 500 :initial-element #\x))
-      (expect (char shown 500) :to-be #\Newline)))
+              :to-be-truthy)))
+
+  (it "keeps both ends of a single huge multibyte line on character boundaries"
+    (let* ((text (concatenate 'string
+                              (make-string 500 :initial-element (code-char #x3042))
+                              (make-string 500 :initial-element (code-char #x3093))))
+           (shown (nshell.feature.machine:economize-output-text text :max-bytes 101)))
+      (expect (uiop:split-string shown :separator '(#\Newline))
+              :to-equal (list (make-string 16 :initial-element (code-char #x3042))
+                              "… 2,904 bytes omitted …"
+                              (make-string 16 :initial-element (code-char #x3093))))))
 
   (it "bounds the shown text when the kept lines are long"
     (let* ((long-line (format nil "~A~%" (make-string 5000 :initial-element #\y)))

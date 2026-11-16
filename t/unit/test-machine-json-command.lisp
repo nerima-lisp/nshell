@@ -275,6 +275,56 @@ an orphan needs its new parent to reap it before kill 0 fails."
           (expect (json-at envelope "safety" "level") :to-equal "confirm")
           (expect (probe-file marker) :to-be-null)))))
 
+  (it "answers exec with an envelope carrying the exec'd program's status"
+    (let ((envelope (json-command "exec sh -c 'echo viaexec; exit 5'")))
+      (expect (json-at envelope "status") :to-equal 5)
+      (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_FAILED")
+      (expect (json-at envelope "stdout" "text") :to-equal (format nil "viaexec~%")))
+    (let ((envelope (json-command "exec true")))
+      (expect (json-at envelope "ok") :to-equal t)))
+
+  (it "stops at the first failure with :errexit-p"
+    (let ((envelope (json-command "false; echo x" :errexit-p t)))
+      (expect (json-at envelope "status") :to-equal 1)
+      (expect (json-at envelope "stdout" "text") :to-equal ""))
+    (let ((envelope (json-command "false; echo x")))
+      (expect (json-at envelope "stdout" "text") :to-equal (format nil "x~%"))))
+
+  (it "states a fractional deadline as a decimal"
+    (let ((envelope (json-command "sh -c 'sleep 5'" :timeout 1/2)))
+      (expect (json-at envelope "error" "message")
+              :to-equal "the run exceeded its 0.5 s deadline")))
+
+  (it "reports captured output only when the deadline stops the run"
+    ;; A capture abandoned by an error, not the deadline, never reaches stdout.
+    (with-temporary-function
+        ((quote nshell.infrastructure.acl:spawn-pipeline)
+         (lambda (&rest arguments)
+           (declare (ignore arguments))
+           (write-string "partial" *standard-output*)
+           (error "spawn failed")))
+      (let ((envelope (json-command "sh -c true")))
+        (expect (json-at envelope "stdout" "text") :to-equal "")))
+    ;; Text a command substitution captured is not the run's stdout.
+    (let ((envelope (json-command "echo $(sh -c 'echo inner; sleep 30')" :timeout 1)))
+      (expect (json-at envelope "error" "code") :to-equal "E_TIMEOUT")
+      (expect (json-at envelope "stdout" "text") :to-equal ""))
+    ;; Output earlier commands wrote comes before the stopped command's.
+    (let ((envelope (json-command "(progn (echo a) (sh -c \"echo b; sleep 30\"))"
+                                  :timeout 1)))
+      (expect (json-at envelope "stdout" "text") :to-equal (format nil "a~%b~%"))))
+
+  (it "returns E_TIMEOUT without the worker's streams when the worker survives"
+    (with-temporary-function
+        ((quote nshell.feature.machine::%finish-worker)
+         (lambda (worker)
+           (sb-thread:join-thread worker :default nil :timeout 5)
+           nil))
+      (let ((envelope (json-command "sh -c 'echo early; sleep 30'" :timeout 1/2)))
+        (expect (json-at envelope "error" "code") :to-equal "E_TIMEOUT")
+        (expect (json-at envelope "stdout" "text") :to-equal "")
+        (expect (json-at envelope "stderr" "text") :to-equal ""))))
+
   (it "produces schema-valid envelopes for every outcome"
     (with-json-cache-home (root)
       (declare (ignorable root))
@@ -348,6 +398,10 @@ an orphan needs its new parent to reap it before kill 0 fails."
               (expect (json-at decoded "status") :to-equal expected-status)
               (expect (json-at decoded "error" "code") :to-equal code)))))
       (multiple-value-bind (stdout exit-status)
+          (invoke (list "-e" "--json" "--private" "--command" "false; echo x"))
+        (expect exit-status :to-equal 1)
+        (expect (json-at (json-kit:parse stdout) "stdout" "text") :to-equal ""))
+      (multiple-value-bind (stdout exit-status)
           (invoke (list "--json" "--timeout" "0.5" "--command" "sh -c 'sleep 5'"))
         (expect exit-status :to-equal 124)
         (expect (json-at (json-kit:parse stdout) "error" "code") :to-equal "E_TIMEOUT"))))
@@ -372,3 +426,53 @@ an orphan needs its new parent to reap it before kill 0 fails."
         (if saved
             (sb-posix:setenv "NSHELL_AGENT" saved 1)
             (sb-posix:unsetenv "NSHELL_AGENT"))))))
+
+(describe "machine json process stopping"
+  (it "copies the process registry while another thread holds its lock"
+    (let* ((held (sb-thread:make-semaphore))
+           (done (sb-thread:make-semaphore))
+           (holder (sb-thread:make-thread
+                    (lambda ()
+                      (sb-thread:with-mutex
+                          (nshell.infrastructure.acl::*native-process-registry-lock*)
+                        (sb-thread:signal-semaphore held)
+                        (sb-thread:wait-on-semaphore done :timeout 10))))))
+      (unwind-protect
+           (progn
+             (sb-thread:wait-on-semaphore held :timeout 5)
+             (let ((start (get-internal-real-time)))
+               (expect (listp (nshell.infrastructure.acl:registered-processes))
+                       :to-be-truthy)
+               (expect (/ (- (get-internal-real-time) start)
+                          internal-time-units-per-second)
+                       :to-be-less-than 1/10)))
+        (sb-thread:signal-semaphore done)
+        (sb-thread:join-thread holder :default nil :timeout 5))))
+
+  (it "signals only processes still running in their recorded group"
+    (let ((process (nshell.infrastructure.acl:spawn-async "sleep" (list "30"))))
+      (expect process :to-be-truthy)
+      (unwind-protect
+           (let ((pid (nshell.infrastructure.acl:process-pid process))
+                 (pgid (nshell.infrastructure.acl::native-process-pgid process)))
+             (expect pgid :to-equal pid)
+             ;; Reaped but not yet recorded as such: left alone.
+             (setf (nshell.infrastructure.acl::native-process-%status process) :exited)
+             (nshell.infrastructure.acl:stop-process-groups (list process)
+                                                            :grace-seconds 0.05)
+             (expect (json-pid-alive-p pid) :to-be-truthy)
+             ;; Recorded group no longer the process's group: left alone.
+             (setf (nshell.infrastructure.acl::native-process-%status process) :running
+                   (nshell.infrastructure.acl::native-process-pgid process) (1+ pgid))
+             (nshell.infrastructure.acl:stop-process-groups (list process)
+                                                            :grace-seconds 0.05)
+             (expect (json-pid-alive-p pid) :to-be-truthy)
+             (setf (nshell.infrastructure.acl::native-process-pgid process) pgid)
+             (nshell.infrastructure.acl:stop-process-groups (list process)
+                                                            :grace-seconds 0.05)
+             (nshell.infrastructure.acl:process-wait process)
+             (expect (json-pid-alive-p pid) :to-be-falsy))
+        (ignore-errors
+          (nshell.infrastructure.acl:kill-process
+           (nshell.infrastructure.acl:process-pid process) :sigkill))
+        (ignore-errors (nshell.infrastructure.acl:process-wait process))))))

@@ -6,7 +6,8 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
   (declare (ftype (function (t list &optional t) (values t integer)) source-lines)
            (ftype (function (stream) list) collect-source-lines))
   (handler-case
-      (let ((*foreground-terminal-runner* nil))
+      (let ((*foreground-terminal-runner* nil)
+            (*output-captures* (cons :substitution *output-captures*)))
         (let ((timeout
                (nshell.infrastructure.acl:ensure-timeout-seconds
                 *command-substitution-timeout*

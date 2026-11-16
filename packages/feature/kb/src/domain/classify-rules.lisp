@@ -221,6 +221,11 @@ changes no other command.")
     ;; --- safe ---------------------------------------------------------------
     ((classify ?c :safe "classify/read-only" "read-only known command")
      (read-only-command ?c))
+    ;; A line of assignments only runs no command; the names decide (2.4), and
+    ;; any name outside the harmless table raises it to confirm above.
+    ((classify ?c :safe "classify/harmless-assignment"
+               "assigns only harmless environment names")
+     (assignment ?c ?n) (not (command ?c ?m)))
 
     ;; --- embedded commands keep the rule that classified them ---------------
     ((classify ?c ?level ?rule ?text) (nested ?c ?level ?rule ?text))

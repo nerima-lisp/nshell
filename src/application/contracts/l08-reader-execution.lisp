@@ -1041,7 +1041,13 @@ running under PARENT-KIND. Return the refusal (MESSAGE STATUS), or NIL."
   (when (and (nshell.domain.parsing:command-node-p ast)
              (string= "" (nshell.domain.parsing:command-node-command ast))
              (nshell.domain.parsing:command-node-environment-assignments ast))
-    (let ((assignments
+    (let ((refusal (and (%assistant-gate-active-p)
+                        (%assistant-execution-gate context ast))))
+      (when refusal
+        (return-from %reader-execute-foreground-in-context
+          (%reader-gate-refusal context refusal 1))))
+    (let* ((*execution-gate-parent-kind* :command)
+           (assignments
             (mapcar (lambda (assignment)
                       (%assignment-word-binding
                        context

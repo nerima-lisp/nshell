@@ -50,6 +50,12 @@
           :exact ("--color=auto" "--color=never" "--color=always")
           :positionals :any)
     ("cat" :flags "nbvets" :positionals :any)
+    ("head" :value-flags (("n" :count) ("c" :count)) :positionals :any)
+    ("tail" :value-flags (("n" :count) ("c" :count)) :positionals :any)
+    ("wc" :flags "lwcm" :positionals :any)
+    ("stat" :flags "L" :positionals :any)
+    ("du" :flags "shkacx" :value-flags (("d" :count)) :positionals :any)
+    ("df" :flags "hkliP" :positionals :any)
     ("file" :flags "bLhks" :long ("--mime-type" "--mime-encoding")
             :positionals :any)
     ("grep" :flags "ivnclLrREFwxohHsqz"

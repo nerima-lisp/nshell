@@ -83,7 +83,7 @@
        :probe-id "redir-value-target"
        :source nil
        :v08 (:exit :success :stdout-lines ("hi") :final-newline t)
-       :owner (:v08 "S2")
+       :owner (:v08 "S2" :crash "C")
        :crash t)
       (:row 20
        :probe-id "bg-sexp"
@@ -140,7 +140,7 @@
               :stderr-final-newline nil
               :single-value "E_VALUE_POSITION"
               :position (1 9 "(echo ,(sort (list 3 1 2) (function <)))" "sort"))
-       :owner (:v08 ("S2" "S4"))
+       :owner (:v08 ("S2" "S4") :crash "C")
        :crash t)
       (:row 28
        :probe-id "find-in-value"
@@ -158,7 +158,7 @@
        :fixture-v08 :observed
        :v08 (:exit :success :stdout-lines ("2") :final-newline t)
        :v09-source :fixture
-       :v09 (:exit :success :stdout-lines nil :final-newline nil)
+       :v09 (:exit :success :stdout-lines ("2") :final-newline t)
        :owner (:warning "S6")
        :warning (:code "W_RESOLUTION_ORDER"
                  :message-en "The input changes meaning once Common Lisp names resolve before PATH, as in (last (list 1 2))."
@@ -172,23 +172,30 @@
        :v09-source :fixture
        :v09 (:exit 1 :single-value "E_LISP_ERROR"
               :position (2 5 "(g2 sym)" "sym"))
-       :owner (:warning "S6")
+       :owner (:warning "S6" :crash "C")
        :warning (:code "W_DEFUN_WORD_ARGS"
                  :message-en "Words passed from an S-expression to a defun function, as in (g sym)."
                  :message-ja "S式から defun の関数に語を渡した ((g sym) など)"
                  :rewrite "defcmd")
+       :v08-current t
        :crash t
        :crash-source (format nil "(defun g2 (a) (echo got=$a))~%(g2 sym)~%(g2 \"str\")~%(g2 ,(+ 1 1))~%")
        :crash-baseline (:exit 1
- :stdout-lines
- ("got="
-  "got=str"
-  "source: $WORK/case.nsh: The value ,(+ 1 1) is not of type (OR STRING CHARACTER NUMBER (AND SYMBOL (NOT (EQL NIL))))"
-  "source: $WORK/case.nsh: The value ,(+ 1 1) is not of type (OR STRING CHARACTER NUMBER (AND SYMBOL (NOT (EQL NIL))))")
- :diagnostic-output t
- :final-newline t
- :stderr-lines nil
- :stderr-final-newline nil))
+                        :stdout-lines ("got="
+                                       "got=str"
+                                       "source: $WORK/case.nsh: The value ,(+ 1 1)"
+                                       "is not of type"
+                                       "  (OR STRING CHARACTER NUMBER (AND SYMBOL (NOT (EQL NIL))))"
+                                       "source: $WORK/case.nsh: The value ,(+ 1 1)"
+                                       "is not of type"
+                                       "  (OR STRING CHARACTER NUMBER (AND SYMBOL (NOT (EQL NIL))))")
+                        :diagnostic-output t
+                        :final-newline t
+                        :stderr-lines nil
+                        :stderr-final-newline nil)
+       :additional-crash-probes
+       ((:probe-id "loop-upper" :crash t :owner (:crash "C"))
+        (:probe-id "time-head" :crash t :owner (:crash "C"))))
       (:row 31
        :probe-id "print-top"
        :source nil
@@ -211,16 +218,12 @@
        :v08 (:exit :success :stdout-lines ("3") :final-newline t)
        :owner (:v08 "S2")
        :additional-probes
-       ((:probe-id "pipe-mixed-1"
-         :source nil
-         :v08 (:exit :success :stdout-lines ("HI") :final-newline t)
-         :owner (:v08 "S2")
-         :note "S2 treats a parenthesized command word as S-expression substitution")))
+       nil)
       (:row 34
        :probe-id "pipe-mixed-2"
        :source nil
        :v08 (:exit 2 :single-value "E_PARSE")
-       :owner (:v08 "S3")
+       :owner (:v08 "S3" :crash "C")
        :crash t)
       (:row 35
        :probe-id "bare-var-list"

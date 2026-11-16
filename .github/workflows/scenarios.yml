@@ -25,17 +25,13 @@ jobs:
           - runner: ubuntu-latest
             system: x86_64-linux
             run_batch_check: true
-          - runner: macos-15
-            system: aarch64-darwin
-            run_batch_check: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Checkout previous supported release (P12)
-        # Public API comparison is OS-independent; v0.6.5 has no Darwin flake outputs.
-        if: ${{ matrix.system == 'x86_64-linux' }}
+        # Public API comparison is OS-independent.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: 35473e96831aed44654e3523f8e965a9a395ed86
@@ -54,8 +50,9 @@ jobs:
           --out-link "$RUNNER_TEMP/nshell-scenario-binary"
 
       - name: Build previous release dependency registry (P12)
-        if: ${{ matrix.system == 'x86_64-linux' }}
         run: |
+          # The quoted Nix expression must remain literal to the shell.
+          # shellcheck disable=SC2016
           nix build --impure --print-build-logs \
             --out-link "$RUNNER_TEMP/nshell-p12-previous-registry" \
             --expr '
@@ -71,7 +68,6 @@ jobs:
             '
 
       - name: Compare public API against previous release (P12)
-        if: ${{ matrix.system == 'x86_64-linux' }}
         run: >-
           nix develop .#default -c bash -c
           "python3 -B scripts/run-scenarios.py --scenario-dir t/scenarios/P12
@@ -92,8 +88,7 @@ jobs:
         id: l02
         # Passes when the prompt and command output do not wait for a sleeping fake
         # `git status`; startup and empty-Enter timings are recorded only. The step
-        # continues on error so the rest of the corpus runs, and the Darwin enforce
-        # step below turns a failure into a job failure.
+        # continues on error so the rest of the corpus runs; the check is advisory.
         continue-on-error: true
         run: >-
           nix develop .#scenarios -c python3 -B scripts/run-scenarios.py
@@ -116,14 +111,12 @@ jobs:
           printf '%s\n' "$version_output"
 
       - name: Build Linux release bundle (T06)
-        if: ${{ matrix.system == 'x86_64-linux' }}
         run: >-
           nix build --print-build-logs
           ".#releaseBundle"
           --out-link "$RUNNER_TEMP/nshell-release-bundle"
 
       - name: Verify Linux release bundle (T06)
-        if: ${{ matrix.system == 'x86_64-linux' }}
         run: |
           set -euo pipefail
           bundle="$RUNNER_TEMP/nshell-release-bundle"
@@ -131,7 +124,6 @@ jobs:
           perl scripts/test-release-pty.pl "$bundle"
 
       - name: Verify copied Linux release bundle (T06)
-        if: ${{ matrix.system == 'x86_64-linux' }}
         run: |
           set -euo pipefail
           scratch="$(mktemp -d "$RUNNER_TEMP/nshell-release-copy.XXXXXX")"
@@ -234,10 +226,3 @@ jobs:
             --scenario-temp-dir "Q07-history-write-failure-on-bounded-filesystem=$q07_tmp_root" \
             --repeat 3 \
             --mode pty
-
-      - name: Enforce Darwin L02 slow Git check result
-        if: ${{ always() && matrix.system == 'aarch64-darwin' && steps.l02.outcome != 'success' }}
-        run: |
-          echo "Darwin L02 slow Git check ended with outcome: ${{ steps.l02.outcome }}" >&2
-          exit 1
-

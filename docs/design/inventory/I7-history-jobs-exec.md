@@ -46,4 +46,4 @@
 | 所要時間の計測 — プロンプトと履歴へ | [残す] | --json の duration_ms でも返す。 |
 | timeout と SIGTERM → SIGKILL — コマンド置換で使用 | [残す] | 全コマンドの --timeout に流用。 |
 | command not found — フックつき | [残す] | 近い候補を hint に出す。 |
-| Linux / macOS — x86_64-linux と aarch64-darwin で CI | [残す] | そのまま。 |
+| Linux / macOS — x86_64-linux と aarch64-darwin | [残す] | Nix の検証対象は両方を維持し、テストスイートとシナリオの CI は x86_64-linux のみ。 |

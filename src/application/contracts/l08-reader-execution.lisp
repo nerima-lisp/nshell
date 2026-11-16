@@ -1231,44 +1231,48 @@ running under PARENT-KIND, each resolved as the executor resolved it
     (let* ((gate-parent-kind *execution-gate-parent-kind*)
            (*execution-gate-parent-kind* :command)
            (evaluated-stages
-             (%reader-evaluate-stages context commands stage-evaluator))
+            (%reader-evaluate-stages context commands stage-evaluator))
            (background-commands
-             (loop for stage in evaluated-stages
-                   for command in commands
-                   unless (eq :external
-                              (nshell.application:evaluated-command-stage-dispatch-kind
-                               stage))
-                     do (%reader-background-unsupported
-                         ast "Background execution requires external command stages."
-                         (nshell.domain.parsing:ast-node-span command))
-                   collect (%reader-background-command context stage)))
+            (loop for stage in evaluated-stages
+                  for command in commands
+                  unless (eq :external
+                             (nshell.application:evaluated-command-stage-dispatch-kind
+                              stage))
+                  do (%reader-background-unsupported
+                      ast "Background execution requires external command stages."
+                      (nshell.domain.parsing:ast-node-span command))
+                  collect (%reader-background-command context stage)))
            (refusal
-             (when (%assistant-gate-active-p)
-               ;; Only :external stages reach this point.
-               (%reader-assistant-gate
-                context background-commands gate-parent-kind
-                (mapcar (constantly :external) background-commands))))
+            (when (%assistant-gate-active-p)
+              ;; Only :external stages reach this point.
+              (%reader-assistant-gate
+               context background-commands gate-parent-kind
+               (mapcar (constantly :external) background-commands))))
            (command-line (nshell.domain.parsing:ast-node->command-line ast))
-           (processes
-             (cond
-               (refusal
-                (return-from %reader-spawn-background-node-in-context
-                  (%reader-gate-refusal context refusal 0)))
-               ((= (length background-commands) 1)
-                (let* ((command (first background-commands))
-                       (process
-                         (nshell.infrastructure.acl:spawn-async
-                          (nshell.domain.parsing:command-node-command command)
-                          (nshell.domain.parsing:command-node-arg-values
-                           command))))
-                  process))
-               (t
-                (nshell.infrastructure.acl:spawn-pipeline-async
-                 background-commands)))))
+           (stage-results nil)
+           (processes (cond
+                       (refusal
+                        (return-from %reader-spawn-background-node-in-context
+                                     (%reader-gate-refusal context refusal 0)))
+                       ((= (length background-commands) 1)
+                        (let* ((command (first background-commands))
+                               (process
+                                (nshell.infrastructure.acl:spawn-async
+                                 (nshell.domain.parsing:command-node-command command)
+                                 (nshell.domain.parsing:command-node-arg-values
+                                  command))))
+                          process))
+                       (t
+                        (multiple-value-bind (processes results)
+                            (nshell.infrastructure.acl:spawn-pipeline-async background-commands)
+                          (setf stage-results results)
+                          processes)))))
       (unless processes
         (return-from %reader-spawn-background-node-in-context
-          (values nil 127
-                  (make-pipeline-execution-result 127 nil nil))))
-      (%register-background-job context processes command-line)
+                     (let ((statuses (or stage-results (list 127))))
+                       (values nil 127
+                               (make-pipeline-execution-result 127 statuses
+                                                               (make-list (length statuses) :initial-element nil))))))
+      (%register-background-job context processes command-line stage-results)
       (values nil 0 (make-pipeline-execution-result 0 nil nil)))))
 

@@ -44,15 +44,17 @@
           do (sleep 0.01))
     (not (some #'process-alive-p procs))))
 
-(defun %wait-pipeline-with-output (procs timeout-seconds timeout-fn pipefail-p)
+(defun %wait-pipeline-with-output (procs timeout-seconds timeout-fn pipefail-p
+                                  &optional (output-process (car procs)))
   (let ((copiers nil))
     (unwind-protect
          (progn
-           (push (%start-process-output-copier (car procs) *standard-output*) copiers)
-           (push (%start-stream-copier (process-error (car procs))
-                                      *standard-output*
-                                      "nshell pipeline error copier")
-                 copiers)
+           (when output-process
+             (push (%start-process-output-copier output-process *standard-output*) copiers)
+             (push (%start-stream-copier (process-error output-process)
+                                        *standard-output*
+                                        "nshell pipeline error copier")
+                   copiers))
            (setf copiers (remove nil copiers))
            (multiple-value-bind (timed-out-p output-complete-p)
                (%wait-processes-with-output-copiers
@@ -68,7 +70,7 @@
                    (multiple-value-bind (ignored statuses)
                        (%wait-pipeline-processes procs pipefail-p)
                      (declare (ignore ignored))
-                     (values code statuses)))
+                     (values code statuses t)))
                  (%wait-pipeline-processes procs pipefail-p))))
       (dolist (copier copiers)
         (when (sb-thread:thread-alive-p copier)

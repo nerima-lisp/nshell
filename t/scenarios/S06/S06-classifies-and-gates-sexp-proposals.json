@@ -74,7 +74,7 @@
     },
     {
       "type": "wait",
-      "contains": "AI proposal [block]",
+      "contains": "AI proposal [confirm]",
       "timeout_seconds": 10
     },
     {
@@ -112,7 +112,7 @@
       "contains": [
         "AI proposal [safe]",
         "S06 protected marker",
-        "AI proposal [block]",
+        "AI proposal [confirm]",
         "S06_SHELL_ALIVE",
         "Goodbye!"
       ]

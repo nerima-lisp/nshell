@@ -810,11 +810,16 @@
       # the bug-report golden test, the response envelope schema
       # conformance test, and the machine --json golden tests, which read
       # the examples from the two design documents.
-      # Language conformance tests also read the v0.7 probe fixture.
+      # Language conformance tests also read the v0.7 probe fixture, and
+      # resolve every design `file:line` their rows cite when they load.
       sourceInclude = [
         ./docs/src/reference/builtins.md
         ./docs/src/reference/error-codes.md
         ./docs/design/conformance/language-probes-v0.7.0.json
+        ./docs/design/language
+        ./docs/design/inventory/I4-builtins.md
+        ./docs/design/proposal/08-robustness.md
+        ./docs/design/tasks/P2-language-and-cuts.md
         ./t/golden/bug-report.txt
         ./docs/design/conformance/envelope.schema.json
         ./docs/design/proposal/02-machine-interface.md

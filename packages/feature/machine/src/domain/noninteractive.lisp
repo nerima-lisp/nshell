@@ -14,36 +14,46 @@ value, for one command or for the rest of the run.")
 
 ;;; Full-screen programs (E_INTERACTIVE_PROGRAM). Each entry is (NAME KIND
 ;;; . NONINTERACTIVE): KIND chooses the fix, and NONINTERACTIVE lists the
-;;; arguments with which NAME runs without a terminal, matched as a whole
-;;; argument or, for a string ending in *, as its prefix. --version runs
-;;; without one for every program.
+;;; arguments with which NAME runs without a terminal, each at any position:
+;;; a string matches a whole argument or, ending in *, its prefix, and a list
+;;; of strings matches arguments in that order with any others between them
+;;; (vim's -s means silent only after -e). --version runs without one for
+;;; every program.
 
 (defparameter +full-screen-programs+
-  '(("vi" :editor "-es" "-Es")
-    ("vim" :editor "-es" "-Es")
-    ("nvim" :editor "-es" "-Es" "--headless")
-    ("nano" :editor)
-    ("emacs" :editor "--batch" "-batch" "--script" "-script")
-    ("less" :pager)
-    ("more" :pager)
+  '(("vi" :editor "-es" "-Es" ("-e" "-s") ("-E" "-s"))
+    ("vim" :editor "-es" "-Es" ("-e" "-s") ("-E" "-s"))
+    ("nvim" :editor "-es" "-Es" ("-e" "-s") ("-E" "-s") "--headless")
+    ("nano" :editor "-V")
+    ("emacs" :editor "--batch" "-batch" "--script" "--script=*" "-script" "-version")
+    ("less" :pager "-V")
+    ("more" :pager "-V")
     ("most" :pager)
-    ("man" :manual "-P" "-f" "-k" "-w")
-    ("top" :top "-l*" "-b*")
-    ("htop" :monitor)
-    ("btop" :monitor)
-    ("watch" :watch)))
+    ("man" :manual "-P*" "--pager*" "-f" "--whatis" "-k" "--apropos"
+     "-w" "--where" "--path" "--location")
+    ("top" :top "-l*" "-b*" "--batch-mode")
+    ("htop" :monitor "-V")
+    ("btop" :monitor "-v")
+    ("watch" :watch "-v")))
 
 (defun %command-base-name (command)
   (subseq command (1+ (or (position #\/ command :from-end t) -1))))
 
-(defun %noninteractive-argument-p (patterns argument)
-  (or (string= argument "--version")
+(defun %argument-matches-p (pattern argument)
+  (let ((end (1- (length pattern))))
+    (if (char= #\* (char pattern end))
+        (and (>= (length argument) end)
+             (string= pattern argument :end1 end :end2 end))
+        (string= pattern argument))))
+
+(defun %noninteractive-arguments-p (patterns arguments)
+  (or (member "--version" arguments :test #'string=)
       (some (lambda (pattern)
-              (let ((end (1- (length pattern))))
-                (if (char= #\* (char pattern end))
-                    (and (>= (length argument) end)
-                         (string= pattern argument :end1 end :end2 end))
-                    (string= pattern argument))))
+              (loop with rest = arguments
+                    for word in (if (listp pattern) pattern (list pattern))
+                    for tail = (member word rest :test #'%argument-matches-p)
+                    always tail
+                    do (setf rest (rest tail))))
             patterns)))
 
 (defun full-screen-program-kind (command arguments)
@@ -54,8 +64,7 @@ terminal. COMMAND may be a path."
       (rest (assoc (%command-base-name command) +full-screen-programs+
                    :test #'string=))
     (and kind
-         (notany (lambda (argument) (%noninteractive-argument-p patterns argument))
-                 arguments)
+         (not (%noninteractive-arguments-p patterns arguments))
          kind)))
 
 (defparameter +top-sample-command+

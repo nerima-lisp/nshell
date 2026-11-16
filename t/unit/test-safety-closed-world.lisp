@@ -108,6 +108,11 @@
        ("git log --format=%h%x09%s" :safe) ("git branch --" :safe)
        ("git branch -a" :safe) ("git remote -v" :safe))))
 
+  (it "matches grep against its spec row without long-name prefixes"
+    (%closed-world-expect-levels
+     '(("grep needle file" :safe) ("grep -rn --include=*.lisp -e needle src" :safe)
+       ("grep --inclu=*.lisp needle src" :confirm) ("grep -P needle file" :confirm))))
+
   (it "keeps the git branch listing grammar"
     (%closed-world-expect-levels
      '(("git branch -- new-name" :confirm) ("git branch -a new-name" :confirm)

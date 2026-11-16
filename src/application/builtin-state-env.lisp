@@ -226,7 +226,7 @@
     (when prompt
       (write-string prompt)
       (finish-output))
-    (let ((line (read-line *standard-input* nil nil)))
+    (let ((line (nshell.infrastructure.terminal:read-input-line)))
       (if line
           (progn
             (%update-shell-environment context

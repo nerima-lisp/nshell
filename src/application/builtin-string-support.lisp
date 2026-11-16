@@ -22,7 +22,7 @@ arguments are rejected as unknown options."
              (let ((texts
                     (if remaining
                         remaining
-                        (loop for line = (read-line *standard-input* nil nil)
+                        (loop for line = (nshell.infrastructure.terminal:read-input-line)
                               while line
                               collect line))))
                (values (%string-emit-lines texts :transform ,transform)

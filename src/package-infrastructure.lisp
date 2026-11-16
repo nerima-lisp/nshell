@@ -124,6 +124,7 @@ line editor has a single place to import them from.")
             #:copy-to-clipboard
             #:read-key-event
             #:query-cursor-position
+            #:read-input-line
             #:detect-east-asian-ambiguous-wide-p
             #:key-event #:key-event-p #:make-key-event
             #:key-event-type #:key-event-char #:key-event-number

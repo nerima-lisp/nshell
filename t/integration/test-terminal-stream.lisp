@@ -317,13 +317,16 @@
               (getf (nshell.infrastructure.terminal:key-event-data mouse-all)
                     :modifiers))))
 
+  ;; The cursor query tests use heap string streams: a stack-allocated
+  ;; WITH-INPUT-FROM-STRING stream can share its address, and so its
+  ;; terminal reader state, with a stream created by a later test.
   (it "terminal-stream-queries-cursor-position"
     "Cursor position reports are decoded to 1-based coordinates."
     (let ((response (coerce (list #\Esc #\[ #\6 #\; #\1 #\1 #\R) 'string))
           (captured-output nil)
           (row nil)
           (column nil))
-      (with-input-from-string (input response)
+      (let ((input (make-string-input-stream response)))
         (let ((*standard-input* input))
           (setf captured-output
                 (with-output-to-string (output)
@@ -337,7 +340,7 @@
 
   (it "terminal-stream-cursor-query-preserves-ordinary-input"
     "A missing cursor response must not consume the next ordinary key."
-    (with-input-from-string (input "x")
+    (let ((input (make-string-input-stream "x")))
       (let ((*standard-input* input))
         (with-output-to-string (output)
           (let ((*standard-output* output))
@@ -346,14 +349,15 @@
                  :attempts 1 :sleep-seconds 0)
               (expect row :to-equal nil)
               (expect column :to-equal nil)
-              (expect (read-char *standard-input* nil nil) :to-equal #\x)))))))
+              (expect (nshell.infrastructure.terminal::next-input-char)
+                      :to-equal #\x)))))))
 
   (it "terminal-stream-cursor-query-handles-empty-and-incomplete-responses"
     "Cursor queries return NIL values and preserve an incomplete escape response."
     (let ((empty-output nil)
           (empty-row :unset)
           (empty-column :unset))
-      (with-input-from-string (input "")
+      (let ((input (make-string-input-stream "")))
         (let ((*standard-input* input))
           (setf empty-output
                 (with-output-to-string (output)
@@ -364,7 +368,7 @@
       (expect empty-row :to-equal nil)
       (expect empty-column :to-equal nil)
       (expect empty-output :to-equal (esc-sequence "[6n")))
-    (with-input-from-string (input (string #\Esc))
+    (let ((input (make-string-input-stream (string #\Esc))))
       (let ((*standard-input* input))
         (with-output-to-string (output)
           (let ((*standard-output* output))
@@ -373,7 +377,8 @@
                  :attempts 1 :sleep-seconds 0)
               (expect row :to-equal nil)
               (expect column :to-equal nil)
-              (expect (read-char *standard-input* nil nil) :to-equal #\Esc)))))))
+              (expect (nshell.infrastructure.terminal::next-input-char)
+                      :to-equal #\Esc)))))))
 
   (it "terminal-stream-decodes-meta-editing-keys"
     "ESC-prefixed Meta editing chords normalize to presentation key events."

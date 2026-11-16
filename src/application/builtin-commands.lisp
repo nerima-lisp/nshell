@@ -283,7 +283,7 @@ lines read from *STANDARD-INPUT*. Exit status is 0 when the count is positive,
 otherwise 1."
   (let ((n (if args
                (length args)
-               (loop for line = (read-line *standard-input* nil nil)
+               (loop for line = (nshell.infrastructure.terminal:read-input-line)
                      while line
                      count t))))
     (values (format nil "~d~%" n) (if (plusp n) 0 1))))

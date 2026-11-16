@@ -175,3 +175,209 @@
         (nshell.presentation::move-cursor-clearing-suggestion state 1))
       (expect (nshell.presentation:input-state-cursor-pos moved)
               :to-equal (+ 1 (length family))))))
+
+(defclass scripted-terminal-input (sb-gray:fundamental-character-input-stream)
+  ((script :initarg :script :accessor scripted-terminal-input-script)
+   (last-read :initform nil :accessor scripted-terminal-input-last-read))
+  (:documentation
+   "Terminal input whose bytes arrive in pieces.  Each :GAP entry makes one
+LISTEN return NIL, as a poll that runs before the next piece arrives; a
+blocking READ-CHAR waits past it.  Like a conforming stream, it accepts only
+one UNREAD-CHAR of the character most recently read."))
+
+(defun scripted-terminal-input (&rest pieces)
+  "Return a SCRIPTED-TERMINAL-INPUT delivering PIECES (strings or :GAP)."
+  (make-instance 'scripted-terminal-input
+                 :script (loop for piece in pieces
+                               if (stringp piece)
+                                 append (coerce piece 'list)
+                               else
+                                 collect piece)))
+
+(defmethod sb-gray:stream-read-char ((stream scripted-terminal-input))
+  (loop while (eq :gap (first (scripted-terminal-input-script stream)))
+        do (pop (scripted-terminal-input-script stream)))
+  (let ((character (pop (scripted-terminal-input-script stream))))
+    (setf (scripted-terminal-input-last-read stream) character)
+    (or character :eof)))
+
+(defmethod sb-gray:stream-listen ((stream scripted-terminal-input))
+  (let ((next (first (scripted-terminal-input-script stream))))
+    (cond ((eq next :gap)
+           (pop (scripted-terminal-input-script stream))
+           nil)
+          (t (characterp next)))))
+
+(defmethod interactive-stream-p ((stream scripted-terminal-input))
+  t)
+
+(defmethod sb-gray:stream-unread-char ((stream scripted-terminal-input) character)
+  (unless (eql character (scripted-terminal-input-last-read stream))
+    (error "UNREAD-CHAR of ~S does not undo the most recent READ-CHAR." character))
+  (setf (scripted-terminal-input-last-read stream) nil)
+  (push character (scripted-terminal-input-script stream))
+  nil)
+
+(defun scripted-gaps (count)
+  (make-list count :initial-element :gap))
+
+(defun query-scripted-cursor-position (attempts &rest pieces)
+  "Query the cursor over PIECES; return the row, column, and the input stream."
+  (let ((input (apply #'scripted-terminal-input pieces)))
+    (multiple-value-bind (row column)
+        (let ((*standard-input* input)
+              (*standard-output* (make-string-output-stream)))
+          (nshell.infrastructure.terminal:query-cursor-position
+           :attempts attempts :sleep-seconds 0))
+      (values row column input))))
+
+(defun next-scripted-key (input)
+  (let ((*standard-input* input))
+    (nshell.infrastructure.terminal:read-key-event)))
+
+(describe "cursor-position-report-input"
+  (it "query-decodes-a-report-split-across-reads"
+    (multiple-value-bind (row column input)
+        (apply #'query-scripted-cursor-position
+               12 (append (list (format nil "~C[1" #\Esc)) (scripted-gaps 1)
+                         (list ";2") (scripted-gaps 1) (list "0R" "x")))
+      (expect row :to-be 1)
+      (expect column :to-be 20)
+      (expect (nshell.infrastructure.terminal:key-event-char
+               (next-scripted-key input))
+              :to-equal #\x)))
+
+  (it "report-tail-arriving-after-query-timeout-is-discarded"
+    (multiple-value-bind (row column input)
+        (apply #'query-scripted-cursor-position
+               3 (append (list (format nil "~C[1;" #\Esc)) (scripted-gaps 3)
+                         (list "20R" "x")))
+      (expect row :to-be nil)
+      (expect column :to-be nil)
+      (expect (nshell.infrastructure.terminal:key-event-type
+               (next-scripted-key input))
+              :to-be :ignore)
+      (expect (nshell.infrastructure.terminal:key-event-char
+               (next-scripted-key input))
+              :to-equal #\x)))
+
+  (it "timeout-between-escape-and-bracket-leaves-report-for-decoder"
+    (multiple-value-bind (row column input)
+        (apply #'query-scripted-cursor-position
+               3 (append (list (string #\Esc)) (scripted-gaps 3) (list "[1;20R" "x")))
+      (expect row :to-be nil)
+      (expect column :to-be nil)
+      (expect (nshell.infrastructure.terminal:key-event-type
+               (next-scripted-key input))
+              :to-be :ignore)
+      (expect (nshell.infrastructure.terminal:key-event-char
+               (next-scripted-key input))
+              :to-equal #\x)))
+
+  (it "user-input-inside-a-report-is-delivered-in-order"
+    (let ((typed (format nil "~C[3x;5Ry" #\Esc)))
+      (multiple-value-bind (row column input)
+          (query-scripted-cursor-position 12 typed)
+        (expect row :to-be nil)
+        (expect column :to-be nil)
+        (expect (let ((*standard-input* input))
+                  (coerce (loop for character
+                                  = (nshell.infrastructure.terminal::read-available-char
+                                     :attempts 1 :sleep-seconds 0)
+                                while character
+                                collect character)
+                          'string))
+                :to-equal typed))))
+
+  (it "query-reads-a-late-reply-so-none-is-left-unread"
+    ;; Ctrl-Z, exit and external commands release raw mode without reading
+    ;; input, so a reply must not be left in the stream after the query.
+    (multiple-value-bind (row column input)
+        (query-scripted-cursor-position
+         3 :gap "ec" :gap (format nil "~C[2;1R" #\Esc) "ho")
+      (expect row :to-be 2)
+      (expect column :to-be 1)
+      (expect (scripted-terminal-input-script input) :to-equal '(#\h #\o))
+      (expect (coerce (let ((*standard-input* input))
+                        (loop for character
+                                = (nshell.infrastructure.terminal::read-available-char
+                                   :attempts 1 :sleep-seconds 0)
+                              while character
+                              collect character))
+                      'string)
+              :to-equal "echo")))
+
+  (it "input-after-the-reply-stays-in-the-stream-for-an-external-command"
+    ;; The scripted stream stands for the inherited descriptor: what is still
+    ;; in it when the cooked-terminal extent starts is what a child would read.
+    (let ((input (scripted-terminal-input
+                  :gap (format nil "~C[2;1R" #\Esc) (format nil "data~%")))
+          (seen-by-command :unset))
+      (let ((*standard-input* input)
+            (*standard-output* (make-string-output-stream)))
+        (nshell.infrastructure.terminal:query-cursor-position
+         :attempts 3 :sleep-seconds 0)
+        (with-temporary-function
+            ('nshell.infrastructure.terminal:restore-terminal-mode
+             (lambda (&rest arguments) (declare (ignore arguments)) nil))
+          (with-temporary-function
+              ('nshell.infrastructure.terminal:enable-raw-mode
+               (lambda (&rest arguments) (declare (ignore arguments)) nil))
+            (with-temporary-function
+                ('nshell.infrastructure.terminal:terminal-control-sequences-supported-p
+                 (lambda (&rest arguments) (declare (ignore arguments)) nil))
+              (nshell.presentation::%call-with-cooked-terminal
+               (lambda ()
+                 (setf seen-by-command
+                       (coerce (remove :gap (scripted-terminal-input-script input))
+                               'string))))))))
+      (expect seen-by-command :to-equal (format nil "data~%"))))
+
+  (it "reply-split-after-escape-does-not-become-input"
+    (multiple-value-bind (row column input)
+        (apply #'query-scripted-cursor-position
+               40 :gap (string #\Esc)
+               (append (scripted-gaps 25) (list "[2;1R" "x")))
+      (expect row :to-be 2)
+      (expect column :to-be 1)
+      (expect (nshell.infrastructure.terminal:key-event-char
+               (next-scripted-key input))
+              :to-equal #\x)))
+
+  (it "unanswered-query-stops-later-cursor-queries"
+    (let ((input (scripted-terminal-input "x"))
+          (output (make-string-output-stream)))
+      (let ((*standard-input* input)
+            (*standard-output* output))
+        (nshell.infrastructure.terminal:query-cursor-position
+         :attempts 3 :sleep-seconds 0)
+        (get-output-stream-string output)
+        (multiple-value-bind (row column)
+            (nshell.infrastructure.terminal:query-cursor-position
+             :attempts 3 :sleep-seconds 0)
+          (expect row :to-be nil)
+          (expect column :to-be nil))
+        (expect (get-output-stream-string output) :to-equal "")
+        (expect (nshell.infrastructure.terminal:key-event-char
+                 (nshell.infrastructure.terminal:read-key-event))
+                :to-equal #\x))))
+
+  (it "builtin-read-sees-input-stashed-during-a-query"
+    (let ((input (scripted-terminal-input
+                  :gap (format nil "hello~%wor") (format nil "~C[2;1R" #\Esc)
+                  (format nil "ld~%next"))))
+      (let ((*standard-input* input)
+            (*standard-output* (make-string-output-stream)))
+        (nshell.infrastructure.terminal:query-cursor-position
+         :attempts 3 :sleep-seconds 0)
+        (with-builtins-context (context)
+          (call-builtin context "read" '("first"))
+          (call-builtin context "read" '("second"))
+          (let ((environment (nshell.application:shell-context-environment context)))
+            (expect (nshell.domain.environment:env-get environment "first")
+                    :to-equal "hello")
+            (expect (nshell.domain.environment:env-get environment "second")
+                    :to-equal "world")))
+        (expect (nshell.infrastructure.terminal:key-event-char
+                 (nshell.infrastructure.terminal:read-key-event))
+                :to-equal #\n)))))

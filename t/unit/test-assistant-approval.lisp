@@ -272,6 +272,17 @@ first, as (SOURCE ORIGIN APPROVAL)."
           (expect '("rm file" . :pending) :to-equal
                   nshell.presentation::*assistant-command-approval*)))))
 
+  (it "refuses-a-blocked-ai-line-at-every-enter"
+    (with-repl-test-state
+      (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm -rf /")))
+        (with-approval-execution (executed :panel-var panel)
+          (%approval-press-enter)
+          (%approval-press-enter)
+          (expect nil :to-be executed)
+          (expect nil :to-be nshell.presentation::*assistant-command-approval*)
+          (expect (search "blocked" (first panel)) :to-be-truthy)
+          (expect "rm -rf /" :to-equal (%approval-buffer))))))
+
   (it "drops-a-pending-approval-when-the-text-changes"
     (with-repl-test-state
       (let ((nshell.presentation::*input-state* (%approval-proposal-state "rm file")))

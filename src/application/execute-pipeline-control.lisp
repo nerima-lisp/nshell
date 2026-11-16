@@ -108,7 +108,8 @@ so it is marked quoted and never read as an assignment or a prefix of one."
   "Return the function the AI safety classifier calls to learn how the
 executor resolves a command node in CONTEXT: it takes the node and the path
 the node runs on and returns the executor's dispatch kind and the node it
-runs.  Each path asks the executor's own resolution:
+runs.  Each path asks the executor's own resolution, told not to load a
+function file: classifying must not run code before the line is approved.
 :BARE-LINE expands an alias with expand-command-alias-node, as
 %expand-command-node-in-context does, and resolves the name of the result;
 :STAGE resolves the name with %resolve-command-by-name, as
@@ -123,7 +124,7 @@ evaluated reader stage, the program exec runs) to their dispatch kind."
         ((eq path :reader)
          (handler-case
              (multiple-value-bind (kind binding run-node)
-                 (%resolve-command-stage-binding context node)
+                 (%resolve-command-stage-binding context node :autoload nil)
                (declare (ignore binding))
                (values kind run-node))
            (error () (values :unresolved node))))
@@ -140,12 +141,14 @@ evaluated reader stage, the program exec runs) to their dispatch kind."
               (values :unresolved node))
              ((eq expanded node)
               (values (%resolve-command-by-name
-                       context (nshell.domain.parsing:command-node-command node))
+                       context (nshell.domain.parsing:command-node-command node)
+                       :autoload nil)
                       node))
              (t
               (let ((run-node (%assistant-command-stage-node expanded)))
                 (values (%resolve-command-by-name
-                         context (nshell.domain.parsing:command-node-command run-node))
+                         context (nshell.domain.parsing:command-node-command run-node)
+                         :autoload nil)
                         run-node))))))))))
 
 (defun %assistant-gate-active-p ()

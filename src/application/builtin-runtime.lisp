@@ -282,21 +282,30 @@ afterwards with any global write the callee made."
          (:return (source-lines context function-body))
          (:stream (source-lines-to-stream context function-body)))))))
 
-(defun %resolve-command-by-name (context command)
+(defun %resolve-command-by-name (context command &key (autoload t))
   "Return how %execute-command-by-name-in-context runs COMMAND, and the
 binding it runs: :SOURCE-FUNCTION (the function table), :SHELL-FUNCTION (the
 shell function registry), :BUILTIN, or :EXTERNAL.  The AI execution gate and
-the safety classifier resolve a command by this function too."
+the safety classifier resolve a command by this function too, with AUTOLOAD
+NIL: then a function file the registry would load makes COMMAND a
+:SHELL-FUNCTION without a binding, and nothing is loaded."
   (multiple-value-bind (function-body function-present-p)
       (gethash command (shell-context-function-table context))
     (if function-present-p
         (values :source-function function-body)
         (multiple-value-bind (binding registered-p)
-            (lookup-shell-function
-             (context-shell-function-registry context) command)
+            ;; peek-shell-function searches the same registry without the
+            ;; lookup-miss hook that loads a function file.
+            (if autoload
+                (lookup-shell-function (context-shell-function-registry context) command)
+                (peek-shell-function (context-shell-function-registry context) command))
           (let ((handler (lookup-builtin command)))
             (cond
               (registered-p (values :shell-function binding))
+              ((and (not autoload)
+                    (%autoload-function-file
+                     context (%shell-function-canonical-key command nil)))
+               (values :shell-function nil))
               (handler (values :builtin handler))
               (t (values :external nil))))))))
 

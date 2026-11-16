@@ -110,40 +110,31 @@
             (sb-thread:signal-semaphore new-release)
             (nshell.presentation::%stop-suggestion-worker))))))
 
-  (it "keeps history suggestion text and right-key acceptance"
+  (it "draws a history suggestion with the key that typed it"
+    ;; Typed-ahead keys never reach the idle poll, so a history match must be
+    ;; on the input state when the key handler returns, without the worker.
     (with-repl-test-state
-      (let ((nshell.presentation::*suggestion-worker-state* nil)
-            (nshell.presentation::*suggestion-history-source* nil)
-            (nshell.presentation::*suggestion-history-snapshot* nil))
+      (with-isolated-suggestion-worker
         (unwind-protect
              (progn
                (history-kit:history-add nshell.presentation::*history* "docker ps")
-               (nshell.presentation::%refresh-suggestion-history-snapshot)
                (setf nshell.presentation::*input-state*
                      (nshell.presentation:make-input-state
                       :buffer "docker" :cursor-pos 6))
                (nshell.presentation::%schedule-current-input-state-suggestion)
-               (let ((result (%wait-for-suggestion-worker-result)))
-                 (expect result :to-be-truthy)
-                 (when result
-                   (expect " ps" :to-equal
-                           (nshell.presentation::%suggestion-worker-result-suggestion
-                            result))
-                   (expect (nshell.presentation::%current-suggestion-worker-result-p
-                            result)
-                           :to-be-truthy)
-                   (setf (nshell.presentation::input-state-suggestion
-                          nshell.presentation::*input-state*)
-                         (nshell.presentation::%suggestion-worker-result-suggestion
-                          result))
-                   (multiple-value-bind (new-state output-event)
-                       (nshell.presentation:reduce-input-state
-                        nshell.presentation::*input-state*
-                        (nshell.domain.input:make-key-event :right))
-                     (declare (ignore output-event))
-                     (expect "docker ps" :to-equal
-                             (nshell.presentation::input-state-buffer new-state))))))
+               (expect " ps" :to-equal
+                       (nshell.presentation::input-state-suggestion
+                        nshell.presentation::*input-state*))
+               (expect nshell.presentation::*suggestion-worker-state* :to-be-falsy)
+               (multiple-value-bind (new-state output-event)
+                   (nshell.presentation:reduce-input-state
+                    nshell.presentation::*input-state*
+                    (nshell.domain.input:make-key-event :right))
+                 (declare (ignore output-event))
+                 (expect "docker ps" :to-equal
+                         (nshell.presentation::input-state-buffer new-state))))
           (nshell.presentation::%stop-suggestion-worker)))))
+
   (it "accepts a suggestion whose calculation is still running"
     (with-repl-test-state
       (let ((nshell.presentation::*suggestion-worker-state* nil)
@@ -451,4 +442,41 @@
             (when stopper
               (ignore-errors (sb-thread:join-thread stopper :default nil :timeout 5)))
             (ignore-errors (delete-file fifo))
-            (ignore-errors (sb-posix:rmdir directory))))))))
+            (ignore-errors (sb-posix:rmdir directory)))))))
+
+  (it "redraws when the key reader's idle poll delivers a worker result"
+    ;; READ-KEY-CONT reads through the real READ-KEY-EVENT: with no key ready
+    ;; it polls the worker and returns the redraw continuation.
+    (with-repl-test-state
+      (with-isolated-suggestion-worker
+        (let ((renders 0)
+              (nshell.presentation::*interactive-terminal-installed-p* t)
+              (*standard-input* (make-string-input-stream "")))
+          (unwind-protect
+               (with-temporary-functions
+                   (('nshell.presentation:compute-suggestion
+                     (lambda (history input &rest arguments)
+                       (declare (ignore history arguments))
+                       (and (string= input "zzq") "-tail")))
+                    ('nshell.infrastructure.acl:consume-terminal-resize-p
+                     (lambda () nil))
+                    ('nshell.presentation::%poll-assistant-model-event
+                     (lambda () nil))
+                    ('nshell.presentation::render-prompt-cont
+                     (lambda () (incf renders) :rendered)))
+                 (setf nshell.presentation::*input-state*
+                       (nshell.presentation:make-input-state
+                        :buffer "zzq" :cursor-pos 3))
+                 (expect (nshell.presentation::%request-current-input-state-suggestion)
+                         :to-be-truthy)
+                 (let ((outcome
+                         (handler-case
+                             (sb-ext:with-timeout 5
+                               (funcall (nshell.presentation::read-key-cont)))
+                           (sb-ext:timeout () :timeout))))
+                   (expect :rendered :to-equal outcome))
+                 (expect 1 :to-equal renders)
+                 (expect "-tail" :to-equal
+                         (nshell.presentation::input-state-suggestion
+                          nshell.presentation::*input-state*)))
+            (nshell.presentation::%stop-suggestion-worker)))))))

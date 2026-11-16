@@ -3,15 +3,19 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :sb-posix)
   (nshell.domain.completion:%configure-path-command-cache-locks
-    (lambda ()
+    ;; WITH-MUTEX, not GRAB-MUTEX and RELEASE-MUTEX: thread termination
+    ;; arriving between a manual grab and the UNWIND-PROTECT that releases it
+    ;; would leave the mutex held for good.
+    (lambda (&key uninterruptible)
       (let ((mutex (sb-thread:make-mutex :name "PATH command directory cache")))
-        (cl-boundary-kit:make-lock
-          :acquire-fn
-          (lambda ()
-            (sb-thread:grab-mutex mutex))
-          :release-fn
-          (lambda ()
-            (sb-thread:release-mutex mutex)))))))
+        (if uninterruptible
+            (lambda (thunk)
+              (sb-thread:with-mutex (mutex)
+                (sb-sys:without-interrupts
+                  (funcall thunk))))
+            (lambda (thunk)
+              (sb-thread:with-mutex (mutex)
+                (funcall thunk))))))))
 
 (defconstant +path-command-parallel-directory-threshold+ 4)
 (defconstant +path-command-parallel-batch-limit+ 4)

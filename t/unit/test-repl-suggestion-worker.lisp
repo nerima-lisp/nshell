@@ -141,24 +141,41 @@
             (nshell.presentation::*suggestion-history-source* nil)
             (nshell.presentation::*suggestion-history-snapshot* nil))
         (let* ((started (sb-thread:make-semaphore :count 0))
+               (waiting (sb-thread:make-semaphore :count 0))
                (release (sb-thread:make-semaphore :count 0))
                (event (nshell.domain.input:make-key-event :right))
+               (caller-thread sb-thread:*current-thread*)
+               (armed nil)
+               (polls 0)
+               (original-alive-p
+                 (symbol-function 'nshell.presentation::%suggestion-worker-alive-p))
                (nshell.presentation::*suggestion-acceptance-wait-seconds* 5)
-               ;; Releases the computation while the acceptance waits. It
-               ;; never signals STARTED, which only the worker may do.
-               (watchdog
+               ;; Releases the computation only once the acceptance is
+               ;; polling for it, so the result cannot be ready before the
+               ;; wait starts. It never signals STARTED, which only the
+               ;; worker may do.
+               (releaser
                  (sb-thread:make-thread
                   (lambda ()
-                    (sleep 0.2)
-                    (sb-thread:signal-semaphore release)))))
+                    (when (sb-thread:wait-on-semaphore waiting :timeout 5)
+                      (sb-thread:signal-semaphore release))))))
           (unwind-protect
-               (with-temporary-function
-                   ((quote nshell.presentation:compute-suggestion)
-                    (lambda (history input &rest arguments)
-                      (declare (ignore history input arguments))
-                      (sb-thread:signal-semaphore started)
-                      (sb-thread:wait-on-semaphore release)
-                      " ps"))
+               (with-temporary-functions
+                   (('nshell.presentation:compute-suggestion
+                     (lambda (history input &rest arguments)
+                       (declare (ignore history input arguments))
+                       (sb-thread:signal-semaphore started)
+                       (sb-thread:wait-on-semaphore release)
+                       " ps"))
+                    ;; The acceptance wait checks the worker on every poll.
+                    ;; Scheduling checks it too, so count only once armed.
+                    ('nshell.presentation::%suggestion-worker-alive-p
+                     (lambda (state)
+                       (when (and armed
+                                  (eq sb-thread:*current-thread* caller-thread)
+                                  (= 1 (incf polls)))
+                         (sb-thread:signal-semaphore waiting))
+                       (funcall original-alive-p state))))
                  (setf nshell.presentation::*input-state*
                        (nshell.presentation:make-input-state
                         :buffer "docker" :cursor-pos 6))
@@ -168,7 +185,11 @@
                  (expect
                   (nshell.presentation::%suggestion-acceptance-key-event-p event)
                   :to-be-truthy)
-                 (nshell.presentation::%await-current-suggestion-before-acceptance)
+                 (setf armed t)
+                 (expect (nshell.presentation::%await-current-suggestion-before-acceptance)
+                         :to-be-truthy)
+                 ;; More than one poll: the wait saw the request still running.
+                 (expect (> polls 1) :to-be-truthy)
                  (expect " ps" :to-equal
                          (nshell.presentation::input-state-suggestion
                           nshell.presentation::*input-state*))
@@ -178,9 +199,10 @@
                    (declare (ignore output-event))
                    (expect "docker ps" :to-equal
                            (nshell.presentation::input-state-buffer new-state))))
+            (sb-thread:signal-semaphore waiting)
             (sb-thread:signal-semaphore release)
             (nshell.presentation::%stop-suggestion-worker)
-            (sb-thread:join-thread watchdog))))))
+            (sb-thread:join-thread releaser :default nil :timeout 5))))))
 
   (it "computes the suggestion inline when the worker died mid-request"
     (with-repl-test-state

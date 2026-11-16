@@ -50,6 +50,12 @@ PATH directory scan to decide whether its stamp is settled.")
 (defvar *path-command-directory-cache* (make-hash-table :test #'equal))
 (defvar *path-command-directory-cache-generation* 0)
 
-(defvar *path-command-cache-lock-factory* nil)
+(defvar *path-command-cache-lock-factory* nil
+  "Function returning a lock: a function that calls its thunk while holding
+the lock and releases it on any exit, including thread termination.")
 (defvar *path-command-directory-cache-lock* nil)
+(defvar *path-command-key-lock-cell* nil
+  "A cons whose car receives the key-lock record inside the cache lock, so a
+caller's cleanup can release the reference even when termination arrives
+right after the reference was taken.")
 (defvar *path-command-directory-key-locks* (make-hash-table :test #'equal))

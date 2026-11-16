@@ -1,5 +1,56 @@
 (in-package #:nshell/test)
 
+(defun %terminate-in-path-lock-grab-window (grab-index thunk &optional while-paused)
+  "Run THUNK in a thread and terminate it right after its GRAB-INDEXth grab of
+a PATH cache mutex, before the grabbing form can protect the release; call
+WHILE-PAUSED first. Return true when the thread reached that point."
+  (let* ((target nil)
+         (grabs 0)
+         (paused (sb-thread:make-semaphore :count 0))
+         (resume nil)
+         (hook
+           (lambda (function &rest arguments)
+             (multiple-value-prog1 (apply function arguments)
+               (when (and (eq sb-thread:*current-thread* target)
+                          (equal "PATH command directory cache"
+                                 (sb-thread:mutex-name (first arguments)))
+                          (= (incf grabs) grab-index))
+                 (sb-thread:signal-semaphore paused)
+                 ;; Spin without an interrupt point: termination lands here
+                 ;; only where the grabbing form leaves interrupts enabled.
+                 (loop until resume
+                       repeat 500000000
+                       do (sb-ext:spin-loop-hint)))))))
+    (sb-ext:without-package-locks
+      (sb-int:encapsulate 'sb-thread:grab-mutex 'path-lock-window hook)
+      (sb-int:encapsulate 'sb-thread::grab-mutex-no-check-deadlock
+                          'path-lock-window hook))
+    (unwind-protect
+         (let ((thread (sb-thread:make-thread
+                        (lambda ()
+                          (loop until target do (sb-thread:thread-yield))
+                          (funcall thunk))
+                        :name "PATH lock termination test")))
+           (setf target thread)
+           (prog1 (sb-thread:wait-on-semaphore paused :timeout 5)
+             (when while-paused
+               (funcall while-paused))
+             (sb-thread:terminate-thread thread)
+             (sleep 0.05)
+             (setf resume t)
+             (sb-thread:join-thread thread :default nil :timeout 5)))
+      (sb-ext:without-package-locks
+        (sb-int:unencapsulate 'sb-thread:grab-mutex 'path-lock-window)
+        (sb-int:unencapsulate 'sb-thread::grab-mutex-no-check-deadlock
+                              'path-lock-window)))))
+
+(defun %finishes-within-deadline-p (thunk)
+  (eq :finished
+      (sb-thread:join-thread
+       (sb-thread:make-thread (lambda () (funcall thunk) :finished)
+                              :name "PATH lock reacquire test")
+       :default :timeout :timeout 2)))
+
 (describe "completion-path-reducer-tests"
   (it "filters deduplicates and sorts executable path entries"
     (let ((entries-by-directory
@@ -97,3 +148,59 @@
                (nshell.domain.completion::%make-path-command-directory-reader
                 filesystem)
                "/coverage-boundary-reader"))))
+
+  #+sb-thread
+  (it "a thread terminated right after taking the PATH cache lock releases it"
+    (let ((factory nshell.domain.completion::*path-command-cache-lock-factory*))
+      (unwind-protect
+           (progn
+             (expect (%terminate-in-path-lock-grab-window
+                      1
+                      (lambda ()
+                        (nshell.domain.completion::%path-command-directory-cache-generation)))
+                     :to-be-truthy)
+             (expect (%finishes-within-deadline-p
+                      (lambda ()
+                        (nshell.domain.completion::%invalidate-path-command-cache)))
+                     :to-be-truthy))
+        ;; A leaked lock would hang every later PATH lookup in this image.
+        (nshell.domain.completion::%configure-path-command-cache-locks factory))))
+
+  #+sb-thread
+  (it "a thread terminated right after taking a PATH key lock releases it"
+    ;; A dropped reference alone would let a later caller make a fresh key
+    ;; lock, so a contender shares the record while the victim holds it.
+    (let ((factory nshell.domain.completion::*path-command-cache-lock-factory*)
+          (key "/path-lock-termination-test")
+          (contender nil))
+      (flet ((references ()
+               (nshell.domain.completion::%with-path-command-directory-cache-lock
+                 (let ((record (gethash key nshell.domain.completion::*path-command-directory-key-locks*)))
+                   (and record (cdr record))))))
+        (unwind-protect
+             (progn
+               ;; The first grab takes the reference under the cache lock,
+               ;; the second takes the key lock itself.
+               (expect (%terminate-in-path-lock-grab-window
+                        2
+                        (lambda ()
+                          (nshell.domain.completion::%with-path-command-directory-key-lock
+                              (key)
+                            :held))
+                        (lambda ()
+                          (setf contender
+                                (sb-thread:make-thread
+                                 (lambda ()
+                                   (nshell.domain.completion::%with-path-command-directory-key-lock
+                                       (key)
+                                     :again)
+                                   :finished)
+                                 :name "PATH key lock contender"))
+                          (loop repeat 2000
+                                until (eql 2 (references))
+                                do (sleep 0.001))))
+                       :to-be-truthy)
+               (expect (sb-thread:join-thread contender :default :timeout :timeout 2)
+                       :to-equal :finished)
+               (expect (references) :to-be-falsy))
+          (nshell.domain.completion::%configure-path-command-cache-locks factory)))))

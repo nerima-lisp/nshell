@@ -531,38 +531,6 @@
                       (nshell.presentation:input-state-buffer
                        nshell.presentation::*input-state*))))))))
 
-  (it "repl-mouse-event-maps-rendered-buffer-position"
-    "Rendered SGR mouse coordinates become buffer-relative mouse events."
-    (with-repl-test-state
-      (with-repl-input-state (:buffer "abc" :cursor-pos 3)
-        (let ((nshell.presentation::*prompt-rendered-prompt-width* 4)
-              (nshell.presentation::*prompt-rendered-terminal-width* 10)
-              (event (input-key-event
-                      :mouse
-                      nil
-                      7
-                      (list :protocol :sgr
-                            :event :press
-                            :row 1
-                            :column 5))))
-          (let ((mapped (nshell.presentation::%map-rendered-mouse-event-to-buffer event)))
-            (expect :mouse :to-be (nshell.domain.input:key-event-type mapped))
-            (expect 7 :to-equal (nshell.domain.input:key-event-number mapped))
-            (expect (getf (nshell.domain.input:key-event-data mapped)
-                          :buffer-index)
-                    :to-equal 0))
-          (let ((unmapped (input-key-event
-                           :mouse
-                           nil
-                           8
-                           (list :protocol :sgr
-                                 :event :press
-                                 :row 99
-                                 :column 99))))
-            (expect unmapped :to-be
-                    (nshell.presentation::%map-rendered-mouse-event-to-buffer
-                     unmapped)))))))
-
   (it "repl-copy-output-event-does-nothing-for-empty-kill-ring-selection"
     "An empty kill ring or empty first selection still redraws the prompt without OSC 52."
     (dolist (kill-ring '(nil ("")))

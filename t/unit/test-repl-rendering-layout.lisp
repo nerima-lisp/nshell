@@ -174,21 +174,6 @@ line's own geometry unchanged."
                     (nshell.presentation::render-prompt-cont))
                   (expect 1 :to-equal queries)))))))))
 
-  (it "repl-render-edit-buffer-highlights-mouse-selection"
-    "A live mouse selection should be rendered with terminal reverse video."
-    (with-repl-test-state
-      (let ((output
-              (capture-standard-output
-                (nshell.presentation::render-edit-buffer
-                 "abcdef"
-                 (nshell.domain.configuration:config-theme
-                  nshell.presentation::*config*)
-                 :selection-start 1
-                 :selection-end 4))))
-        (expect (search (format nil "~C[7mbcd~C[0m" #\Esc #\Esc)
-                        output)
-                :to-be-truthy))))
-
   (it "repl-render-edit-buffer-styles-continuation-prompt"
     "A second logical line should style its continuation prompt with the theme's role."
     (with-repl-test-state

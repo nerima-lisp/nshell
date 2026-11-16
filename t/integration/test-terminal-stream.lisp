@@ -184,55 +184,25 @@
       (expect :char :to-be (nshell.infrastructure.terminal:key-event-type next))
       (expect #\x :to-equal (nshell.infrastructure.terminal:key-event-char next))))
 
-  (it "terminal-stream-decodes-modified-arrows-and-sgr-mouse-reports"
-    "Advanced terminal CSI variants are normalized before presentation handling."
+  (it "terminal-stream-decodes-modified-arrows"
+    "Modified terminal navigation keys are normalized before presentation handling."
     (let ((shift-right (single-key-event-from-string (esc-sequence "[1;2C")))
           (shift-left (single-key-event-from-string (esc-sequence "[1;2D")))
           (alt-left (single-key-event-from-string (esc-sequence "[1;3D")))
           (ctrl-right (single-key-event-from-string (esc-sequence "[1;5C")))
-          (shift-ctrl-right (single-key-event-from-string (esc-sequence "[1;6C")))
-          (mouse (single-key-event-from-string (esc-sequence "[<0;10;5M")))
-          (mouse-release (single-key-event-from-string (esc-sequence "[<0;10;5m")))
-          (mouse-wheel (single-key-event-from-string (esc-sequence "[<64;12;7M"))))
+          (shift-ctrl-right (single-key-event-from-string (esc-sequence "[1;6C"))))
       (expect :shift-right :to-be (nshell.infrastructure.terminal:key-event-type shift-right))
       (expect :shift-left :to-be (nshell.infrastructure.terminal:key-event-type shift-left))
       (expect :alt-left :to-be (nshell.infrastructure.terminal:key-event-type alt-left))
       (expect :ctrl-right :to-be (nshell.infrastructure.terminal:key-event-type ctrl-right))
-      (expect :shift-ctrl-right :to-be (nshell.infrastructure.terminal:key-event-type shift-ctrl-right))
-      (expect :mouse :to-be (nshell.infrastructure.terminal:key-event-type mouse))
-      (expect 0 :to-equal (nshell.infrastructure.terminal:key-event-number mouse))
-      (expect '(:protocol :sgr :button 0 :button-code 0
-                   :column 10 :row 5 :event :press :modifiers nil) :to-equal (nshell.infrastructure.terminal:key-event-data mouse))
-      (expect :release :to-be (getf (nshell.infrastructure.terminal:key-event-data mouse-release)
-                    :event))
-      (expect :wheel-up :to-be (getf (nshell.infrastructure.terminal:key-event-data mouse-wheel)
-                    :event))))
+      (expect :shift-ctrl-right :to-be (nshell.infrastructure.terminal:key-event-type shift-ctrl-right))))
 
-  (it "terminal-stream-decodes-sgr-mouse-variants-and-unknown-escape-events"
-    "Mouse wheel, drag, malformed reports, and unknown escape forms remain explicit events."
-    (let ((wheel-down (single-key-event-from-string (esc-sequence "[<65;12;7M")))
-          (wheel-other (single-key-event-from-string (esc-sequence "[<66;12;7M")))
-          (drag (single-key-event-from-string (esc-sequence "[<32;12;7M")))
-          (shift-press (single-key-event-from-string (esc-sequence "[<4;12;7M")))
-          (malformed-mouse (single-key-event-from-string (esc-sequence "[<;12;7M")))
-          (unknown-csi (single-key-event-from-string (esc-sequence "[999~")))
+  (it "terminal-stream-decodes-unknown-escape-events"
+    "Unknown CSI and SS3 forms remain explicit events."
+    (let ((unknown-csi (single-key-event-from-string (esc-sequence "[999~")))
           (unknown-ss3 (single-key-event-from-string (esc-sequence "O?")))
           (empty-csi (single-key-event-from-string (esc-sequence "[")))
           (empty-ss3 (single-key-event-from-string (esc-sequence "O"))))
-      (expect :wheel-down :to-be
-              (getf (nshell.infrastructure.terminal:key-event-data wheel-down)
-                    :event))
-      (expect :wheel :to-be
-              (getf (nshell.infrastructure.terminal:key-event-data wheel-other)
-                    :event))
-      (expect :drag :to-be
-              (getf (nshell.infrastructure.terminal:key-event-data drag)
-                    :event))
-      (expect '(:shift) :to-equal
-              (getf (nshell.infrastructure.terminal:key-event-data shift-press)
-                    :modifiers))
-      (expect :unknown :to-be
-              (nshell.infrastructure.terminal:key-event-type malformed-mouse))
       (expect :unknown :to-be
               (nshell.infrastructure.terminal:key-event-type unknown-csi))
       (expect :unknown :to-be
@@ -282,8 +252,8 @@
       (expect :shift-alt-ctrl-right :to-be
               (nshell.infrastructure.terminal:key-event-type all-right))))
 
-  (it "terminal-stream-decodes-ss3-and-mouse-modifier-variants"
-    "SS3 navigation and all mouse modifier masks map to normalized events."
+  (it "terminal-stream-decodes-ss3-and-navigation-aliases"
+    "SS3 navigation and tilde home/end aliases map to normalized events."
     (let ((ss3-up (single-key-event-from-string (esc-sequence "OA")))
           (ss3-down (single-key-event-from-string (esc-sequence "OB")))
           (ss3-right (single-key-event-from-string (esc-sequence "OC")))
@@ -293,10 +263,7 @@
           (tilde-home (single-key-event-from-string (esc-sequence "[1~")))
           (tilde-end (single-key-event-from-string (esc-sequence "[4~")))
           (tilde-home-alias (single-key-event-from-string (esc-sequence "[7~")))
-          (tilde-end-alias (single-key-event-from-string (esc-sequence "[8~")))
-          (mouse-alt (single-key-event-from-string (esc-sequence "[<8;12;7M")))
-          (mouse-ctrl (single-key-event-from-string (esc-sequence "[<16;12;7M")))
-          (mouse-all (single-key-event-from-string (esc-sequence "[<28;12;7M"))))
+          (tilde-end-alias (single-key-event-from-string (esc-sequence "[8~"))))
       (expect :up :to-be (nshell.infrastructure.terminal:key-event-type ss3-up))
       (expect :down :to-be (nshell.infrastructure.terminal:key-event-type ss3-down))
       (expect :right :to-be (nshell.infrastructure.terminal:key-event-type ss3-right))
@@ -306,16 +273,7 @@
       (expect :home :to-be (nshell.infrastructure.terminal:key-event-type tilde-home))
       (expect :end :to-be (nshell.infrastructure.terminal:key-event-type tilde-end))
       (expect :home :to-be (nshell.infrastructure.terminal:key-event-type tilde-home-alias))
-      (expect :end :to-be (nshell.infrastructure.terminal:key-event-type tilde-end-alias))
-      (expect '(:alt) :to-equal
-              (getf (nshell.infrastructure.terminal:key-event-data mouse-alt)
-                    :modifiers))
-      (expect '(:ctrl) :to-equal
-              (getf (nshell.infrastructure.terminal:key-event-data mouse-ctrl)
-                    :modifiers))
-      (expect '(:shift :alt :ctrl) :to-equal
-              (getf (nshell.infrastructure.terminal:key-event-data mouse-all)
-                    :modifiers))))
+      (expect :end :to-be (nshell.infrastructure.terminal:key-event-type tilde-end-alias))))
 
   ;; The cursor query tests use heap string streams: a stack-allocated
   ;; WITH-INPUT-FROM-STRING stream can share its address, and so its

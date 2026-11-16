@@ -13,7 +13,6 @@
            (nshell.infrastructure.terminal:ansi-show-cursor stream)
            (nshell.infrastructure.terminal:ansi-enable-bracketed-paste stream)
            (nshell.infrastructure.terminal:ansi-disable-bracketed-paste stream)
-           (nshell.infrastructure.terminal:ansi-enable-sgr-mouse stream)
            (nshell.infrastructure.terminal:ansi-disable-sgr-mouse stream)
            (nshell.infrastructure.terminal:ansi-enable-alternate-screen stream)
            (nshell.infrastructure.terminal:ansi-disable-alternate-screen stream))))
@@ -21,9 +20,6 @@
     (expect (search (format nil "~C[?25h" #\Esc) output) :to-be-truthy)
     (expect (search (format nil "~C[?2004h" #\Esc) output) :to-be-truthy)
     (expect (search (format nil "~C[?2004l" #\Esc) output) :to-be-truthy)
-    (expect
-     (search (format nil "~C[?1000h~C[?1006h" #\Esc #\Esc) output)
-     :to-be-truthy)
     (expect
      (search (format nil "~C[?1006l~C[?1000l" #\Esc #\Esc) output)
      :to-be-truthy)

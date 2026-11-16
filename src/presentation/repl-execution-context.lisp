@@ -70,9 +70,7 @@
     (nshell.infrastructure.terminal:enable-raw-mode)
     (when (nshell.infrastructure.terminal:terminal-control-sequences-supported-p)
       (nshell.infrastructure.terminal:ansi-enable-bracketed-paste)
-      (if *mouse-reporting-enabled-p*
-          (nshell.infrastructure.terminal:ansi-enable-sgr-mouse)
-          (nshell.infrastructure.terminal:ansi-disable-sgr-mouse))
+      (nshell.infrastructure.terminal:ansi-disable-sgr-mouse)
       (finish-output))))
 
 (defun %execute-with-repl-shell-context (thunk)

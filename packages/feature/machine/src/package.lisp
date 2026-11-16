@@ -58,4 +58,10 @@ of ux/U6, its builders, and its JSON serialization.")
              #:explain-envelope
              #:build-envelope-response
              #:envelope-json-object
-             #:envelope-to-json)))
+             #:envelope-to-json)
+    (:export #:+json-default-timeout-seconds+
+             #:*machine-methods*
+             #:make-machine-context
+             #:explain-input
+             #:initialize-envelope
+             #:policy-envelope)))

@@ -255,6 +255,23 @@ read the same value as the thread that started them."
  "Print an issue draft with version, OS, and terminal details; send nothing."
  '%run-bug-report)
 
+(defun %run-explain (arguments)
+  "Run `nshell [--json] explain INPUT`: print INPUT's explain envelope as one
+line of JSON and run nothing.  The exit status is the envelope's status."
+  (if (/= 1 (length arguments))
+      (%print-startup-option-error "explain takes exactly one INPUT argument")
+      (let ((envelope (nshell.feature.machine:explain-input
+                       (nshell.feature.machine:make-machine-context)
+                       (first arguments))))
+        (write-line (nshell.feature.machine:envelope-to-json envelope))
+        (finish-output)
+        (nshell.feature.machine:envelope-status envelope))))
+
+(nshell.feature.command-line:register-subcommand
+ "explain"
+ "Classify INPUT and print its explain envelope as JSON; run nothing."
+ '%run-explain)
+
 (defparameter *main-exit-function*
   (lambda (&key unix-status)
     (sb-ext:quit :unix-status unix-status))
@@ -274,6 +291,11 @@ read the same value as the thread that started them."
                   ;; The common stdin batch path does not need a CLI specification.
                   (%establish-safe-mode nil)
                   (%run-default-invocation))
+                 ;; language/L2 2.5: `nshell --json explain INPUT'.  explain
+                 ;; always answers in JSON, so --json only selects it here.
+                 ((and (equal "--json" (first arguments))
+                       (equal "explain" (second arguments)))
+                  (%run-explain (rest (rest arguments))))
                  ((not (%flag-argument-p (first arguments)))
                   ;; A registered subcommand name wins over a script of the
                   ;; same name (D-53); ./NAME and -- NAME reach the script.

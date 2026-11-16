@@ -524,3 +524,19 @@ first, as (SOURCE ORIGIN APPROVAL)."
         (declare (ignore status))
         (expect 126 :to-equal body-status)
         (expect t :to-be stopped-p)))))
+
+(describe "reader-path-execution-gate-user-functions"
+  (it "does-not-let-the-outer-approval-run-the-body-of-a-called-defun"
+    (let ((context (make-test-shell-context)))
+      (%approval-reader-run
+       context
+       ;; The status comparison keeps the refused or missing command from
+       ;; signalling a command failure out of the body.
+       (format nil "(defun approval-test-defun () (= (^~a) 0))"
+               +approval-missing-command+)
+       :sexp :origin :typed)
+      (multiple-value-bind (status stopped-p)
+          (%approval-reader-run context "(approval-test-defun)" :sexp
+                                :approval :confirm)
+        (declare (ignore status))
+        (expect t :to-be stopped-p)))))

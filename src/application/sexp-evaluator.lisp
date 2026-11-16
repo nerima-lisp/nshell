@@ -1658,35 +1658,83 @@
           (*current-user-evaluator-position* position))
       (apply function arguments))))
 
+(defun %form-classification (context form reader-result)
+  "Return how FORM's head reads, :COMMAND-ISLAND or :HOST-FORM, or NIL when
+FORM is not a list with a symbol head."
+  (and (consp form) (symbolp (first form))
+       (%form-command-classification context form reader-result)))
+
+(defun %form-operator (context form reader-result)
+  "Return the operator FORM's symbol head resolves to, or NIL."
+  (and (consp form) (symbolp (first form))
+       (%resolve-form-operator context form reader-result)))
+
+(defun %eval-form-branch (form reader-result operator raw-operator classification)
+  "Return the branch %eval-form takes for FORM, whose resolved OPERATOR,
+reader head RAW-OPERATOR, and head CLASSIFICATION the caller computed.  The
+evaluator and explain both choose the branch here, in this order, so explain
+reports what evaluation would do."
+  (cond
+    ((nshell.domain.parsing::ast-node-p form) :ast)
+    ((symbolp form) :symbol)
+    ((atom form) :atom)
+    ((not (%proper-list-p form)) :improper)
+    ((eq operator 'cl:quote) :quote)
+    ((eq operator 'cl:function) :function)
+    ((member operator
+             '(cl:if cl:when cl:unless cl:and cl:or cl:not cl:let cl:let*
+               cl:progn cl:cond cl:case cl:handler-case cl:setq)
+             :test #'eq)
+     :special-form)
+    ((eq operator 'cl:defun) :defun)
+    ((eq operator 'cl:defmacro) :defmacro)
+    ((and (eq operator 'nshell.user::define-shell-function)
+          (let ((origin (%reader-symbol-origin reader-result raw-operator)))
+            (or (null origin)
+                (and (not (%origin-field origin :escaped-p))
+                     (null (%origin-field origin :package-qualifier :package))))))
+     :define-shell-function)
+    ((and (eq classification :host-form)
+          (eq operator 'cl:dolist))
+     :dolist)
+    ((and (eq classification :host-form)
+          (eq operator 'cl:dotimes))
+     :dotimes)
+    ((and (eq classification :host-form)
+          (symbolp operator)
+          (macro-function operator))
+     :user-macro)
+    ((%reader-pipeline-form-p form reader-result) :pipeline)
+    ((eq classification :command-island) :command-island)
+    (t :host-form)))
+
 (defun %eval-form
     (context form reader-result lexical-environment position
      &optional (supplied-classification nil classification-supplied-p))
   (let* ((raw-operator (and (consp form) (first form)))
-         (operator (and (consp form) (symbolp raw-operator)
-                        (%resolve-form-operator context form reader-result)))
+         (operator (%form-operator context form reader-result))
          (classification
            (if classification-supplied-p
                supplied-classification
-               (and (consp form) (symbolp raw-operator)
-                    (%form-command-classification
-                     context form reader-result)))))
+               (%form-classification context form reader-result))))
     (unless (or (nshell.domain.parsing::ast-node-p form)
                 (%reader-pipeline-form-p form reader-result)
                 (eq classification :command-island))
       (%reject-opaque-dispatch-markers form reader-result))
-    (cond
-      ((nshell.domain.parsing::ast-node-p form)
+    (ecase (%eval-form-branch form reader-result operator raw-operator
+                              classification)
+      (:ast
        (%eval-command-ast-in-position
         context form reader-result lexical-environment position))
-      ((symbolp form)
+      (:symbol
        (%eval-symbol context form reader-result lexical-environment))
-      ((atom form) form)
-      ((not (%proper-list-p form))
+      (:atom form)
+      (:improper
        (error "Cannot evaluate an improper form: ~S" form))
-      ((eq operator 'cl:quote)
+      (:quote
        (%check-special-form-arity 'cl:quote form 1 1)
        (%materialize-reader-form (second form) reader-result))
-      ((eq operator 'cl:function)
+      (:function
        (%check-special-form-arity 'cl:function form 1 1)
        (let ((name (%materialize-reader-form (second form) reader-result)))
          (cond
@@ -1694,49 +1742,38 @@
            ((and (consp name) (eq (first name) 'cl:lambda))
             (%make-evaluator-function (second name) (cddr name) reader-result))
            (t name))))
-      ((member operator
-               '(cl:if cl:when cl:unless cl:and cl:or cl:not cl:let cl:let*
-                 cl:progn cl:cond cl:case cl:handler-case cl:setq)
-               :test #'eq)
+      (:special-form
        (%eval-special-form context form reader-result lexical-environment
                            position))
-      ((eq operator 'cl:defun)
+      (:defun
        (%eval-defun-form context form reader-result))
-      ((eq operator 'cl:defmacro)
+      (:defmacro
        (%eval-defmacro-form form reader-result))
-      ((and (eq operator 'nshell.user::define-shell-function)
-            (let ((origin (%reader-symbol-origin reader-result raw-operator)))
-              (or (null origin)
-                  (and (not (%origin-field origin :escaped-p))
-                       (null (%origin-field origin :package-qualifier :package))))))
+      (:define-shell-function
        (%eval-define-shell-function-form
         context form reader-result lexical-environment))
-      ((and (eq classification :host-form)
-            (eq operator 'cl:dolist))
+      (:dolist
        (%eval-dolist-form context form reader-result lexical-environment
                           position))
-      ((and (eq classification :host-form)
-            (eq operator 'cl:dotimes))
+      (:dotimes
        (%eval-dotimes-form context form reader-result lexical-environment
                            position))
-      ((and (eq classification :host-form)
-            (symbolp operator)
-            (macro-function operator))
+      (:user-macro
        (%eval-user-macro-call context form reader-result lexical-environment
                               position))
-      ((%reader-pipeline-form-p form reader-result)
+      (:pipeline
        (%eval-command-ast-in-position
         context
         (if (%source-backed-command-form-p form reader-result) (%command-form->ast context form reader-result) (%macro-generated-form->ast context form reader-result (%source-form-span form reader-result)))
         reader-result lexical-environment position))
-      ((eq classification :command-island)
+      (:command-island
        (if (%source-backed-command-form-p form reader-result)
            (%eval-command-ast-in-position
             context (%command-form->ast context form reader-result)
             reader-result lexical-environment position)
            (%eval-macro-generated-command
             context form reader-result lexical-environment position)))
-      (t
+      (:host-form
        (%eval-host-form context form reader-result lexical-environment
                         position)))))
 
@@ -1796,9 +1833,7 @@
      (lambda ()
        (let* ((form (nshell.domain.parsing:reader-result-form reader-result))
               (classification
-               (and (consp form) (symbolp (first form))
-                    (%form-command-classification
-                     context form reader-result)))
+               (%form-classification context form reader-result))
               (stream-form-p
                (or (nshell.domain.parsing::ast-node-p form)
                    (%reader-pipeline-form-p form reader-result)
@@ -1809,31 +1844,44 @@
                            classification)))
          (values value *current-evaluation-status*))))))
 
+(defun %reader-result-branch (context reader-result)
+  "Return the branch evaluate-reader-result-in-context takes for
+READER-RESULT's form, chosen by %eval-form-branch in the same evaluation
+state.  Resolving the operator may intern its name in NSHELL.USER, as
+evaluation does; nothing runs."
+  (%with-reader-evaluation-state
+   reader-result
+   (lambda ()
+     (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
+       (%eval-form-branch form reader-result
+                          (%form-operator context form reader-result)
+                          (and (consp form) (first form))
+                          (%form-classification context form reader-result))))))
+
 (defun reader-result-form-kind (context reader-result)
   "Return how evaluate-reader-result-in-context runs READER-RESULT's form:
 :COMMAND for a command (a bare-line command or a list it runs as a command
 island), :SYNTAX for a pipeline or a sequence (language/L2 2.1 row 2), and
-:LISP for everything it evaluates as Lisp.  It tests the evaluator's own
-predicates in the evaluator's order and runs nothing."
-  (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
-    (cond
-      ((nshell.domain.parsing:command-node-p form) :command)
-      ((nshell.domain.parsing::ast-node-p form) :syntax)
-      ((%reader-pipeline-form-p form reader-result) :syntax)
-      ((and (consp form)
-            (symbolp (first form))
-            (eq :command-island
-                (%form-command-classification context form reader-result)))
-       :command)
-      (t :lisp))))
+:LISP for everything it evaluates as Lisp.  The branch is the evaluator's
+own choice (%reader-result-branch); nothing runs."
+  (case (%reader-result-branch context reader-result)
+    (:ast (if (nshell.domain.parsing:command-node-p
+               (nshell.domain.parsing:reader-result-form reader-result))
+              :command
+              :syntax))
+    (:pipeline :syntax)
+    (:command-island :command)
+    (t :lisp)))
 
 (defun reader-result-command-ast (context reader-result)
   "Return the AST the evaluator runs for READER-RESULT's command or syntax
 form, or NIL for a Lisp form.  It converts the form the way %eval-form does
 and runs nothing."
   (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
-    (cond
-      ((nshell.domain.parsing::ast-node-p form) form)
-      ((member (reader-result-form-kind context reader-result) '(:command :syntax))
-       (%command-form->ast context form reader-result))
+    (case (%reader-result-branch context reader-result)
+      (:ast form)
+      ((:pipeline :command-island)
+       (%with-reader-evaluation-state
+        reader-result
+        (lambda () (%command-form->ast context form reader-result))))
       (t nil))))

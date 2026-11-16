@@ -148,11 +148,16 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
              (%json-golden-without (%json-golden-pipeline-expected) "effects" "safety"))))
 
   (it "matches proposal/02's --json pipeline example effects"
-    (skip "effects stay [] until P1-5 adds the effects model (example: reads .)"))
+    (skip (format nil "--json reports no effects yet, and the P1-5 effect model ~
+                       (classify-rules.lisp) has deletes, writes and network ~
+                       but no reads (example: reads .)")))
 
   (it "matches proposal/02's --json pipeline example safety"
-    (skip (format nil "the classifier marks git status confirm, the example safe; ~
-                       P1-5 rewrites the safety rules")))
+    (skip (format nil "Enter-time safety is confirm, the example safe: ~
+                       classify/sexp-not-forced (S-expression command requires ~
+                       explicit force and has no redirects), and wc -l is ~
+                       classify/unknown-command because +safe-command-specs+ ~
+                       has no wc row although D-P1-5 2.6 lists wc -lwcm as safe")))
 
   (it "has the shape of ux/U6's long-output example"
     (host-kit:with-temporary-directory (work)
@@ -205,7 +210,8 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
               (expect (probe-file (gethash "path" output)) :to-be-truthy)))))))
 
   (it "has the shape of ux/U6's long-output example effects"
-    (skip "effects stay [] until P1-5 adds the effects model (example: writes result/)"))
+    (skip (format nil "--json reports no effects yet; the example's writes ~
+                       result/ comes from a build, not from cat")))
 
   (it "matches proposal/02's structured error example except fixes"
     (host-kit:with-temporary-directory (work)
@@ -224,4 +230,7 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
                   :to-equal (%json-golden-normalize expected-error))))))
 
   (it "matches proposal/02's structured error example fixes"
-    (skip "fixes (diagnose/typo) come with P1-5's diagnose rules")))
+    (skip (format nil "--json does not attach fixes yet, and diagnose/typo ~
+                       proposes every known name within edit distance 2 ~
+                       (git status, ai status, at status, ...) where the ~
+                       example lists only git status"))))

@@ -24,67 +24,32 @@
 
 ;;; Safety
 
-(defun %classification-rank (level)
-  (case level (:safe 0) (:confirm 1) (otherwise 2)))
-
-(defun %verdict (result)
-  "Return the (LEVEL RULE TEXT) of the classifier's RESULT."
-  (let ((rule (nshell.feature.assistant:assistant-safety-result-rule-name result)))
-    (list (nshell.feature.assistant:assistant-safety-result-classification result)
-          (if rule (string-downcase (symbol-name rule)) "classify/unknown")
-          (or (nshell.feature.assistant:assistant-safety-result-reason result) ""))))
-
-(defun %unclassifiable (text)
-  (list :confirm "classify/unknown" text))
-
-(defun %classify-reader-result (reader-result)
-  "Classify READER-RESULT the way the AI execution gate classifies what it
-reaches: an S-expression command form is converted to its command AST first."
-  (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
-    (cond
-      ((or (nshell.domain.parsing:command-node-p form)
-           (nshell.domain.parsing:pipeline-node-p form)
-           (nshell.domain.parsing:sequence-node-p form))
-       (%verdict (nshell.feature.assistant:classify-ast form)))
-      ((consp form)
-       (handler-case
-           (%verdict
-            (nshell.feature.assistant:classify-ast
-             (nshell.domain.parsing:command-form->ast
-              (nshell.domain.parsing:reader-result-source reader-result)
-              form
-              (nshell.domain.parsing:reader-result-form-span-map reader-result)
-              (lambda (head-source)
-                (declare (ignore head-source))
-                :command-island))))
-         (error ()
-           (%unclassifiable "unclassifiable S-expression form"))))
-      (t (%unclassifiable "unclassifiable form")))))
-
 (defun %classify-input (input)
-  "Return the most restrictive (LEVEL RULE TEXT) of INPUT's forms, (:SAFE)
-when INPUT has none, and as a second value whether INPUT could be read."
-  (handler-case
-      (let ((verdicts (mapcar #'%classify-reader-result
-                              (nshell.domain.parsing:read-submission input))))
-        (values (if verdicts
-                    (reduce (lambda (left right)
-                              (if (> (%classification-rank (first right))
-                                     (%classification-rank (first left)))
-                                  right
-                                  left))
-                            verdicts)
-                    (list :safe))
-                t))
-    (error ()
-      (values (%unclassifiable "the input could not be parsed") nil))))
+  "Return the verdict Enter gives INPUT as an AI proposal (D-P1-5 3.1), as
+(LEVEL . REASONS) with REASONS a list of (RULE . TEXT), and as a second value
+whether INPUT could be read. Unreadable input is :BLOCK, as at Enter; blank
+input runs nothing and is :SAFE."
+  (if (nshell.presentation::%blank-command-text-p input)
+      (values (list :safe) t)
+      (multiple-value-bind (status result)
+          (nshell.presentation::%assistant-proposal-assessment input)
+        (if (eq status :classified)
+            (values (cons (nshell.feature.assistant:assistant-safety-result-classification
+                           result)
+                          (nshell.feature.assistant:assistant-safety-result-reasons
+                           result))
+                    t)
+            (values (list :block (cons "classify/unparsable"
+                                       "the input could not be read"))
+                    nil)))))
 
 (defun %envelope-safety-of (verdict)
-  (destructuring-bind (level &optional rule text) verdict
+  (destructuring-bind (level . reasons) verdict
     (make-envelope-safety
      :level level
      :reasons (unless (eq level :safe)
-                (list (make-envelope-reason :rule rule :text text))))))
+                (loop for (rule . text) in reasons
+                      collect (make-envelope-reason :rule rule :text text))))))
 
 ;;; Running
 
@@ -101,6 +66,8 @@ SBCL thread otherwise sees only global values.")
   (user-code-p nil)
   (missing-command nil)
   (timed-out-p nil)
+  ;; The car is the error code of the AI gate's last refusal, if any.
+  (gate-refusal (list nil))
   ;; The worker outlived the deadline's terminate-thread: its output streams
   ;; may still be written and its locks still held.
   (worker-alive-p nil))
@@ -121,10 +88,13 @@ SBCL thread otherwise sees only global values.")
               (throw tag :exec)))
       ;; No single external command wait may outlast the whole-run deadline.
       (bind 'nshell.infrastructure.acl:*external-command-timeout* timeout)
+      ;; Every gate refusal of the run, nested ones and pipeline stages too.
+      (bind 'nshell.application::*execution-gate-refusal* (json-run-gate-refusal run))
       (when agent-p
-        ;; The existing AI gate then runs :safe forms and refuses the rest.
-        (bind 'nshell.application::*execution-origin* :proposal)
-        (bind 'nshell.application::*execution-confirmed-p* nil)))
+        ;; As after Enter on a safe AI proposal: the gate runs what classifies
+        ;; :safe where it runs and refuses the rest, since no one can approve.
+        (bind 'nshell.application:*execution-origin* :proposal)
+        (bind 'nshell.application:*execution-approval* :safe)))
     (values symbols values)))
 
 (defun %observe (run)
@@ -285,11 +255,15 @@ the span of a run that did not end with status 0, or NIL when it did."
   (let* ((condition (json-run-condition run))
          (code (%error-code-of condition))
          (missing (json-run-missing-command run))
+         (refusal (car (json-run-gate-refusal run)))
          (message (%first-line stderr-text)))
     (cond
       ((json-run-timed-out-p run)
        (values "E_TIMEOUT" nil (format nil "the run exceeded its ~A s deadline"
                                        (%seconds-text timeout))))
+      ;; The input did not run as given once the AI gate refused part of it,
+      ;; whatever the status of the commands after that part.
+      (refusal (values refusal nil message))
       ((equal code "E_PARSE")
        (values code nil "the input could not be parsed"))
       ((and code (string/= code "E_COMMAND_FAILED"))
@@ -331,14 +305,15 @@ its PATH, and return the session, or NIL when nothing could be saved."
     (and saved session)))
 
 (defun %refusal-envelope (verdict duration-ms)
-  (destructuring-bind (level rule text) verdict
-    (declare (ignore rule))
+  "The envelope of input refused at the Enter step: :BLOCK is never run, and
+:CONFIRM needs an approval no one can give under --json."
+  (destructuring-bind (level . reasons) verdict
     (error-envelope (if (eq level :block) "E_BLOCKED_BY_POLICY" "E_NEEDS_APPROVAL")
                     :message (format nil "~A: ~A"
                                      (if (eq level :block)
                                          "blocked by policy"
                                          "approval required")
-                                     text)
+                                     (cdr (first reasons)))
                     :duration-ms duration-ms
                     :stdout (output-from-text "")
                     :stderr (output-from-text "")
@@ -369,6 +344,8 @@ first failing command, as -e does."
     (error "The --json timeout must be a positive number of seconds, not ~S."
            timeout))
   (let ((start (get-internal-real-time)))
+    ;; The classifier resolves names in the batch shell state the run uses.
+    (nshell.presentation::%initialize-batch-state)
     (multiple-value-bind (verdict readable-p) (%classify-input input)
       (let ((level (first verdict)))
         (when (and environment-agent-p readable-p (member level '(:confirm :block)))

@@ -86,10 +86,10 @@ an orphan needs its new parent to reap it before kill 0 fails."
     (let ((envelope (json-command "true")))
       (expect (json-at envelope "ok") :to-equal t)
       (expect (json-at envelope "stdout" "text") :to-equal "")
-      ;; The current classifier has no rule for true: unknown means confirm.
+      ;; No safe command spec covers true: an unknown command is confirm.
       (expect (json-at envelope "safety" "level") :to-equal "confirm")
       (expect (json-at envelope "safety" "reasons" 0 "rule")
-              :to-equal "classify/unknown")))
+              :to-equal "classify/unknown-command")))
 
   (it "reports the working directory the run leaves behind"
     (host-kit:with-temporary-directory (directory)
@@ -148,7 +148,10 @@ an orphan needs its new parent to reap it before kill 0 fails."
       (expect (json-at envelope "error" "code") :to-equal "E_PARSE")
       (expect (json-at envelope "error" "message")
               :to-equal "the input could not be parsed")
-      (expect (json-at envelope "safety" "level") :to-equal "confirm"))
+      ;; Unreadable input is block, as at Enter on an AI proposal.
+      (expect (json-at envelope "safety" "level") :to-equal "block")
+      (expect (json-at envelope "safety" "reasons" 0 "rule")
+              :to-equal "classify/unparsable"))
     (let ((envelope (json-command "(car 1)")))
       (expect (json-at envelope "status") :to-equal 1)
       (expect (json-at envelope "error" "code") :to-equal "E_LISP_ERROR")
@@ -258,7 +261,7 @@ an orphan needs its new parent to reap it before kill 0 fails."
           (expect (json-at envelope "error" "code") :to-equal "E_NEEDS_APPROVAL")
           (expect (json-at envelope "safety" "level") :to-equal "confirm")
           (expect (json-at envelope "safety" "reasons" 0 "rule")
-                  :to-equal "destructive-delete")
+                  :to-equal "classify/delete-dir")
           (expect (probe-file marker) :to-be-truthy))
         ;; rm refuses to remove ".", so this stays harmless even if it ran.
         (let ((envelope (json-command "rm -r ." :environment-agent-p t)))
@@ -274,6 +277,33 @@ an orphan needs its new parent to reap it before kill 0 fails."
           (expect (json-at envelope "ok") :to-equal t)
           (expect (json-at envelope "safety" "level") :to-equal "confirm")
           (expect (probe-file marker) :to-be-null)))))
+
+  (it "maps the execution gate's own refusals to approval and policy errors"
+    ;; The Enter step is made to pass everything, so the gate alone decides,
+    ;; as for a line whose alias or function expands to more than it shows.
+    (host-kit:with-temporary-directory (directory)
+      (let* ((victim (format nil "~Avictim" (sb-ext:native-namestring directory)))
+             (marker (format nil "~A/keep" victim)))
+        (ensure-directories-exist marker)
+        (with-open-file (out marker :direction :output) (write-string "x" out))
+        (with-temporary-function
+            ((quote nshell.feature.machine::%classify-input)
+             (lambda (input) (declare (ignore input)) (values (list :safe) t)))
+          (dolist (case (list (list (format nil "rm -r ~A" victim) 3 "E_NEEDS_APPROVAL")
+                              (list (format nil "echo before; rm -r ~A; echo after" victim)
+                                    3 "E_NEEDS_APPROVAL")
+                              (list (format nil "echo hi | rm -r ~A" victim)
+                                    3 "E_NEEDS_APPROVAL")
+                              (list "rm -r ." 4 "E_BLOCKED_BY_POLICY")))
+            (destructuring-bind (input status code) case
+              (let ((envelope (json-command input :environment-agent-p t)))
+                (expect (list input (json-at envelope "status")
+                              (json-at envelope "error" "code"))
+                        :to-equal (list input status code))
+                (expect (search "nshell: AI proposal"
+                                (json-at envelope "error" "message"))
+                        :to-be-truthy))))
+          (expect (probe-file marker) :to-be-truthy)))))
 
   (it "answers exec with an envelope carrying the exec'd program's status"
     (let ((envelope (json-command "exec sh -c 'echo viaexec; exit 5'")))

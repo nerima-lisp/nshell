@@ -36,6 +36,26 @@
                   (logand #o777 (sb-posix:stat-mode (sb-posix:stat test-path))))
           (progn (delete-file test-path) (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path test-path))) (when (probe-file lock-path) (delete-file lock-path))))))))
 
+  (it "file-history-read-restores-private-mode"
+    "Loading a history file whose mode was widened makes it private again."
+    (with-temporary-output-file (test-path :prefix "nshell-history-mode")
+      (let ((nshell.infrastructure.persistence:*history-file-path-override*
+              (pathname test-path)))
+        (unwind-protect
+             (progn
+               (nshell.infrastructure.persistence:append-history-entry "kept")
+               (sb-posix:chmod test-path #o644)
+               (expect '("kept")
+                       :to-equal
+                       (mapcar #'nshell.infrastructure.persistence:history-record-text
+                               (nshell.infrastructure.persistence:load-history-file)))
+               (expect #o600 :to-equal
+                       (logand #o777 (sb-posix:stat-mode (sb-posix:stat test-path)))))
+          (let ((lock-path (nshell.infrastructure.persistence::%history-lock-path
+                            test-path)))
+            (when (probe-file lock-path)
+              (delete-file lock-path)))))))
+
   (it "file-history-multiline-round-trip"
     "Multiline command history survives persistence."
     (let* ((test-path (format nil "/tmp/nshell-test-history-multiline-~d.lisp"

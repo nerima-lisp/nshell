@@ -87,16 +87,12 @@
   (or *history-file-path-override* (%default-history-file-path)))
 
 (defun history-file-stamp ()
-  "Return (DEV INO SIZE MTIME CTIME) of the history file, or NIL when it cannot
-be stat'ed. An append changes SIZE; a replacement changes INO or the times."
-  (handler-case
-      (let ((stat (sb-posix:stat (namestring (history-file-path)))))
-        (list (sb-posix:stat-dev stat)
-              (sb-posix:stat-ino stat)
-              (sb-posix:stat-size stat)
-              (sb-posix:stat-mtime stat)
-              (sb-posix:stat-ctime stat)))
-    (error () nil)))
+  "Return the history file's device, inode, size, and subsecond mtime and ctime,
+or NIL when they cannot be read. An append changes the size; a replacement or
+an in-place rewrite changes the inode or the times."
+  ;; Two writes within one tick of the file system's timestamp clock (coarse on
+  ;; Linux) get equal times, so a same-size rewrite inside that tick is missed.
+  (nshell.infrastructure.acl:path-stat-stamp (namestring (history-file-path))))
 
 (defun %history-record-length-for-prefix (header prefix)
   (let ((prefix-length (length prefix)))
@@ -281,7 +277,10 @@ be stat'ed. An append changes SIZE; a replacement changes INO or the times."
                    (= (sb-posix:stat-nlink stat) 1))
         (error "History path ~s must be a regular, singly-linked file owned by this user."
                (namestring path)))
-      (when secure-mode-p
+      ;; A chmod updates ctime even when the mode is unchanged, and a changed
+      ;; ctime makes the next refresh read the file again.
+      (when (and secure-mode-p
+                 (/= (logand (sb-posix:stat-mode stat) #o7777) #o600))
         (sb-posix:fchmod fd #o600))))
 
   (defun %open-history-descriptor (path flags &key create-p)

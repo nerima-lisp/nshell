@@ -150,4 +150,21 @@ records in."
           (sb-posix:rmdir lock))
         (%history-refresh-new-prompt)
         (expect "echo recover" :to-equal (%history-refresh-prev-key))
-        (expect contents :to-equal (uiop:read-file-string path))))))
+        (expect contents :to-equal (uiop:read-file-string path)))))
+
+  (it "a-same-size-rewrite-within-one-second-is-merged-at-the-next-prompt"
+    "An in-place rewrite that keeps the inode and the size, with a modification
+time in the same second as the merged version, is still merged."
+    (with-history-refresh-session (reads)
+      (rewrite '("echo A"))
+      (let ((path (namestring
+                   nshell.infrastructure.persistence:*history-file-path-override*)))
+        (sb-posix:utimes path 1700000000.25d0 1700000000.25d0)
+        (%history-refresh-new-prompt)
+        (let ((payload (uiop:read-file-string path)))
+          (setf (char payload (+ (search "echo A" payload) 5)) #\B)
+          (with-open-file (out path :direction :output :if-exists :overwrite)
+            (write-string payload out)))
+        (sb-posix:utimes path 1700000000.75d0 1700000000.75d0)
+        (%history-refresh-new-prompt)
+        (expect '("echo B" "echo A") :to-equal (%history-refresh-texts))))))

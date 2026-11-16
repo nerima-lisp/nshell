@@ -29,10 +29,12 @@ grow it without bound.")
         (t (concatenate (quote string) directory "/")))
       (namestring (host-kit:ensure-directory-pathname directory))))
 
-(defun %directory-listing-stamp (directory)
+(defun path-stat-stamp (path)
+  "Return (DEV INO SIZE MTIME MTIME-NSEC CTIME CTIME-NSEC) of PATH, following
+symlinks, or NIL when PATH cannot be stat'ed or its subsecond times are
+unavailable."
   (ignore-errors
-    (let ((path (sb-posix::filename
-                 (%directory-listing-path-string directory))))
+    (let ((path (sb-posix::filename path)))
       ;; On 64-bit Linux and Darwin, the long after each st_mtime/st_ctime
       ;; seconds field is the corresponding tv_nsec value.
       #+(and 64-bit (or darwin linux))
@@ -59,12 +61,17 @@ grow it without bound.")
               (when (and mtime-nanoseconds ctime-nanoseconds)
                 (list (sb-alien:slot stat 'sb-posix::dev)
                       (sb-alien:slot stat 'sb-posix::ino)
+                      (sb-alien:slot stat 'sb-posix::size)
                       (sb-alien:slot stat 'sb-posix::mtime)
                       mtime-nanoseconds
                       (sb-alien:slot stat 'sb-posix::ctime)
-                      ctime-nanoseconds)))))
+                      ctime-nanoseconds))))))
       #-(and 64-bit (or darwin linux))
-      nil))))
+      nil)))
+
+(defun %directory-listing-stamp (directory)
+  (ignore-errors
+    (path-stat-stamp (%directory-listing-path-string directory))))
 (defun %directory-listing-cache-key (kind directory)
   (cons kind (ignore-errors
               (%directory-listing-path-string directory))))

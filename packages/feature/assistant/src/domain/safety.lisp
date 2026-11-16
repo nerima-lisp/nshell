@@ -184,20 +184,26 @@ as a command line, anything else goes through the auto reader
           (nshell.domain.parsing:parenthesized-substitution-texts word (car entry)))
         +assistant-substitution-markers+))
 
-(defun %assistant-substitution-results (words resolve)
-  (loop for word in words
-        nconc (loop for (marker . reader) in +assistant-substitution-markers+
-                    nconc (mapcar
-                           (lambda (text)
-                             (cond
-                               ((eq text :incomplete)
-                                (%assistant-unparsable-result
-                                 "an incomplete command substitution cannot be classified safely"))
-                               ((eq reader :command-line)
-                                (%assistant-classify-command-line text resolve))
-                               (t (%assistant-classify-substitution-text text resolve))))
-                           (nshell.domain.parsing:parenthesized-substitution-texts
-                            word marker)))))
+(defun %assistant-substitution-results (words resolve &optional inert-words)
+  "Classify the substitutions in WORDS.  Those in INERT-WORDS, members of
+WORDS that the executor passes on without expanding, are judged as a
+precaution but do not run."
+  (loop with runs-p = *assistant-subject-runs-p*
+        for word in words
+        nconc (let ((*assistant-subject-runs-p*
+                      (and runs-p (not (member word inert-words :test #'eq)))))
+                (loop for (marker . reader) in +assistant-substitution-markers+
+                      nconc (mapcar
+                             (lambda (text)
+                               (cond
+                                 ((eq text :incomplete)
+                                  (%assistant-unparsable-result
+                                   "an incomplete command substitution cannot be classified safely"))
+                                 ((eq reader :command-line)
+                                  (%assistant-classify-command-line text resolve))
+                                 (t (%assistant-classify-substitution-text text resolve))))
+                             (nshell.domain.parsing:parenthesized-substitution-texts
+                              word marker))))))
 
 (defun %assistant-embedded-command-result (args resolve)
   "Classify the operands from the first word that names a command able to
@@ -327,12 +333,15 @@ and reader kinds from ast-redirect-entry.")
   "Describe the redirects of one command (D-P1-5 2.5).  SPLIT-REDIRECTS are
 the (KIND . TARGET) pairs of ast-redirect-split and ENTRIES the reader's
 ast-redirect-entry values.  Return the output targets, a text for each
-redirect outside the safe forms, the texts whose substitutions run
-(targets, here-document bodies, here-strings), and the results of the
-process substitutions, read on PATH."
+redirect outside the safe forms, the texts whose substitutions are judged
+(targets, here-document bodies, here-strings), the results of the process
+substitutions, read on PATH, and the members of those texts that do not run:
+the bodies of quoted here-documents (<<'EOF'), which the executor passes on
+as written."
   (let ((writes nil)
         (problems nil)
         (texts nil)
+        (inert nil)
         (results nil))
     (labels ((output (kind target)
                (push target writes)
@@ -370,7 +379,10 @@ process substitutions, read on PATH."
                        :output)
                (push "process substitution >(...)" problems)))
             ((nshell.domain.parsing:redirect-heredoc-target-p target)
-             (push (nshell.domain.parsing:redirect-heredoc-target-body target) texts))
+             (let ((body (nshell.domain.parsing:redirect-heredoc-target-body target)))
+               (push body texts)
+               (unless (nshell.domain.parsing:redirect-heredoc-target-expand-p target)
+                 (push body inert))))
             ((eq kind :duplicate-output-fd)
              (duplicate (nshell.domain.parsing:ast-redirect-entry-file-descriptor entry)
                         (and (nshell.domain.parsing:redirect-fd-target-p target)
@@ -384,7 +396,7 @@ process substitutions, read on PATH."
                  (output kind value))))
             (t (push (format nil "~(~a~)" kind) problems)))))
       (values (nreverse writes) (nreverse problems) (nreverse texts)
-              (nreverse results)))))
+              (nreverse results) inert))))
 
 (defun %assistant-command-parts (node path resolve)
   "Split a command NODE the way the executor on PATH splits it (see PATH
@@ -399,7 +411,8 @@ targets, here-document bodies, and assignments included), the output
 targets, the redirect problems, the results of its process substitution
 redirects, the redirects used, the command's resolution by RESOLVE
 (:BUILTIN, :EXTERNAL, or :FUNCTION), and the node the executor runs
-instead (after an alias), or NIL, the typed arguments, and the argument forms."
+instead (after an alias), or NIL, the typed arguments, the argument forms, and
+the words whose substitutions do not run (quoted here-document bodies)."
   (let* ((reader-p (eq path :reader))
          (reader-assignments
            (mapcar #'nshell.domain.parsing:arg-value
@@ -418,7 +431,7 @@ instead (after an alias), or NIL, the typed arguments, and the argument forms."
                (and split
                     (nshell.domain.parsing:command-redirect-split-result-redirects split)))
              (entries (nshell.domain.parsing:command-node-redirects node)))
-        (multiple-value-bind (writes problems texts results)
+        (multiple-value-bind (writes problems texts results inert-texts)
             (%assistant-redirects split-redirects entries path resolve)
           (multiple-value-bind (resolution run-node)
               (if rest (%assistant-resolve rest path resolve) (values nil nil))
@@ -460,7 +473,8 @@ instead (after an alias), or NIL, the typed arguments, and the argument forms."
                             (if split
                                 (nshell.domain.parsing:command-redirect-split-result-clean-command
                                  split)
-                                rest)))))))))))
+                                rest)))
+                      inert-texts))))))))
 
 (defun classify-command (node &key (path :bare-line) resolve
                                    (source-arguments-p (eq path :bare-line)))
@@ -468,12 +482,14 @@ instead (after an alias), or NIL, the typed arguments, and the argument forms."
 and RESOLVE are as for classify-ast."
   (if (nshell.domain.parsing:command-node-p node)
       (multiple-value-bind (argv assignments words writes problems results
-                            redirects resolution run-node argument-nodes argument-forms)
+                            redirects resolution run-node argument-nodes argument-forms
+                            inert-words)
           (%assistant-command-parts node path resolve)
         (declare (ignore redirects))
         (let ((nested (mapcan #'%assistant-result-reasons
                               (append results
-                                      (%assistant-substitution-results words resolve)))))
+                                      (%assistant-substitution-results
+                                       words resolve inert-words)))))
           (cond
             ((null argv)
              (%assistant-subject-result

@@ -271,7 +271,12 @@ them, the (SUBJECT . RUNS-P) pairs the walk described, in order."
               :to-equal '((nshell.feature.kb::reads "fixture")))
       (expect (effects "cat <(cat f) > out")
               :to-equal '((nshell.feature.kb::reads "f")
-                          (nshell.feature.kb::writes "out")))))
+                          (nshell.feature.kb::writes "out")))
+      ;; The body of a quoted here-document is passed on as written; only
+      ;; an unquoted one runs its substitutions.
+      (expect (effects (format nil "cat <<'EOF'~%$(cat fixture)~%EOF")) :to-equal nil)
+      (expect (effects (format nil "cat <<EOF~%$(cat fixture)~%EOF"))
+              :to-equal '((nshell.feature.kb::reads "fixture")))))
 
   (it "follows an alias of the context to the command it runs"
     (let ((resolve (nshell.application:assistant-command-resolver (%kb-alias-context))))
@@ -292,10 +297,12 @@ them, the (SUBJECT . RUNS-P) pairs the walk described, in order."
 
   (it "collects effects from exactly the subjects the classifier judges"
     (let ((context (%kb-alias-context)))
-      (dolist (line '("echo $(rm victim)" "cat a | wc -l > out" "ls; rm -r build"
-                      "(| (git status --short) (wc -l))" "(rm -rf build)"
-                      "env FOO=1 rm x" "sh -c 'cat f'" "sudo rm x" "timeout 5 cat f"
-                      "del victim" "cat <(cat f)" "command -v ls" "foo rm -rf x"))
+      (dolist (line (list "echo $(rm victim)" "cat a | wc -l > out" "ls; rm -r build"
+                          "(| (git status --short) (wc -l))" "(rm -rf build)"
+                          "env FOO=1 rm x" "sh -c 'cat f'" "sudo rm x" "timeout 5 cat f"
+                          "del victim" "cat <(cat f)" "command -v ls" "foo rm -rf x"
+                          (format nil "cat <<'EOF'~%$(rm victim)~%EOF")
+                          (format nil "cat <<EOF~%$(rm victim)~%EOF")))
         (let ((resolve (nshell.application:assistant-command-resolver context))
               (input (%kb-read-line line)))
           (multiple-value-bind (verdict judged)

@@ -197,7 +197,7 @@ build reads the same way."
         (expect (search "nshell -- NAME" help) :to-be-truthy))
       (expect 41 :to-equal (%bug-report-main (list "p06-probe" "x" "--y")))
       (expect (list "x" "--y") :to-equal received)
-      (expect (list "bug-report" "p06-probe") :to-equal
+      (expect (list "bug-report" "explain" "p06-probe") :to-equal
               (mapcar #'first (nshell.feature.command-line:subcommand-summaries))))
     (expect (find "p06-probe" (nshell.feature.command-line:subcommand-summaries)
                   :key #'first :test #'string=)

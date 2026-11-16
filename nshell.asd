@@ -117,7 +117,8 @@
     :serial t
     :components ((:file "package")
                  (:file "feature")
-                 (:file "domain/envelope")))
+                 (:file "domain/envelope")
+                 (:file "domain/methods")))
    (:file "util/struct-macros")
    (:file "util/strings")
    (:file "application/contracts/wp-interface-errors")
@@ -412,6 +413,10 @@
 	   (:file "presentation/repl-assistant-poll")
 	   (:file "presentation/repl-assistant-progress")
 	   (:file "presentation/repl")
+	   (:module "feature-machine-application"
+	    :pathname "../packages/feature/machine/src"
+	    :serial t
+	    :components ((:file "application/methods")))
 	   (:file "main")
     (:file "presentation/input-state-structural-editing")
     (:file "domain/completion/generated-external-command-kb-data"
@@ -628,6 +633,7 @@
    (:file "unit/test-safe-mode")
    (:file "unit/test-crash-recovery")
    (:file "unit/test-bug-report")
+   (:file "unit/test-machine-methods")
    (:file "unit/static-check-allowlist")
    (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is

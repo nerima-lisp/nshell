@@ -3,4 +3,4 @@
 (nshell.architecture:define-feature
  :machine
  :root "packages/feature/machine/src"
- :layers (:domain))
+ :layers (:domain :application))

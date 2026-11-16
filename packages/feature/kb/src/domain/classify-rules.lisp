@@ -192,10 +192,10 @@ changes no other command.")
      (invoked-as ?c ?w) (:when (contains-p "`" ?w)))
     ((classify ?c :confirm "classify/backtick"
                "backtick command substitution requires confirmation")
-     (argument ?c ?w) (:when (contains-p "`" ?w)))
+     (word ?c ?w) (:when (contains-p "`" ?w)))
     ((classify ?c :confirm "classify/output-redirect"
                "output redirection or process substitution requires confirmation")
-     (argument ?c ?w) (:when (contains-p ">" ?w)))
+     (redirect-not-allowed ?c ?text))
     ((classify ?c :confirm "classify/environment-assignment"
                "assigning this environment variable can change what the command runs")
      (assignment ?c ?n) (not (harmless-environment-name ?n)))

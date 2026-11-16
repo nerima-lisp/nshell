@@ -47,9 +47,12 @@
     ;; maximum), :listing-options (options that allow any operands),
     ;; :plus-options (reject + words as unsupported options before --),
     ;; :subcommands, and :grammar for find and echo/printf.  :dash-stdin
-    ;; says the operand - may be standard input, before or after --; the
-    ;; macOS and GNU tools differ for wc, head, tail and stat, so it is set
-    ;; where either reads standard input.  :resolution
+    ;; says the operand - is standard input, before or after --, on macOS
+    ;; and GNU alike.  Where they differ (wc, head, tail and stat read a file
+    ;; named - on macOS) the row leaves it out: effects inform the agent and
+    ;; safety does not use them, and reads - is true wherever the command
+    ;; reads a file named -, while standard input would hide that read.
+    ;; :resolution
     ;; :builtin marks a row that describes the nshell builtin of that name;
     ;; it applies only when the executor resolves the name to the builtin,
     ;; never to a forced (^name) command.  Other rows describe external
@@ -62,12 +65,11 @@
     ("which" :positionals :any :resolution :builtin)
     ("type" :positionals :any :resolution :builtin)
     ("command" :flags "vV" :positionals :any :resolution :builtin)
-    ("head" :value-flags (("n" :count) ("c" :count)) :positionals :any
-            :dash-stdin t)
+    ("head" :value-flags (("n" :count) ("c" :count)) :positionals :any)
     ("tail" :value-flags (("n" :count) ("c" :count))
-            :plus-options t :positionals :any :dash-stdin t)
-    ("wc" :flags "lwcm" :positionals :any :dash-stdin t)
-    ("stat" :flags "L" :positionals :any :dash-stdin t)
+            :plus-options t :positionals :any)
+    ("wc" :flags "lwcm" :positionals :any)
+    ("stat" :flags "L" :positionals :any)
     ("du" :flags "shkacx" :value-flags (("d" :count)) :positionals :any)
     ("df" :flags "hkliP" :positionals :any)
     ("file" :flags "bLhks" :long ("--mime-type" "--mime-encoding")

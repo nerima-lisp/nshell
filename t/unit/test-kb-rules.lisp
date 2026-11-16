@@ -150,16 +150,20 @@
       (expect (effects "head -n 5 f") :to-equal '((nshell.feature.kb::reads "f")))
       (expect (effects "tail -n5 -c 10 f g")
               :to-equal '((nshell.feature.kb::reads "f") (nshell.feature.kb::reads "g")))
-      ;; - is standard input, not a path, for the commands whose spec row
-      ;; says so, after -- too; ls reads a file named -.
+      ;; - is standard input, not a path, only for the commands whose spec
+      ;; row says so on every platform (cat, file), after -- too.  The
+      ;; others read a file named - on some platform: ls everywhere, wc,
+      ;; head, tail and stat on macOS.
       (expect (effects "cat - f") :to-equal '((nshell.feature.kb::reads "f")))
-      (expect (effects "ls -") :to-equal '((nshell.feature.kb::reads "-")))
-      (expect (effects "ls -- -") :to-equal '((nshell.feature.kb::reads "-")))
-      (dolist (line '("cat -- -" "wc -l -- -" "head -n 1 -- -"))
+      (dolist (line '("cat -- -" "file -"))
         (expect (list line (effects line)) :to-equal (list line nil)))
+      (dolist (line '("ls -" "ls -- -" "wc -" "wc -l -- -" "head -n 1 -- -"
+                      "tail -- -" "stat -"))
+        (expect (list line (effects line))
+                :to-equal (list line '((nshell.feature.kb::reads "-")))))
       ;; An option the row does not describe may take a value, so no word
       ;; is known to be an operand: file -F takes a separator.
-      (dolist (line '("wc -" "cat -" "file -F : x" "cat -Z f" "ls -Z"))
+      (dolist (line '("cat -" "file -F : x" "cat -Z f" "ls -Z"))
         (expect (list line (effects line)) :to-equal (list line nil))))))
 
 (describe "knowledge-base user rules"

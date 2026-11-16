@@ -612,3 +612,22 @@ first, as (SOURCE ORIGIN APPROVAL)."
                                   :approval :safe)
           (expect 126 :to-equal status)
           (expect t :to-be stopped-p))))))
+
+;;; An alias that expands to a NAME=value word still runs that word as a
+;;; command, so the gate must not read the expanded node as an assignment.
+;;; (On the reader path the same alias fails in stage evaluation for any
+;;; origin, so nothing runs there.)
+(describe "alias-expanded-assignment-words-are-commands"
+  (it "stops-a-safe-approval-on-the-ast-path"
+    (let ((context (make-test-shell-context)))
+      (setf (gethash "ls" (nshell.application:shell-context-alias-table context))
+            "LANG=C")
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :safe)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (multiple-value-bind (output code)
+            (nshell.application:execute-ast-in-context
+             context (nshell.domain.parsing:make-command-node "ls" nil))
+          (declare (ignore output))
+          (expect 126 :to-equal code)
+          (expect t :to-be nshell.application:*execution-gate-stopped-p*))))))

@@ -20,7 +20,8 @@
         "PATH=/tmp/x" "TZ=UTC" "LANG=C"
         "(^LANG=C ls)" "\"LANG=C\" ls" "'LANG=C' cat" "LANG=C \"TZ=UTC\" ls"
         "LANG=C ls" "LANG=C TZ=UTC ls > /dev/null" "FOO=1 \"BAR=2\" ls"
-        "ls '>' out" "FOO+=x ls" "(^git branch \"2>&1\")")
+        "ls '>' out" "FOO+=x ls" "(^git branch \"2>&1\")"
+        "(^and ls)" "(^or ls)" "(^not ls)")
   "Inputs R-P1-5 used, read with every reader that accepts them.")
 
 (defun %safety-view-command-nodes (ast)
@@ -82,14 +83,21 @@ nodes run as reader stages."
 (defun %safety-view-classifier (path node)
   ;; The classifier reads a reader result's form as a reader stage
   ;; (%assistant-classify-reader-result passes :READER).
-  (multiple-value-bind (argv names)
+  (multiple-value-bind (argv names words writes problems results redirects resolution)
       (nshell.feature.assistant::%assistant-command-parts
        node (if (eq path :reader) :reader :bare-line))
-    (list names argv)))
+    (declare (ignore words writes problems results redirects))
+    (list names argv resolution)))
+
+(defun %safety-view-bare-resolution (context node)
+  ;; %execute-command-by-name-in-context runs a function or a registered
+  ;; builtin in this process and anything else as an external command.
+  (if (nshell.application::%shell-internal-command-p context node) :builtin :external))
 
 (defun %safety-view-executor (context path node)
-  "The names and command words the executor's own functions give NODE.  The
-expansion of assignment values is stubbed so no substitution runs."
+  "The names, command words, and resolution (builtin or external) the
+executor's own functions give NODE.  The expansion of assignment values is
+stubbed so no substitution runs."
   (flet ((names (words)
            (mapcar (lambda (word)
                      (car (nshell.application::%assignment-word-binding context word)))
@@ -98,16 +106,18 @@ expansion of assignment values is stubbed so no substitution runs."
       (cond
         ;; Both executors run an assignment-only line as assignments
         ;; (execute-command-node-in-context, %reader-execute-foreground-in-context).
-        (assignment-only (list (names assignment-only) nil))
+        (assignment-only (list (names assignment-only) nil nil))
         ((eq path :bare-line)
          (multiple-value-bind (assignments rest)
              (nshell.application::%split-prefix-assignments context node)
-           (list (mapcar #'car assignments)
-                 (and rest
-                      (let ((clean (nshell.domain.parsing:command-redirect-split-result-clean-command
-                                    (nshell.application::%extract-command-redirects rest))))
+           (let ((clean (and rest
+                             (nshell.domain.parsing:command-redirect-split-result-clean-command
+                              (nshell.application::%extract-command-redirects rest)))))
+             (list (mapcar #'car assignments)
+                   (and clean
                         (cons (nshell.domain.parsing:command-node-command clean)
-                              (nshell.domain.parsing:command-node-arg-values clean)))))))
+                              (nshell.domain.parsing:command-node-arg-values clean)))
+                   (and clean (%safety-view-bare-resolution context clean))))))
         ;; A reader stage keeps its assignments in their own slot and runs its
         ;; command word with its arguments (evaluate-command-stage-in-context).
         (t
@@ -115,7 +125,11 @@ expansion of assignment values is stubbed so no substitution runs."
                               (nshell.domain.parsing:command-node-environment-assignments
                                node)))
                (cons (nshell.domain.parsing:command-node-command node)
-                     (nshell.domain.parsing:command-node-arg-values node))))))))
+                     (nshell.domain.parsing:command-node-arg-values node))
+               (handler-case
+                   (nth-value 0 (nshell.application::%resolve-command-stage-binding
+                                 context node))
+                 (error () :unresolved))))))))
 
 (describe "safety classifier sees commands as the executor runs them"
   (it "compares a corpus that covers both execution paths and the R-P1-5 inputs"
@@ -132,7 +146,7 @@ expansion of assignment values is stubbed so no substitution runs."
                            t))
                 :to-equal (list source t)))))
 
-  (it "agrees on the assigned names and the command words"
+  (it "agrees on the assigned names, the command words, and the resolution"
     (let ((context (make-test-shell-context)))
       (with-temporary-function
           ('nshell.application::%expand-source-arg-in-context
@@ -170,7 +184,8 @@ its evaluation fails (then nothing runs)."
 
 (defun %safety-view-gate-classifier (gate)
   "Run GATE (a thunk calling the real gate) and return the names, command
-words, and redirects of the first command the classifier split."
+words, redirects, and resolution of the outermost command the classifier
+split."
   (let ((original (symbol-function 'nshell.feature.assistant::%assistant-command-parts))
         (seen nil)
         (depth 0))
@@ -192,7 +207,8 @@ words, and redirects of the first command the classifier split."
         (funcall gate)))
     (and seen
          (list (second seen) (first seen)
-               (%safety-view-normal-redirects (seventh seen))))))
+               (%safety-view-normal-redirects (seventh seen))
+               (eighth seen)))))
 
 (defun %safety-view-gate-pair (context path node)
   "Return (CLASSIFIER EXECUTOR) views of the stage NODE at the gate, or NIL
@@ -218,7 +234,8 @@ when the executor dispatches no stage for it."
                               (nshell.domain.parsing:command-node-arg-values clean))
                         (%safety-view-normal-redirects
                          (nshell.domain.parsing:command-redirect-split-result-redirects
-                          split))))))
+                          split))
+                        (%safety-view-bare-resolution context clean)))))
         (let ((stage (%safety-view-reader-stage context node)))
           (when stage
             (let ((command (nshell.application:evaluated-command-stage-command-node stage)))
@@ -236,10 +253,12 @@ when the executor dispatches no stage for it."
                                  context
                                  (nshell.application:evaluated-command-stage-arguments stage)))
                           (%safety-view-normal-redirects
-                           (nshell.domain.parsing:command-node-redirects command))))))))))
+                           (nshell.domain.parsing:command-node-redirects command))
+                          (nshell.application:evaluated-command-stage-dispatch-kind
+                           stage)))))))))
 
 (describe "safety classifier sees a stage at the gate as the executor runs it"
-  (it "agrees on the names, command words, and redirects of every gated stage"
+  (it "agrees on the names, command words, redirects, and resolution of every gated stage"
     (let ((context (make-test-shell-context))
           (compared 0))
       (with-temporary-function

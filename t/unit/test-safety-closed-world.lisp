@@ -200,3 +200,15 @@
           (declare (ignore output))
           (expect 126 :to-equal code)
           (expect t :to-be nshell.application:*execution-gate-stopped-p*))))))
+
+;;; R-P1-5: a forced (^name) command runs the external program, so specs and
+;;; wrapper rows written for the builtin of that name must not apply.
+(describe "closed-world safety: builtin rows apply only to builtins"
+  (it "judges forced and, or, and not as external commands"
+    (dolist (source '("(^and ls)" "(^or ls)" "(^not ls)"))
+      (expect (list source
+                    (nshell.feature.assistant:assistant-safety-result-classification
+                     (nshell.feature.assistant:classify-ast
+                      (nshell.domain.parsing:read-submission
+                       source :reader-context :auto))))
+              :to-equal (list source :confirm)))))

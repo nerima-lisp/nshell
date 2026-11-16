@@ -53,6 +53,51 @@
     (expect (%kb-rule-names (%kb-classify-line "echo $(rm -r build)"))
             :to-equal '("classify/delete-dir")))
 
+  (it "uses the inner level only behind harmless environment assignments"
+    (dolist (case '(("LANG=C git status" :safe ("classify/read-only"))
+                    ("env TZ=UTC ls" :safe ("classify/read-only"))
+                    ("LC_ALL=C NO_COLOR=1 TERM=dumb COLUMNS=80 ls" :safe
+                     ("classify/read-only"))
+                    ("GIT_EXTERNAL_DIFF=x git diff" :confirm
+                     ("classify/environment-assignment"))
+                    ("env GIT_EXTERNAL_DIFF=/tmp/helper git diff HEAD~1 HEAD" :confirm
+                     ("classify/environment-assignment"))
+                    ("env TZ=UTC GIT_EXTERNAL_DIFF=x git log" :confirm
+                     ("classify/environment-assignment"))
+                    ("sudo PAGER=x ls" :confirm ("classify/environment-assignment"))
+                    ("env -i git status" :confirm ("classify/env-option"))
+                    ("env -u PATH ls" :confirm ("classify/env-option"))
+                    ("env -S 'git status'" :confirm ("classify/env-option"))
+                    ("PATH=/tmp/x rm -rf /" :block ("classify/root-recursive-delete"))))
+      (let ((result (%kb-classify-line (first case))))
+        (expect (nshell.feature.assistant:assistant-safety-result-classification result)
+                :to-be (second case))
+        (expect (%kb-rule-names result) :to-equal (third case)))))
+
+  (it "keeps git global options out of the read-only grammar"
+    (dolist (line '("git -c core.pager=x log" "git -C /x status"
+                    "git --exec-path=/x log" "git --exec-path log"
+                    "git --config-env=core.pager=V log"
+                    "git -c core.fsmonitor=x status" "git status -C x"
+                    "git diff -c x"))
+      (let ((result (%kb-classify-line line)))
+        (expect (nshell.feature.assistant:assistant-safety-result-classification result)
+                :to-be :confirm)
+        (expect (%kb-rule-names result) :to-equal '("classify/git-not-read-only")))))
+
+  (it "recognizes the root after lexical normalization"
+    (dolist (line '("rm -rf --no-preserve-root /./" "rm -rf //" "rm -rf /../"
+                    "rm -rf /." "rm -rf /tmp/.." "rm -rf /../../.." "rm -rf //*"
+                    "rm -rf ~/" "rm -rf ./"))
+      (expect (nshell.feature.assistant:assistant-safety-result-classification
+               (%kb-classify-line line))
+              :to-be :block))
+    (dolist (line '("rm -rf /tmp/./x" "rm -rf /.x" "rm -rf ./.." "rm -rf ~/.."
+                    "rm -rf /tmp//x"))
+      (expect (nshell.feature.assistant:assistant-safety-result-classification
+               (%kb-classify-line line))
+              :to-be :confirm)))
+
   (it "derives command effects from the effect model"
     (expect (nshell.feature.kb:subject-effects
              :command "rm" :arguments '("-r" "target/" "--" "-x"))

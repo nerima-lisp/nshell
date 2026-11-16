@@ -20,7 +20,9 @@
 ;;;   embedded(S, Level, Rule, Text) from a known command name in the operands
 ;;;   unparsable(S, Text)            text that could not be read as a command
 ;;; S-expression proposals add form-redirect(S), sexp-unforced(S), and
-;;; unclassifiable(S, Text).
+;;; unclassifiable(S, Text).  A command run with environment assignments
+;;; (`NAME=value cmd', `env NAME=value cmd') adds assignment(S, Name) per
+;;; name and wrapper-option(S, Option) per option given to env.
 
 (defparameter *builtin-classify-rulebase*
   (cl-prolog-kit:prolog
@@ -46,6 +48,7 @@
     ((flag ?c :recursive)
      (command ?c "rm") (option ?c ?o) (:when (recursive-option-p ?o)))
     ((root-path ?p) (:when (root-path-p ?p)))
+    ((harmless-environment-name ?n) (:when (harmless-environment-name-p ?n)))
     ((deletes-root ?c) (effect ?c (deletes ?p)) (root-path ?p))
     ((read-only-command ?c) (invoked-as ?c ?n) (read-only-name ?n))
     ((read-only-command ?c)
@@ -104,6 +107,12 @@
     ((classify ?c :confirm "classify/ripgrep-preprocessor"
                "ripgrep can execute external preprocessors and requires confirmation")
      (invoked-as ?c "rg") (argument ?c ?w) (:when (ripgrep-preprocessor-option-p ?w)))
+    ((classify ?c :confirm "classify/environment-assignment"
+               "assigning this environment variable can change what the command runs")
+     (assignment ?c ?n) (not (harmless-environment-name ?n)))
+    ((classify ?c :confirm "classify/env-option"
+               "env options can change the environment the command runs in")
+     (wrapper-option ?c ?o))
     ((classify ?c :confirm "classify/form-redirect"
                "Reader-result redirects require confirmation")
      (form-redirect ?c))

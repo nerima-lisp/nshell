@@ -5,11 +5,24 @@
   (eval-when (:compile-toplevel :load-toplevel :execute)
     (defpackage #:nshell.infrastructure.acl
       (:use #:cl)
-      (:export #:current-environment-value)))
+      (:export #:current-environment-value #:path-stat-stamp)))
   (setf (symbol-function
          (intern "CURRENT-ENVIRONMENT-VALUE"
                  "NSHELL.INFRASTRUCTURE.ACL"))
-        (lambda (name) (sb-ext:posix-getenv name))))
+        (lambda (name) (sb-ext:posix-getenv name)))
+  ;; No storage check compares stamps, so whole-second times stand in for the
+  ;; subsecond stamp of the real ACL function.
+  (setf (symbol-function
+         (intern "PATH-STAT-STAMP" "NSHELL.INFRASTRUCTURE.ACL"))
+        (lambda (path)
+          (handler-case
+              (let ((stat (sb-posix:stat path)))
+                (list (sb-posix:stat-dev stat)
+                      (sb-posix:stat-ino stat)
+                      (sb-posix:stat-size stat)
+                      (sb-posix:stat-mtime stat)
+                      (sb-posix:stat-ctime stat)))
+            (error () nil)))))
 (load (merge-pathnames "asdf-runtime.lisp" *load-truename*))
 (nshell-configure-writable-asdf-output)
 (asdf:load-system "cl-history-kit")

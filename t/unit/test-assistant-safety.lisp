@@ -429,7 +429,7 @@
       (setf (gethash "x" (nshell.application:shell-context-alias-table context))
             "rm -rf")
       (let ((nshell.application::*execution-origin* :agent)
-            (nshell.application::*execution-confirmed-p* nil))
+            (nshell.application::*execution-approval* nil))
         (multiple-value-bind (output code)
             (nshell.application:execute-ast-in-context context ast)
           (expect 126 :to-equal code)

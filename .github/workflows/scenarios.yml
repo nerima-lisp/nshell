@@ -88,7 +88,8 @@ jobs:
         id: l02
         # Passes when the prompt and command output do not wait for a sleeping fake
         # `git status`; startup and empty-Enter timings are recorded only. The step
-        # continues on error so the rest of the corpus runs; the check is advisory.
+        # continues on error so the rest of the corpus runs; the enforcement step
+        # below turns an L02 failure into a job failure.
         continue-on-error: true
         run: >-
           nix develop .#scenarios -c python3 -B scripts/run-scenarios.py
@@ -226,3 +227,9 @@ jobs:
             --scenario-temp-dir "Q07-history-write-failure-on-bounded-filesystem=$q07_tmp_root" \
             --repeat 3 \
             --mode pty
+
+      - name: Enforce L02 slow Git check result
+        if: ${{ always() && steps.l02.outcome != 'success' }}
+        run: |
+          echo "L02 slow Git check ended with outcome: ${{ steps.l02.outcome }}" >&2
+          exit 1

@@ -385,13 +385,33 @@ false needs only a non-zero status or an error, not both."
                  "branch 0 [path \"/ok\": Value is not in enum]"
                  "branch 1 [path \"\": oneOf matched 2 schemas")
                 :to-be-truthy)
+        (expect (one-of-failure-p
+                 (failures-after :result
+                                 (lambda (p)
+                                   (setf (gethash "ok" p) json-kit:+json-false+
+                                         (gethash "error" p) json-kit:+json-null+)))
+                 "branch 0 [path \"/ok\": Value is not in enum]"
+                 "branch 1 [path \"\": oneOf matched 2 schemas")
+                :to-be-truthy)
         (expect (failures-after :result
                                 (lambda (p)
                                   (setf (gethash "ok" p) json-kit:+json-false+
                                         (gethash "status" p) 1)))
                 :to-be-null)
         (expect (failures-after :error (lambda (p) (setf (gethash "status" p) 0)))
-                :to-be-null))))
+                :to-be-null)
+        ;; An error written as null counts as no error.
+        (expect (failures-after :result
+                                (lambda (p) (setf (gethash "error" p) json-kit:+json-null+)))
+                :to-be-null)
+        (dolist (status '(1 -1))
+          (expect (list status
+                        (failures-after :result
+                                        (lambda (p)
+                                          (setf (gethash "ok" p) json-kit:+json-false+
+                                                (gethash "status" p) status
+                                                (gethash "error" p) json-kit:+json-null+))))
+                  :to-equal (list status nil))))))
 
   (it "builders-reject-malformed-parts"
     "Builders and the JSON conversion signal INVALID-ENVELOPE instead of

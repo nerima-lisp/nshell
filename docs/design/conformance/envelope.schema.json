@@ -41,7 +41,7 @@
     },
     "value": true,
     "error": {
-      "type": "object",
+      "type": ["object", "null"],
       "required": ["code"],
       "properties": {
         "code": {

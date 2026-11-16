@@ -167,3 +167,36 @@
               :to-equal '((nshell.feature.kb::writes "out") :network)))
     (with-complete-ast (ast "grep x f")
       (expect (nshell.feature.assistant:command-effects ast) :to-equal nil))))
+
+;;; R-P1-5: the classifier must read assignments from the AST the way the
+;;; executors split them, not from the `=' in a word.  A quoted or forced
+;;; NAME=value word, and every word after one, names a command.
+(describe "closed-world safety: assignments come from the AST"
+  (it "treats quoted and forced NAME=value words as commands"
+    (dolist (case '((:bare "\"LANG=C\" ls") (:bare "'LANG=C' cat")
+                    (:bare "LANG=C \"TZ=UTC\" ls") (:auto "(^LANG=C ls)")))
+      (destructuring-bind (reader source) case
+        (expect (list source
+                      (nshell.feature.assistant:assistant-safety-result-classification
+                       (if (eq reader :bare)
+                           (%closed-world-classify source)
+                           (nshell.feature.assistant:classify-ast
+                            (nshell.domain.parsing:read-submission
+                             source :reader-context :auto)))))
+                :to-equal (list source :confirm)))))
+
+  (it "stops an alias whose expansion starts with a NAME=value word"
+    ;; On the AST path the executor splits the prefix before it expands the
+    ;; alias, so an alias ls='LANG=C ls' runs a command named LANG=C.
+    (let ((context (make-test-shell-context)))
+      (setf (gethash "ls" (nshell.application:shell-context-alias-table context))
+            "LANG=C ls")
+      (let ((nshell.application:*execution-origin* :proposal)
+            (nshell.application:*execution-approval* :safe)
+            (nshell.application:*execution-gate-stopped-p* nil))
+        (multiple-value-bind (output code)
+            (nshell.application:execute-ast-in-context
+             context (nshell.domain.parsing:make-command-node "ls" nil))
+          (declare (ignore output))
+          (expect 126 :to-equal code)
+          (expect t :to-be nshell.application:*execution-gate-stopped-p*))))))

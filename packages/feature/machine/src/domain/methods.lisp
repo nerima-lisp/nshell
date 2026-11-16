@@ -36,7 +36,7 @@ initialize announces it.")
 
 (defun knowledge-base-effects (effects)
   "Return ENVELOPE-EFFECTs for the effect model's EFFECTS: (DELETES PATH),
-(WRITES PATH), and :NETWORK."
+(WRITES PATH), :NETWORK, and (READS PATH)."
   (mapcar (lambda (effect)
             (let ((kind (intern (symbol-name (if (consp effect) (first effect) effect))
                                 :keyword)))

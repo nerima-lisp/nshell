@@ -140,24 +140,10 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
     copy))
 
 (describe "machine json golden examples"
-  (it "matches proposal/02's --json pipeline example except effects and safety"
-    (expect (%json-golden-normalize
-             (%json-golden-without (%json-golden-run-pipeline-example) "effects" "safety"))
+  (it "matches proposal/02's --json pipeline example"
+    (expect (%json-golden-normalize (%json-golden-run-pipeline-example))
             :to-equal
-            (%json-golden-normalize
-             (%json-golden-without (%json-golden-pipeline-expected) "effects" "safety"))))
-
-  (it "matches proposal/02's --json pipeline example effects"
-    (skip (format nil "--json reports no effects yet, and the P1-5 effect model ~
-                       (classify-rules.lisp) has deletes, writes and network ~
-                       but no reads (example: reads .)")))
-
-  (it "matches proposal/02's --json pipeline example safety"
-    (skip (format nil "Enter-time safety is confirm, the example safe: ~
-                       classify/sexp-not-forced (S-expression command requires ~
-                       explicit force and has no redirects), and wc -l is ~
-                       classify/unknown-command because +safe-command-specs+ ~
-                       has no wc row although D-P1-5 2.6 lists wc -lwcm as safe")))
+            (%json-golden-normalize (%json-golden-pipeline-expected))))
 
   (it "has the shape of ux/U6's long-output example"
     (host-kit:with-temporary-directory (work)
@@ -210,8 +196,8 @@ envelope with duration_ms set to 0 and state.cwd to $WORK."
               (expect (probe-file (gethash "path" output)) :to-be-truthy)))))))
 
   (it "has the shape of ux/U6's long-output example effects"
-    (skip (format nil "--json reports no effects yet; the example's writes ~
-                       result/ comes from a build, not from cat")))
+    (skip (format nil "the example's writes result/ comes from a build, ~
+                       not from cat, whose effect is reads build.log")))
 
   (it "matches proposal/02's structured error example except fixes"
     (host-kit:with-temporary-directory (work)

@@ -321,7 +321,8 @@ Returns the level and the (RULE . TEXT) reasons at that level."
      (append (%builtin-solutions facts) (%user-solutions facts)))))
 
 (defun subject-effects (&key command invoked-as arguments writes)
-  "Return the effects of one command: (DELETES PATH), (WRITES PATH), :NETWORK.
+  "Return the effects of one command: (DELETES PATH), (WRITES PATH), :NETWORK,
+and (READS PATH).
 WRITES are the output redirect targets the caller read from the AST."
   (remove-duplicates
    (copy-tree

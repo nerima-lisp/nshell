@@ -116,10 +116,30 @@
     (expect (nshell.feature.assistant:command-effects
              (nshell.domain.parsing:parse-result-ast
               (nshell.domain.parsing:parse-command-line "ls >log")))
-            :to-equal '((nshell.feature.kb::writes "log")))
+            :to-equal '((nshell.feature.kb::writes "log")
+                        (nshell.feature.kb::reads ".")))
     (expect (nshell.feature.kb:subject-effects
              :command "grep" :arguments '(">" "log"))
-            :to-equal nil)))
+            :to-equal nil))
+
+  (it "derives read effects only from the commands whose reads it states"
+    (flet ((effects (line)
+             (nshell.feature.assistant:command-effects
+              (nshell.domain.parsing:parse-result-ast
+               (nshell.domain.parsing:parse-command-line line)))))
+      ;; proposal/02: git status reads the working tree.
+      (expect (effects "git status --short")
+              :to-equal '((nshell.feature.kb::reads ".")))
+      (expect (effects "cat -n a.txt -- -b")
+              :to-equal '((nshell.feature.kb::reads "a.txt")
+                          (nshell.feature.kb::reads "-b")))
+      (expect (effects "ls -la src")
+              :to-equal '((nshell.feature.kb::reads "src")))
+      (expect (effects "ls -la")
+              :to-equal '((nshell.feature.kb::reads ".")))
+      ;; Without an operand wc and cat read only standard input.
+      (dolist (line '("wc -l" "cat" "git log -n 3" "grep x f" "head -n 5 f"))
+        (expect (list line (effects line)) :to-equal (list line nil))))))
 
 (describe "knowledge-base user rules"
   (it "caps a user block at confirm"

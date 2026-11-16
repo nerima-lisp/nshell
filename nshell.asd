@@ -520,6 +520,7 @@
    (:file "unit/test-repl-assistant-poll")
    (:file "unit/test-repl-assistant-progress")
    (:file "unit/test-repl-ask")
+   (:file "unit/test-assistant-approval")
    (:file "unit/test-repl-completion-data")
    (:file "unit/test-repl-background")
    (:file "unit/test-repl-state")

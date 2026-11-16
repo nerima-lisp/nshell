@@ -489,6 +489,7 @@
    (:file "unit/test-safety-closed-world")
    (:file "unit/legacy-assistant-safety")
    (:file "unit/test-safety-rule-migration")
+   (:file "unit/test-safety-ast-view")
    (:file "unit/test-assistant-redaction")
    (:file "unit/test-assistant-context")
    (:file "unit/test-assistant-audit")

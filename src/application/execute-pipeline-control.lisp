@@ -17,6 +17,12 @@
 each refusal: E_NEEDS_APPROVAL or E_BLOCKED_BY_POLICY. The caller binds a fresh
 cons; pipeline stage threads share it, so a refusal in a stage reaches it.")
 
+(defvar *full-screen-program-guard* nil
+  "NIL, or a function of an external command's name and argument strings that
+returns true when the command is a full-screen program that must not start.
+Machine mode binds it (ux/U6); the execution gate then refuses the command
+with E_INTERACTIVE_PROGRAM.")
+
 ;;; Control flow execution and AST dispatch.
 ;;; This file defines:
 ;;;   - %execute-command-substitution-fields: the bridge from argument expansion
@@ -182,10 +188,42 @@ the code's exit status in the error-code table, and record CODE."
   "True while executing a line that came from an AI proposal or agent step."
   (member *execution-origin* '(:proposal :agent) :test #'eq))
 
+(defun %execution-gate-active-p ()
+  "True while %ASSISTANT-EXECUTION-GATE can refuse anything."
+  (or (%assistant-gate-active-p) *full-screen-program-guard*))
+
+(defun %full-screen-program-refusal (context ast path resolve)
+  "Return the gate's refusal of the first stage of AST, a command or a
+pipeline, that runs an external program *FULL-SCREEN-PROGRAM-GUARD* rejects,
+or NIL. PATH and RESOLVE are as for %ASSISTANT-EXECUTION-GATE."
+  (when *full-screen-program-guard*
+    (dolist (node (if (nshell.domain.parsing:pipeline-node-p ast)
+                      (nshell.domain.parsing:pipeline-node-commands ast)
+                      (list ast)))
+      (when (nshell.domain.parsing:command-node-p node)
+        (multiple-value-bind (kind run-node)
+            (funcall (or resolve (assistant-command-resolver context)) node path)
+          (let ((command (nshell.domain.parsing:command-node-command run-node)))
+            (when (and (eq kind :external)
+                       (funcall *full-screen-program-guard*
+                                command
+                                (mapcar #'nshell.domain.parsing:arg-value
+                                        (nshell.domain.parsing:command-node-args
+                                         run-node))))
+              (return
+                (%gate-refusal
+                 "E_INTERACTIVE_PROGRAM"
+                 "nshell: ~a: a full-screen program does not run in machine mode~%"
+                 command)))))))))
+
 (defun %assistant-execution-gate (context ast &key (path :bare-line) resolve)
   "PATH names the executor that runs AST, as for classify-ast.  RESOLVE is
 the classifier's resolver, by default assistant-command-resolver of
-CONTEXT."
+CONTEXT. A full-screen program machine mode refuses is refused first."
+  (or (%full-screen-program-refusal context ast path resolve)
+      (%assistant-safety-gate context ast path resolve)))
+
+(defun %assistant-safety-gate (context ast path resolve)
   (when (%assistant-gate-active-p)
     (labels ((rank (value)
                (case (nshell.feature.assistant:assistant-safety-result-classification value)

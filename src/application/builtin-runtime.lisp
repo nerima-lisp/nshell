@@ -9,6 +9,19 @@
   "Return the builtin handler registered for NAME, or NIL."
   (and name (gethash name *builtin-registry*)))
 
+(defun %assistant-command-builtin-p (name path)
+  "True when the executor on PATH runs NAME as a builtin: the bare-line path
+(%execute-command-by-name-in-context) looks NAME up in the builtin registry,
+a reader stage (%resolve-command-stage-binding) in the builtin binding
+registry.  The AI safety classifier asks the same question through
+*assistant-builtin-resolver*."
+  (if (eq path :reader)
+      (nth-value 1 (lookup-builtin-binding name))
+      (and (lookup-builtin name) t)))
+
+(setf nshell.feature.assistant:*assistant-builtin-resolver*
+      #'%assistant-command-builtin-p)
+
 (defun %required-argument-error (builtin option requirement)
   (format nil "~a: ~a requires ~a~%" builtin option requirement))
 

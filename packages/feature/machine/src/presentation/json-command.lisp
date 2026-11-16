@@ -299,7 +299,7 @@ builtins, functions and aliases."
   (multiple-value-bind (start end) (%input-name-span input name-span)
     (when (and start
                (not (nshell.domain.parsing:text-span-alias-word-p name-span)))
-      (values (if (nshell.domain.parsing::text-span-forced-external-p name-span)
+      (values (if (nshell.domain.parsing:text-span-forced-external-p name-span)
                   (1+ start)
                   start)
               end))))

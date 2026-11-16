@@ -6,11 +6,11 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 
 ## P1-1 共通の応答の型
 
-- [ ] ux/U6 のフィールド (ok, status, value, stdout, stderr, error, effects, safety, state, duration_ms, session, seq) を表す構造体と JSON 変換
-- [ ] `nshell_api: 1` を版として持つ
-- [ ] 常に出すキーは `nshell_api ok status duration_ms stdout stderr effects safety state`。ほかは任意。P2-5 用の `warnings[]` と、explain 用の `forms` を持つ
-- [ ] JSON Schema はトップレベルを `additionalProperties: true` にし、`error.code` は enum で縛る
-- [ ] Schema の検証器は cl-json-kit に足したものを使う
+- [x] ux/U6 のフィールド (ok, status, value, stdout, stderr, error, effects, safety, state, duration_ms, session, seq) を表す構造体と JSON 変換
+- [x] `nshell_api: 1` を版として持つ
+- [x] 常に出すキーは `nshell_api ok status duration_ms stdout stderr effects safety state`。ほかは任意。P2-5 用の `warnings[]` と、explain 用の `forms` を持つ
+- [x] JSON Schema はトップレベルを `additionalProperties: true` にし、`error.code` は enum で縛る
+- [x] Schema の検証器は cl-json-kit に足したものを使う
 
 受け入れ条件: 型の JSON Schema を `docs/design/conformance/envelope.schema.json` に置き、すべての応答がそれに通るテスト。
 

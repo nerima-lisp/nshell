@@ -12,9 +12,9 @@ passes a shell variable's value and `,EXPR` evaluates an expression for an
 argument.
 
 > **Status: development preview.** CI runs the Nix test suite on
-> `x86_64-linux` and `aarch64-darwin`; real-PTY integration runs on
-> `x86_64-linux`. Bare command lines are entry syntax, not a promise of POSIX
-> or fish script compatibility. The `-c` option delegates to `/bin/sh`.
+> `x86_64-linux`; real-PTY integration runs on `x86_64-linux`. Bare command
+> lines are entry syntax, not a promise of POSIX or fish script compatibility.
+> The `-c` option delegates to `/bin/sh`.
 
 Documentation source lives in [docs/src/](docs/src/).
 

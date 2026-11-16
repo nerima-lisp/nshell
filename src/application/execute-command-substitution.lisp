@@ -7,7 +7,6 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
            (ftype (function (stream) list) collect-source-lines))
   (handler-case
       (let* ((*foreground-terminal-runner* nil)
-             (*output-captures* (cons :substitution *output-captures*))
              (output-stream (make-string-output-stream))
              (*standard-output* output-stream))
         (let ((timeout
@@ -57,8 +56,8 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
                                (declare (ignore exit-code))
                                (%trim-command-substitution-output output))))))))
             ;; exec in the substitution ends only the substitution, which
-            ;; then yields what reached OUTPUT-STREAM: the exec'd program's
-            ;; output, but not output earlier commands returned as values.
+            ;; then yields what reached OUTPUT-STREAM: what its commands
+            ;; produced before exec, then the exec'd program's output.
             (call-with-subshell-exit
              (lambda ()
                (if timeout

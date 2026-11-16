@@ -287,6 +287,17 @@ and expect EXPECTED-STATUS as the exit status."
 (defun %json-golden-stdout-text (envelope)
   (gethash "text" (gethash "stdout" envelope)))
 
+(defun %json-golden-expect-exec-output (input pid-files expected-status expected-stdout)
+  "Run INPUT as %JSON-GOLDEN-CHECK-EXEC-RUN does and expect EXPECTED-STATUS,
+EXPECTED-STDOUT and an empty stderr."
+  (%json-golden-check-exec-run
+   input pid-files
+   (lambda (envelope status work)
+     (declare (ignore work))
+     (expect status :to-equal expected-status)
+     (expect (%json-golden-stdout-text envelope) :to-equal expected-stdout)
+     (expect (gethash "text" (gethash "stderr" envelope)) :to-equal ""))))
+
 (describe "machine json real entry exec in several stages"
   ;; exec in a stage ends only that stage, with its program's status, and the
   ;; run reports the pipeline's own status: the last stage's.
@@ -307,7 +318,20 @@ and expect EXPECTED-STATUS as the exit status."
        (declare (ignore work))
        (expect status :to-equal 0)
        (expect (%json-golden-stdout-text envelope)
-               :to-equal (format nil "late~%after~%"))))))
+               :to-equal (format nil "late~%after~%")))))
+
+  (it "keeps a function stage's output from before its exec in order"
+    (%json-golden-expect-exec-output
+     (format nil "function f; echo a; sh -c 'echo x'; ~
+                  exec sh -c 'echo $$ > p1; echo b'; end; ~
+                  f | tr a-z A-Z; echo after")
+     '("p1") 0 (format nil "A~%X~%B~%after~%")))
+
+  (it "keeps a function stage's output from before its exec in a command substitution"
+    (%json-golden-expect-exec-output
+     (format nil "function f; echo a; exec sh -c 'echo $$ > p1; echo b'; end; ~
+                  echo $(f | cat); echo after")
+     '("p1") 0 (format nil "a b~%after~%"))))
 
 (describe "machine json real entry exec in substitutions"
   (it "waits for every process substitution when some of them exec"
@@ -321,6 +345,17 @@ and expect EXPECTED-STATUS as the exit status."
        (expect status :to-equal 0)
        (expect (%json-golden-stdout-text envelope) :to-equal (format nil "after~%")))))
 
+  (it "keeps a process substitution's input from before its stage's exec"
+    (%json-golden-expect-exec-output
+     "cat <(echo a | exec sh -c 'echo $$ > p1; cat; echo b'); echo after" '("p1")
+     0 (format nil "a~%b~%after~%")))
+
+  (it "keeps a function's output from before its exec in a command substitution"
+    (%json-golden-expect-exec-output
+     (format nil "function f; echo a; exec sh -c 'echo $$ > p1; echo b'; end; ~
+                  echo $(f); echo after")
+     '("p1") 0 (format nil "a b~%after~%")))
+
   (it "ends only a command substitution whose command execs"
     (%json-golden-check-exec-run
      "echo $(exec sh -c 'echo $$ > p1; echo in; exit 3'); echo after" '("p1")
@@ -329,6 +364,27 @@ and expect EXPECTED-STATUS as the exit status."
        (expect status :to-equal 0)
        (expect (%json-golden-stdout-text envelope)
                :to-equal (format nil "in~%after~%")))))
+
+  (it "keeps a command substitution's output from before its exec"
+    ;; echo returns its output as a value, which exec once threw away.
+    (%json-golden-expect-exec-output
+     "echo $(echo a; exec sh -c 'echo $$ > p1; echo b'); echo after" '("p1")
+     0 (format nil "a b~%after~%")))
+
+  (it "keeps an external command's output from before exec in order"
+    (%json-golden-expect-exec-output
+     "echo $(sh -c 'printf x'; exec sh -c 'echo $$ > p1; printf y'); echo after" '("p1")
+     0 (format nil "xy~%after~%")))
+
+  (it "keeps the output from before exec in nested command substitutions"
+    (%json-golden-expect-exec-output
+     "echo $(echo $(echo a; exec echo b) c; exec echo d); echo after" nil
+     0 (format nil "a b c d~%after~%")))
+
+  (it "keeps the output from before a top-level exec"
+    (%json-golden-expect-exec-output
+     "sh -c 'echo x'; exec sh -c 'echo $$ > p1; echo y; exit 4'" '("p1")
+     4 (format nil "x~%y~%")))
 
   (it "waits for a top-level exec's process substitution before ending the run"
     (%json-golden-check-exec-run

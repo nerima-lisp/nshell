@@ -101,22 +101,19 @@
 (defun %source-lines-handle-function-start (context line remaining source-path output)
   (let ((result (%source-function-definition context (%function-start-p line)
                                              line remaining source-path)))
+    (%source-lines-add-chunk
+     (%source-function-definition-result-output-chunk result)
+     output)
     (%make-source-lines-step-result
      (%source-function-definition-result-remaining-lines result)
-     (%source-lines-add-chunk
-      (%source-function-definition-result-output-chunk result)
-      output)
      (%source-function-definition-result-exit-code result)
      (%source-function-definition-result-stop-p result))))
 
 (defun %source-lines-add-chunk (chunk output)
-  (if chunk
-      (if *source-lines-stream-output-p*
-          (progn
-            (write-string chunk *standard-output*)
-            output)
-          (cons chunk output))
-      output))
+  "Write CHUNK to *STANDARD-OUTPUT* in stream mode, else to OUTPUT, an output
+collector."
+  (when chunk
+    (write-string chunk (if *source-lines-stream-output-p* *standard-output* output))))
 
 (defun %source-line-needs-more-input-p (result)
   (or (nshell.domain.parsing:parse-diagnostic-kind-p
@@ -138,18 +135,12 @@
     (if (nshell.domain.parsing:parse-complete-p result)
         (multiple-value-bind (chunk exit-code)
             (%execute-source-line context text)
-          (%make-source-lines-step-result
-           tail
-           (%source-lines-add-chunk chunk output)
-           exit-code
-           nil))
+          (%source-lines-add-chunk chunk output)
+          (%make-source-lines-step-result tail exit-code nil))
         (multiple-value-bind (chunk exit-code)
             (%source-line-parse-error-result result)
-          (%make-source-lines-step-result
-           tail
-           (%source-lines-add-chunk chunk output)
-           exit-code
-           t)))))
+          (%source-lines-add-chunk chunk output)
+          (%make-source-lines-step-result tail exit-code t)))))
 
 (defun %comment-or-blank-source-line-p (line)
   "True for blank, shell-comment, or Lisp-comment lines and shebangs."
@@ -159,42 +150,40 @@
         (char= (char trimmed 0) #\;))))
 
 (defun %source-lines (context lines &optional source-path)
-  (let ((output nil)
-        (code 0)
+  (let ((code 0)
         (remaining lines))
-    (loop while remaining
-          for line = (pop remaining)
-          do (cond
-               ;; Skip blank lines and whole-line comments / shebangs.
-               ((%comment-or-blank-source-line-p line) nil)
-               ;; A definition that opens after another command on the same
-               ;; line: run what came first, then read the definition whole.
-               ((and (not (%function-start-p line))
-                     (source-line-function-split line))
-                (multiple-value-bind (prefix definition)
-                    (source-line-function-split line)
-                  (setf remaining (list* prefix definition remaining))))
-               ((%function-start-p line)
-                (let ((step (%source-lines-handle-function-start
-                             context line remaining source-path output)))
-                  (setf remaining (%source-lines-step-result-remaining-lines step)
-                        output (%source-lines-step-result-output-chunks step)
-                        code (%source-lines-step-result-exit-code step))
-                  (%record-last-exit-code context code)
-                  (when (or (%source-lines-step-result-stop-p step)
-                            (not (shell-context-running context)))
-                    (return))))
-               (t
-                (let ((step (%source-lines-handle-source-form
-                             context line remaining output)))
-                  (setf remaining (%source-lines-step-result-remaining-lines step)
-                        output (%source-lines-step-result-output-chunks step)
-                        code (%source-lines-step-result-exit-code step))
-                  (%record-last-exit-code context code)
-                  (when (or (%source-lines-step-result-stop-p step)
-                            (not (shell-context-running context)))
-                    (return))))))
-    (values (apply #'concatenate 'string (nreverse output)) code)))
+    (with-output-collector (output)
+      (loop while remaining
+            for line = (pop remaining)
+            do (cond
+                 ;; Skip blank lines and whole-line comments / shebangs.
+                 ((%comment-or-blank-source-line-p line) nil)
+                 ;; A definition that opens after another command on the same
+                 ;; line: run what came first, then read the definition whole.
+                 ((and (not (%function-start-p line))
+                       (source-line-function-split line))
+                  (multiple-value-bind (prefix definition)
+                      (source-line-function-split line)
+                    (setf remaining (list* prefix definition remaining))))
+                 ((%function-start-p line)
+                  (let ((step (%source-lines-handle-function-start
+                               context line remaining source-path output)))
+                    (setf remaining (%source-lines-step-result-remaining-lines step)
+                          code (%source-lines-step-result-exit-code step))
+                    (%record-last-exit-code context code)
+                    (when (or (%source-lines-step-result-stop-p step)
+                              (not (shell-context-running context)))
+                      (return))))
+                 (t
+                  (let ((step (%source-lines-handle-source-form
+                               context line remaining output)))
+                    (setf remaining (%source-lines-step-result-remaining-lines step)
+                          code (%source-lines-step-result-exit-code step))
+                    (%record-last-exit-code context code)
+                    (when (or (%source-lines-step-result-stop-p step)
+                              (not (shell-context-running context)))
+                      (return))))))
+      (values (get-output-stream-string output) code))))
 
 (defun %source-reader-scan-result (context source)
   (nshell.domain.parsing:scan-input
@@ -218,73 +207,72 @@
                   :complete)
         (error (nshell.domain.parsing:scan-result-reader-error
                 scan-result :source-path source-path :source-map source-map)))
-      (let ((output nil)
-            (code 0))
-        (dolist (reader-result reader-results)
-          (let* ((form
-                   (nshell.domain.parsing:reader-result-form reader-result))
-                 (classification
-                   (and (consp form)
-                        (symbolp (first form))
-                        (%form-command-classification
-                         context form reader-result)))
-                 (form-type
-                   (cond
-                     ((or (nshell.domain.parsing::ast-node-p form)
-                          (%reader-pipeline-form-p form reader-result)
-                          (eq classification :command-island))
-                      :command-island)
-                     ((and (consp form)
-                           (symbolp (first form))
-                           (member
-                            (%resolve-form-operator context form reader-result)
-                            (quote (cl:defun cl:defmacro
-                                     nshell.user::define-shell-function))
-                            :test (function eq)))
-                      :definition)
-                     (t :lisp-value))))
-            (multiple-value-bind (value result-code)
-                (handler-case
-                    (%source-evaluate-reader-result
-                     context reader-result form-type)
-                  (sexp-evaluation-syntax-error (condition)
-                    (error
-                     (make-condition
-                      (quote sexp-evaluation-syntax-error)
-                      :source-span
-                      (source-span-in-file
-                       (sexp-evaluation-syntax-error-source-span condition))
-                      :source-path
-                      (sexp-evaluation-syntax-error-source-path condition)
-                      :cause
-                      (sexp-evaluation-syntax-error-cause condition))))
-                  (command-macro-syntax-error (condition)
-                    (error
-                     (make-condition
-                      (quote command-macro-syntax-error)
-                      :source-span
-                      (source-span-in-file
-                       (command-macro-syntax-error-source-span condition))
-                      :source-path
-                      (command-macro-syntax-error-source-path condition)
-                      :cause
-                      (command-macro-syntax-error-cause condition)))))
-              (setf output
-                    (%source-lines-add-chunk
+      (let ((code 0))
+        (with-output-collector (output)
+          (dolist (reader-result reader-results)
+            (let* ((form
+                     (nshell.domain.parsing:reader-result-form reader-result))
+                   (classification
+                     (and (consp form)
+                          (symbolp (first form))
+                          (%form-command-classification
+                           context form reader-result)))
+                   (form-type
                      (cond
-                      ((and (eq form-type :command-island)
-                            (stringp value))
-                       value)
-                      ((and (eq form-type :lisp-value)
-                            (not (null value))
-                            (not (eq value t)))
-                       (format nil "~a~%" value)))
-                     output))
-              (setf code result-code)
-              (%record-last-exit-code context code)))
-          (unless (shell-context-running context)
-            (return)))
-        (values (apply #'concatenate 'string (nreverse output)) code)))))
+                       ((or (nshell.domain.parsing::ast-node-p form)
+                            (%reader-pipeline-form-p form reader-result)
+                            (eq classification :command-island))
+                        :command-island)
+                       ((and (consp form)
+                             (symbolp (first form))
+                             (member
+                              (%resolve-form-operator context form reader-result)
+                              (quote (cl:defun cl:defmacro
+                                       nshell.user::define-shell-function))
+                              :test (function eq)))
+                        :definition)
+                       (t :lisp-value))))
+              (multiple-value-bind (value result-code)
+                  (handler-case
+                      (%source-evaluate-reader-result
+                       context reader-result form-type)
+                    (sexp-evaluation-syntax-error (condition)
+                      (error
+                       (make-condition
+                        (quote sexp-evaluation-syntax-error)
+                        :source-span
+                        (source-span-in-file
+                         (sexp-evaluation-syntax-error-source-span condition))
+                        :source-path
+                        (sexp-evaluation-syntax-error-source-path condition)
+                        :cause
+                        (sexp-evaluation-syntax-error-cause condition))))
+                    (command-macro-syntax-error (condition)
+                      (error
+                       (make-condition
+                        (quote command-macro-syntax-error)
+                        :source-span
+                        (source-span-in-file
+                         (command-macro-syntax-error-source-span condition))
+                        :source-path
+                        (command-macro-syntax-error-source-path condition)
+                        :cause
+                        (command-macro-syntax-error-cause condition)))))
+                (%source-lines-add-chunk
+                 (cond
+                   ((and (eq form-type :command-island)
+                         (stringp value))
+                    value)
+                   ((and (eq form-type :lisp-value)
+                         (not (null value))
+                         (not (eq value t)))
+                    (format nil "~a~%" value)))
+                 output)
+                (setf code result-code)
+                (%record-last-exit-code context code)))
+            (unless (shell-context-running context)
+              (return)))
+          (values (get-output-stream-string output) code))))))
 
 (defun %source-lines-with-reader (context lines &optional source-path)
   (labels ((source-map-for-line (line offset)
@@ -356,106 +344,105 @@
                         (cons inline-line (+ line-offset start))))
                 (nthcdr suffix-index remaining)))))
     (let* ((source-length (length (format nil "~{~a~^~%~}" lines)))
-           (output nil)
            (code 0)
            (remaining (source-line-entries lines)))
-      (loop while remaining
-            for entry = (pop remaining)
-            for line = (car entry)
-            for line-offset = (cdr entry)
-            do (cond
-                 ((%comment-or-blank-source-line-p line) nil)
-                 ((and (not (%function-start-p line))
-                       (source-line-function-split line))
-                  (multiple-value-bind (prefix definition)
-                      (source-line-function-split line)
-                    (setf remaining
-                          (list* (cons prefix line-offset)
-                                 (cons definition
-                                       (+ line-offset
-                                          (or (search definition line) 0)))
-                                 remaining))))
-                 ((%function-start-p line)
-                  (let* ((raw-remaining (mapcar #'car remaining))
-                         (step (%source-lines-handle-function-start
-                                context line raw-remaining source-path output)))
-                    (setf remaining
-                          (source-function-remaining-entries
-                           line line-offset remaining raw-remaining
-                           (%source-lines-step-result-remaining-lines step))
-                          output (%source-lines-step-result-output-chunks step)
-                          code (%source-lines-step-result-exit-code step))
-                    (%record-last-exit-code context code)
-                    (when (or (%source-lines-step-result-stop-p step)
-                              (not (shell-context-running context)))
-                      (return))))
-                 (t
-                  (let* ((first-nonwhite
-                           (position-if-not
-                            (lambda (character)
-                              (find character
-                                    (list #\Space #\Tab #\Newline #\Return)))
-                            line))
-                         (sexp-p
-                           (and first-nonwhite
-                                (char= (char line first-nonwhite)
-                                       (code-char 40))))
-                         (text line)
-                         (source-map (source-map-for-line line line-offset))
-                         (scan-result (%source-reader-scan-result context line))
-                         (parse-result
-                           (and (not sexp-p)
-                                (nshell.domain.parsing:parse-command-line line))))
-                    (loop while
-                          (and remaining
-                               (or (eq (nshell.domain.parsing:scan-result-status
-                                        scan-result)
-                                       :incomplete)
-                                   (and parse-result
-                                        (%source-line-needs-more-input-p
-                                         parse-result))))
-                          for next-entry = (pop remaining)
-                          for next-line = (car next-entry)
-                          for next-line-offset = (cdr next-entry)
-                          do (let* ((separator
-                                      (and (not sexp-p)
-                                           (if (nshell.domain.parsing:parse-diagnostic-kind-p
-                                                parse-result :trailing-continuation)
-                                               " "
-                                               "; ")))
-                                    (next-text
-                                      (if sexp-p
-                                          (%append-source-here-document-line
-                                           text next-line)
-                                          (%append-source-continuation
-                                           text next-line parse-result)))
-                                    (next-source-map
-                                      (if (or sexp-p
-                                              (%source-continuation-uses-here-document-p
-                                               parse-result))
-                                          (append-here-document-source-map
-                                           source-map text next-line
-                                           next-line-offset source-length)
-                                          (append-continuation-source-map
-                                           source-map separator next-line
-                                           next-line-offset))))
-                               (setf text next-text
-                                     source-map next-source-map
-                                     scan-result
-                                     (%source-reader-scan-result context text)
-                                     parse-result
-                                     (and (not sexp-p)
-                                          (nshell.domain.parsing:parse-command-line
-                                           text)))))
-                    (multiple-value-bind (chunk exit-code)
-                        (%source-evaluate-reader-submission
-                         context text source-path source-map)
-                      (setf output (%source-lines-add-chunk chunk output)
-                            code exit-code)
+      (with-output-collector (output)
+        (loop while remaining
+              for entry = (pop remaining)
+              for line = (car entry)
+              for line-offset = (cdr entry)
+              do (cond
+                   ((%comment-or-blank-source-line-p line) nil)
+                   ((and (not (%function-start-p line))
+                         (source-line-function-split line))
+                    (multiple-value-bind (prefix definition)
+                        (source-line-function-split line)
+                      (setf remaining
+                            (list* (cons prefix line-offset)
+                                   (cons definition
+                                         (+ line-offset
+                                            (or (search definition line) 0)))
+                                   remaining))))
+                   ((%function-start-p line)
+                    (let* ((raw-remaining (mapcar #'car remaining))
+                           (step (%source-lines-handle-function-start
+                                  context line raw-remaining source-path output)))
+                      (setf remaining
+                            (source-function-remaining-entries
+                             line line-offset remaining raw-remaining
+                             (%source-lines-step-result-remaining-lines step))
+                            code (%source-lines-step-result-exit-code step))
                       (%record-last-exit-code context code)
-                      (when (not (shell-context-running context))
-                        (return)))))))
-      (values (apply #'concatenate 'string (nreverse output)) code))))
+                      (when (or (%source-lines-step-result-stop-p step)
+                                (not (shell-context-running context)))
+                        (return))))
+                   (t
+                    (let* ((first-nonwhite
+                             (position-if-not
+                              (lambda (character)
+                                (find character
+                                      (list #\Space #\Tab #\Newline #\Return)))
+                              line))
+                           (sexp-p
+                             (and first-nonwhite
+                                  (char= (char line first-nonwhite)
+                                         (code-char 40))))
+                           (text line)
+                           (source-map (source-map-for-line line line-offset))
+                           (scan-result (%source-reader-scan-result context line))
+                           (parse-result
+                             (and (not sexp-p)
+                                  (nshell.domain.parsing:parse-command-line line))))
+                      (loop while
+                            (and remaining
+                                 (or (eq (nshell.domain.parsing:scan-result-status
+                                          scan-result)
+                                         :incomplete)
+                                     (and parse-result
+                                          (%source-line-needs-more-input-p
+                                           parse-result))))
+                            for next-entry = (pop remaining)
+                            for next-line = (car next-entry)
+                            for next-line-offset = (cdr next-entry)
+                            do (let* ((separator
+                                        (and (not sexp-p)
+                                             (if (nshell.domain.parsing:parse-diagnostic-kind-p
+                                                  parse-result :trailing-continuation)
+                                                 " "
+                                                 "; ")))
+                                      (next-text
+                                        (if sexp-p
+                                            (%append-source-here-document-line
+                                             text next-line)
+                                            (%append-source-continuation
+                                             text next-line parse-result)))
+                                      (next-source-map
+                                        (if (or sexp-p
+                                                (%source-continuation-uses-here-document-p
+                                                 parse-result))
+                                            (append-here-document-source-map
+                                             source-map text next-line
+                                             next-line-offset source-length)
+                                            (append-continuation-source-map
+                                             source-map separator next-line
+                                             next-line-offset))))
+                                 (setf text next-text
+                                       source-map next-source-map
+                                       scan-result
+                                       (%source-reader-scan-result context text)
+                                       parse-result
+                                       (and (not sexp-p)
+                                            (nshell.domain.parsing:parse-command-line
+                                             text)))))
+                      (multiple-value-bind (chunk exit-code)
+                          (%source-evaluate-reader-submission
+                           context text source-path source-map)
+                        (%source-lines-add-chunk chunk output)
+                        (setf code exit-code)
+                        (%record-last-exit-code context code)
+                        (when (not (shell-context-running context))
+                          (return)))))))
+        (values (get-output-stream-string output) code)))))
 
 (defun %source-lines-in-mode (context lines source-path output-mode)
   (let ((*interactive-top-level-p*
@@ -467,13 +454,13 @@
       (:return
        (let ((code 0))
          (let ((output
-                (with-output-to-string (stream)
-                  (let ((*standard-output* stream))
-                    (multiple-value-bind (result result-code)
-                        (%source-lines-with-reader context lines source-path)
-                      (when result
-                        (write-string result stream))
-                      (setf code result-code))))))
+                (%call-capturing-standard-output
+                 (lambda ()
+                   (multiple-value-bind (result result-code)
+                       (%source-lines-with-reader context lines source-path)
+                     (when result
+                       (write-string result))
+                     (setf code result-code))))))
            (values output code)))))))
 (defun source-lines (context lines &optional source-path)
   "Execute source LINES in CONTEXT through the application source use case."

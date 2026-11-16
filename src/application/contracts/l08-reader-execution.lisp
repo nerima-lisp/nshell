@@ -1024,7 +1024,7 @@ running under PARENT-KIND, each resolved as the executor resolved it
                context :stage-kinds (mapcar #'cons command-nodes dispatch-kinds)))))
 
 (defun %reader-gate-evaluated-stages (context evaluated-stages parent-kind)
-  (when (%assistant-gate-active-p)
+  (when (%execution-gate-active-p)
     (%reader-assistant-gate
      context
      (mapcar (lambda (stage) (%reader-gate-command-node context stage))

@@ -68,6 +68,9 @@ SBCL thread otherwise sees only global values.")
   (timed-out-p nil)
   ;; The car is the error code of the AI gate's last refusal, if any.
   (gate-refusal (list nil))
+  ;; The car is (COMMAND . ARGUMENTS) of the first full-screen program the
+  ;; gate refused, if any.
+  (full-screen-program (list nil))
   ;; The worker outlived the deadline's terminate-thread: its output streams
   ;; may still be written and its locks still held.
   (worker-alive-p nil)
@@ -119,12 +122,21 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
       (bind 'nshell.infrastructure.acl:*external-command-timeout* timeout)
       ;; Every gate refusal of the run, nested ones and pipeline stages too.
       (bind 'nshell.application::*execution-gate-refusal* (json-run-gate-refusal run))
+      (bind 'nshell.application::*full-screen-program-guard* (%full-screen-program-guard run))
       (when agent-p
         ;; As after Enter on a safe AI proposal: the gate runs what classifies
         ;; :safe where it runs and refuses the rest, since no one can approve.
         (bind 'nshell.application:*execution-origin* :proposal)
         (bind 'nshell.application:*execution-approval* :safe)))
     (values symbols values)))
+
+(defun %full-screen-program-guard (run)
+  (let ((refused (json-run-full-screen-program run)))
+    (lambda (command arguments)
+      (when (full-screen-program-kind command arguments)
+        (unless (car refused)
+          (setf (car refused) (cons command arguments)))
+        t))))
 
 (defun %observe (run)
   (lambda (kind value &rest details)
@@ -229,9 +241,9 @@ process's directory, the physical directory otherwise."
   (member char '(#\Space #\Tab #\Newline #\Return #\( #\) #\; #\| #\& #\< #\>
                  #\" #\')))
 
-(defun %word-span (input word)
-  "Return the span of the first occurrence of WORD in INPUT as a whole word:
-1-based line and column, END one past its last column."
+(defun %word-start (input word)
+  "Return the index of the first occurrence of WORD in INPUT as a whole word,
+or NIL."
   (let ((length (length word)))
     (when (plusp length)
       (loop for start = (search word input)
@@ -240,15 +252,34 @@ process's directory, the physical directory otherwise."
             for end = (+ start length)
             when (and (or (zerop start) (%word-delimiter-p (char input (1- start))))
                       (or (= end (length input)) (%word-delimiter-p (char input end))))
-              return (let* ((line-start (let ((newline (position #\Newline input
-                                                                 :end start
+              return start))))
+
+(defun %word-span (input word)
+  "Return the span of the first occurrence of WORD in INPUT as a whole word:
+1-based line and column, END one past its last column."
+  (let ((start (%word-start input word)))
+    (when start
+      (let* ((line-start (let ((newline (position #\Newline input :end start
                                                                  :from-end t)))
-                                          (if newline (1+ newline) 0)))
-                            (column (1+ (- start line-start))))
-                       (make-envelope-span
-                        :line (1+ (count #\Newline input :end start))
-                        :column column
-                        :end (+ column length)))))))
+                           (if newline (1+ newline) 0)))
+             (column (1+ (- start line-start))))
+        (make-envelope-span
+         :line (1+ (count #\Newline input :end start))
+         :column column
+         :end (+ column (length word)))))))
+
+(defun %full-screen-program-fixes (input program)
+  "The fixes for the full-screen PROGRAM, (COMMAND . ARGUMENTS), refused in
+INPUT: INPUT with the command word replaced by the noninteractive form."
+  (destructuring-bind (command . arguments) program
+    (let ((start (%word-start input command)))
+      (multiple-value-bind (replacement why)
+          (full-screen-program-replacement command arguments)
+        (when (and start replacement)
+          (list (make-envelope-fix
+                 :input (concatenate 'string (subseq input 0 start) replacement
+                                     (subseq input (+ start (length command))))
+                 :why why)))))))
 
 (defun %first-line (text)
   (let ((line (string-trim '(#\Space #\Tab #\Return)
@@ -287,17 +318,25 @@ does not list as an error, or NIL when it carries none."
       (string-right-trim "." (string-right-trim "0" (format nil "~,6F" seconds)))))
 
 (defun %failure (run input status stderr-text timeout)
-  "Return the error code, the status to give ERROR-ENVELOPE, the message and
-the span of a run that did not end with status 0, or NIL when it did."
+  "Return the error code, the status to give ERROR-ENVELOPE, the message, the
+span and the fixes of a run that did not end with status 0, or NIL when it
+did."
   (let* ((condition (json-run-condition run))
          (code (%error-code-of condition))
          (missing (json-run-missing-command run))
          (refusal (car (json-run-gate-refusal run)))
+         (full-screen (car (json-run-full-screen-program run)))
          (message (%first-line stderr-text)))
     (cond
       ((json-run-timed-out-p run)
        (values "E_TIMEOUT" nil (format nil "the run exceeded its ~A s deadline"
                                        (%seconds-text timeout))))
+      (full-screen
+       (values "E_INTERACTIVE_PROGRAM" nil
+               (format nil "~A is a full-screen program; it was not started"
+                       (car full-screen))
+               (%word-span input (car full-screen))
+               (%full-screen-program-fixes input full-screen)))
       ;; The input did not run as given once the AI gate refused part of it,
       ;; whatever the status of the commands after that part.
       (refusal (values refusal nil message))
@@ -422,11 +461,12 @@ first failing command, as -e does."
                             :session (and session (output-session-id session))
                             :seq (and session 1)))
                (envelope
-                 (multiple-value-bind (code code-status message span)
+                 (multiple-value-bind (code code-status message span fixes)
                      (%failure run input status (clean-output-text err-text) timeout)
                    (if code
                        (apply #'error-envelope code :status code-status
-                                                    :message message :span span parts)
+                                                    :message message :span span
+                                                    :fixes fixes parts)
                        (apply #'result-envelope :status 0 parts)))))
           (values (envelope-to-json envelope) (envelope-status envelope)
                   envelope))))))

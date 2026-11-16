@@ -11,6 +11,7 @@
    *execution-gate-parent-kind*
    *execution-gate-refusal*
    *exec-exit-function*
+   *full-screen-program-guard*
    nshell.infrastructure.acl:*process-group-log*
    nshell.infrastructure.acl:*detach-child-standard-input*))
 
@@ -247,6 +248,7 @@ execution errors that wrap it on the way out."
         ;; (see CALL-WITH-SUBSHELL-EXIT), and the stage's processes join the
         ;; caller's record of process groups.
         (exec-exit-function *exec-exit-function*)
+        (full-screen-program-guard *full-screen-program-guard*)
         (process-group-log nshell.infrastructure.acl:*process-group-log*)
         (detach-child-standard-input
           nshell.infrastructure.acl:*detach-child-standard-input*)
@@ -275,6 +277,7 @@ execution errors that wrap it on the way out."
                    (*execution-gate-parent-kind* execution-gate-parent-kind)
                    (*execution-gate-refusal* execution-gate-refusal)
                    (*exec-exit-function* exec-exit-function)
+                   (*full-screen-program-guard* full-screen-program-guard)
                    (nshell.infrastructure.acl:*process-group-log* process-group-log)
                    (nshell.infrastructure.acl:*detach-child-standard-input*
                      detach-child-standard-input))

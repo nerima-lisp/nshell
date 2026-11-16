@@ -75,22 +75,25 @@ SBCL thread otherwise sees only global values.")
   (group-log (list nil)))
 
 (defun %exec-exit-function (run tag out err)
-  "Return the *EXEC-EXIT-FUNCTION* of RUN: exec ends the run, not the process.
+  "Return the *EXEC-EXIT-FUNCTION* of RUN, which gives exec under --json the
+meaning it has in a POSIX shell.
 
-In the worker, exec ends the run with the exec'd program's status: the worker
-records it, passes on the captured output and throws to TAG, so the commands
-after exec do not run.
+exec inside a subshell-like context (a pipeline stage, a process
+substitution, or a command substitution) ends only that context, with the
+exec'd program's status as the context's status, and the run goes on: a
+pipeline still joins and closes all its stages and has its normal status (the
+last stage's, or under pipefail the first nonzero one), and a command
+substitution yields the exec'd program's output.
 
-In a pipeline stage, exec ends only that stage, with its program's status,
-and every other stage runs to its end. The pipeline then ends as without exec
-and calls this function in the thread that waited for it, with the
-pipeline's own status: the last stage's, or under pipefail the first nonzero
-one. In the worker that ends the run as above; in an enclosing stage it ends
-that stage in turn. So when several stages exec, the run's status does not
-depend on which of them ends first."
+exec anywhere else (at top level, in a function called there, or in a file
+sourced from there) ends the run with the program's status: no later command
+runs. It records the status, passes on the captured output, and throws to
+TAG; the unwinding runs every cleanup of the commands it leaves, so their
+process substitutions are still waited for and closed before the envelope is
+made."
   (lambda (status)
-    (if nshell.application::*pipeline-stage-exit-function*
-        (funcall nshell.application::*pipeline-stage-exit-function* status)
+    (if nshell.application::*subshell-exit-function*
+        (funcall nshell.application::*subshell-exit-function* status)
         (progn
           (setf (json-run-status run) status)
           (nshell.application::flush-pending-captured-output out err)

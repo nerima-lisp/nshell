@@ -6,8 +6,10 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
   (declare (ftype (function (t list &optional t) (values t integer)) source-lines)
            (ftype (function (stream) list) collect-source-lines))
   (handler-case
-      (let ((*foreground-terminal-runner* nil)
-            (*output-captures* (cons :substitution *output-captures*)))
+      (let* ((*foreground-terminal-runner* nil)
+             (*output-captures* (cons :substitution *output-captures*))
+             (output-stream (make-string-output-stream))
+             (*standard-output* output-stream))
         (let ((timeout
                (nshell.infrastructure.acl:ensure-timeout-seconds
                 *command-substitution-timeout*
@@ -37,15 +39,13 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
                              (nshell.domain.parsing:with-parsed-command-line-case
                                  (result ast command-string)
                                (:complete
-                                (let ((output-stream (make-string-output-stream)))
-                                  (let ((*standard-output* output-stream))
-                                    (multiple-value-bind (output exit-code)
-                                        (execute-ast-in-context context ast)
-                                      (declare (ignore exit-code))
-                                      (%trim-command-substitution-output
-                                       (if (and (stringp output) (plusp (length output)))
-                                           output
-                                           (get-output-stream-string output-stream)))))))
+                                (multiple-value-bind (output exit-code)
+                                    (execute-ast-in-context context ast)
+                                  (declare (ignore exit-code))
+                                  (%trim-command-substitution-output
+                                   (if (and (stringp output) (plusp (length output)))
+                                       output
+                                       (get-output-stream-string output-stream)))))
                                (:error nil)
                                (:incomplete nil)
                                (:empty nil))
@@ -56,10 +56,19 @@ Returns its trailing-newline-trimmed output, or NIL on error or timeout."
                                    (make-string-input-stream command-string)))
                                (declare (ignore exit-code))
                                (%trim-command-substitution-output output))))))))
-            (if timeout
-                (sb-ext:with-timeout timeout
-                  (execute-substitution))
-                (execute-substitution)))))
+            ;; exec in the substitution ends only the substitution, which
+            ;; then yields what reached OUTPUT-STREAM: the exec'd program's
+            ;; output, but not output earlier commands returned as values.
+            (call-with-subshell-exit
+             (lambda ()
+               (if timeout
+                   (sb-ext:with-timeout timeout
+                     (execute-substitution))
+                   (execute-substitution)))
+             (lambda (status)
+               (declare (ignore status))
+               (%trim-command-substitution-output
+                (get-output-stream-string output-stream)))))))
     (sb-ext:timeout ()
       (format *error-output* "nshell: command substitution timed out: ~a~%"
               command-string)

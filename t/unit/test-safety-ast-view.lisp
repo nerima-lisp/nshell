@@ -296,7 +296,7 @@ when the executor dispatches no stage for it."
         (expect (second
                  (nshell.application::%reader-gate-evaluated-stages
                   context (list stage) nil))
-                :to-equal 126)))))
+                :to-equal 3)))))
 
 ;;; R-P1-5: the executor runs a registered shell function or an alias before
 ;;; the builtin or external command of that name.  The classifier at Enter,
@@ -343,7 +343,7 @@ whether the gate stopped it."
         (multiple-value-bind (status stopped-p)
             (%safety-view-run-ai-line context source reader-context :safe)
           (expect (list source status stopped-p (car ran))
-                  :to-equal (list source 126 t nil))))))
+                  :to-equal (list source 3 t nil))))))
 
   (it "does not run a shell function named echo on a safe approval on the AST path"
     (let ((context (make-test-shell-context))
@@ -357,7 +357,7 @@ whether the gate stopped it."
              context (nshell.domain.parsing:make-command-node "echo" '("hi")))
           (declare (ignore output))
           (expect (list code nshell.application:*execution-gate-stopped-p* (car ran))
-                  :to-equal (list 126 t nil)))))))
+                  :to-equal (list 3 t nil)))))))
 
 (defparameter +safety-view-resolution-sources+
   '((:bare "echo hi") (:bare "ls -la") (:bare "git status") (:bare "not ls")
@@ -591,7 +591,7 @@ the gate, and the executor see them."
             (expect (second (nshell.application::%assistant-execution-gate
                              context
                              (nshell.domain.parsing:make-command-node "echo" '("hi"))))
-                    :to-equal 126))
+                    :to-equal 3))
           (expect (%safety-view-registered-count context) :to-equal 0))
         (expect (probe-file marker) :to-be nil))))
 
@@ -610,7 +610,7 @@ the gate, and the executor see them."
             (expect (nth-value 1 (nshell.application:execute-ast-in-context
                                   context
                                   (nshell.domain.parsing:make-command-node "echo" nil)))
-                    :to-equal 126)
+                    :to-equal 3)
             (expect (probe-file marker) :to-be nil))
           ;; A confirm approval passes the gate; then the executor loads the
           ;; file and runs the function it defines.
@@ -698,13 +698,13 @@ the gate, and the executor see them."
               (expect (list source
                             (nth-value 1 (nshell.application:execute-ast-in-context context ast))
                             nshell.application:*execution-gate-stopped-p*)
-                      :to-equal (list source 126 t))))
+                      :to-equal (list source 3 t))))
           (dolist (target '("$X" "{foo,ls}" "$(echo foo)"))
             (let ((source (format nil "command ~a ~a" option target)))
               (multiple-value-bind (status stopped-p)
                   (%safety-view-run-ai-line context source :auto :safe)
                 (expect (list source status stopped-p)
-                        :to-equal (list source 126 t))))))
+                        :to-equal (list source 3 t))))))
         (expect (probe-file marker) :to-be nil)
         (expect (%safety-view-registered-count context) :to-equal 0))))
 
@@ -762,12 +762,12 @@ the gate, and the executor see them."
             (expect (list source
                           (nth-value 1 (nshell.application:execute-ast-in-context context ast))
                           nshell.application:*execution-gate-stopped-p*)
-                    :to-equal (list source 126 t))))
+                    :to-equal (list source 3 t))))
         (dolist (source '("command -v ls $X" "command -V ls \"$X\""
                           "command -v -- $X"))
           (multiple-value-bind (status stopped-p)
               (%safety-view-run-ai-line context source :auto :safe)
-            (expect (list source status stopped-p) :to-equal (list source 126 t))))
+            (expect (list source status stopped-p) :to-equal (list source 3 t))))
         (expect (probe-file marker) :to-be nil)
         (expect (%safety-view-registered-count context) :to-equal 0))))
 

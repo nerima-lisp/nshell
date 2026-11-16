@@ -12,6 +12,10 @@
 (defvar *execution-gate-stopped-p* nil
   "Set to true when the AI execution gate refuses a command; the caller binds it.")
 (defvar *execution-gate-parent-kind* nil)
+(defvar *execution-gate-refusal* nil
+  "NIL, or a cons whose car the AI execution gate sets to the error code of
+each refusal: E_NEEDS_APPROVAL or E_BLOCKED_BY_POLICY. The caller binds a fresh
+cons; pipeline stage threads share it, so a refusal in a stage reaches it.")
 
 ;;; Control flow execution and AST dispatch.
 ;;; This file defines:
@@ -165,6 +169,15 @@ evaluated reader stage, the program exec runs) to their dispatch kind."
                          :autoload nil)
                         run-node))))))))))
 
+(defun %gate-refusal (code message-control &rest arguments)
+  "Return the gate's (MESSAGE STATUS) refusal for error CODE, whose status is
+the code's exit status in the error-code table, and record CODE."
+  (when *execution-gate-refusal*
+    (setf (car *execution-gate-refusal*) code))
+  (list (apply #'format nil message-control arguments)
+        (nshell.domain.error-codes:error-code-exit-code
+         (nshell.domain.error-codes:find-error-code code))))
+
 (defun %assistant-gate-active-p ()
   "True while executing a line that came from an AI proposal or agent step."
   (member *execution-origin* '(:proposal :agent) :test #'eq))
@@ -205,22 +218,22 @@ CONTEXT."
                       classification)
                  (:safe
                   (when (and agent-p (null approval))
-                    (list
-                     (format nil "nshell: AI proposal requires approval before execution~%")
-                     126)))
+                    (%gate-refusal
+                     "E_NEEDS_APPROVAL"
+                     "nshell: AI proposal requires approval before execution~%")))
                  (:confirm
                   (unless (eq approval :confirm)
-                    (list
-                     (format nil "nshell: AI proposal requires confirmation: ~a~%"
-                             (nshell.feature.assistant:assistant-safety-result-reason
-                              classification))
-                     126)))
+                    (%gate-refusal
+                     "E_NEEDS_APPROVAL"
+                     "nshell: AI proposal requires confirmation: ~a~%"
+                     (nshell.feature.assistant:assistant-safety-result-reason
+                      classification))))
                  (otherwise
-                  (list
-                   (format nil "nshell: AI proposal blocked: ~a~%"
-                           (nshell.feature.assistant:assistant-safety-result-reason
-                            classification))
-                   126)))))
+                  (%gate-refusal
+                   "E_BLOCKED_BY_POLICY"
+                   "nshell: AI proposal blocked: ~a~%"
+                   (nshell.feature.assistant:assistant-safety-result-reason
+                    classification))))))
         (when stop
           (setf *execution-gate-stopped-p* t))
         stop))))

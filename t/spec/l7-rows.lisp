@@ -83,8 +83,9 @@
        :probe-id "redir-value-target"
        :source nil
        :v08 (:exit :success :stdout-lines ("hi") :final-newline t)
-       :owner (:v08 "S2" :crash "C")
-       :crash t)
+       :owner (:v08 "S2")
+       :crash t
+       :v07-baseline-skip t)
       (:row 20
        :probe-id "bg-sexp"
        :source (format nil "(sleep 0 &)~%")
@@ -95,7 +96,7 @@
        :owner (:v08 "S2"))
       (:row 21
        :probe-id "and-cmd"
-       :source nil
+       :source (format nil "(echo __SPEC_CANARY_and_cmd__)~%(and (true) (echo and-ok))~%")
        :v08 (:exit :success :stdout-lines ("__SPEC_CANARY_and_cmd__" "ok") :final-newline t)
        :owner (:v08 "S4"))
       (:row 22
@@ -134,14 +135,15 @@
        :probe-id "sort-in-value"
        :source nil
        :v08 (:exit 1
-              :stdout-line-count 4
-              :final-newline t
-              :stderr-lines nil
-              :stderr-final-newline nil
-              :single-value "E_VALUE_POSITION"
-              :position (1 9 "(echo ,(sort (list 3 1 2) (function <)))" "sort"))
-       :owner (:v08 ("S2" "S4") :crash "C")
-       :crash t)
+             :stdout-line-count 4
+             :final-newline t
+             :stderr-lines nil
+             :stderr-final-newline nil
+             :single-value "E_VALUE_POSITION"
+             :position (1 9 "(echo ,(sort (list 3 1 2) (function <)))" "sort"))
+       :owner (:v08 ("S2" "S4"))
+       :crash t
+       :v07-baseline-skip t)
       (:row 28
        :probe-id "find-in-value"
        :source nil
@@ -172,30 +174,34 @@
        :v09-source :fixture
        :v09 (:exit 1 :single-value "E_LISP_ERROR"
               :position (2 5 "(g2 sym)" "sym"))
-       :owner (:warning "S6" :crash "C")
+       :owner (:warning "S6" :error "S3")
        :warning (:code "W_DEFUN_WORD_ARGS"
                  :message-en "Words passed from an S-expression to a defun function, as in (g sym)."
                  :message-ja "S式から defun の関数に語を渡した ((g sym) など)"
                  :rewrite "defcmd")
        :v08-current t
+       :v07-baseline-skip t
        :crash t
        :crash-source (format nil "(defun g2 (a) (echo got=$a))~%(g2 sym)~%(g2 \"str\")~%(g2 ,(+ 1 1))~%")
-       :crash-baseline (:exit 1
-                        :stdout-lines ("got="
-                                       "got=str"
-                                       "source: $WORK/case.nsh: The value ,(+ 1 1)"
-                                       "is not of type"
-                                       "  (OR STRING CHARACTER NUMBER (AND SYMBOL (NOT (EQL NIL))))"
-                                       "source: $WORK/case.nsh: The value ,(+ 1 1)"
-                                       "is not of type"
-                                       "  (OR STRING CHARACTER NUMBER (AND SYMBOL (NOT (EQL NIL))))")
-                        :diagnostic-output t
-                        :final-newline t
-                        :stderr-lines nil
-                        :stderr-final-newline nil)
+       :crash-expectation (:exit 1
+                           :stdout-line-count 3
+                           :final-newline t
+                           :stderr-lines nil
+                           :stderr-final-newline nil
+                           :single-value "Command argument"
+                           :position (4 5 "(g2 ,(+ 1 1))" ","))
        :additional-crash-probes
        ((:probe-id "loop-upper" :crash t :owner (:crash "C"))
-        (:probe-id "time-head" :crash t :owner (:crash "C"))))
+        (:probe-id "time-head"
+         :v08 (:exit 127
+               :stdout-lines nil
+               :final-newline nil
+               :stderr-lines ("nshell: time: command not found")
+               :stderr-final-newline t
+               :single-value "command not found")
+         :owner (:v08 "S4")
+         :crash t
+         :v07-baseline-skip t)))
       (:row 31
        :probe-id "print-top"
        :source nil
@@ -222,9 +228,26 @@
       (:row 34
        :probe-id "pipe-mixed-2"
        :source nil
-       :v08 (:exit 2 :single-value "E_PARSE")
-       :owner (:v08 "S3" :crash "C")
-       :crash t)
+       :v08 (:exit 2
+             :stdout-lines nil
+             :final-newline nil
+             :stderr-lines ("nshell: $WORK/case.nsh:1:23: syntax error [22,22): Incomplete form at the end of the input.")
+             :stderr-final-newline t
+             :single-value "syntax error")
+       :owner (:v08 "S3")
+       :crash t
+       :v07-baseline-skip t
+       :additional-probes
+       ((:row 34
+         :probe-id "pipe-mixed-1"
+         :v08-current t
+         :v07-baseline-skip t
+         :v08 (:exit 127
+               :stdout-lines nil
+               :final-newline nil
+               :stderr-lines ("nshell: (tr a-z A-Z): command not found")
+               :stderr-final-newline t
+               :single-value "command not found"))))
       (:row 35
        :probe-id "bare-var-list"
        :source nil

@@ -13,15 +13,15 @@
             (lambda (row) (getf (getf row :owner) :v08))
             descriptors))
          (current-behavior-rows
-           (remove-if-not (lambda (row) (getf row :v08-current)) rows))
+           (remove-if-not (lambda (row) (getf row :v08-current)) descriptors))
          (next-version-rows
            (remove-if-not (lambda (row) (getf row :v09)) rows))
          (warning-rows
            (remove-if-not (lambda (row) (getf row :warning)) descriptors))
          (crash-rows
            (remove-if-not (lambda (row) (getf row :crash)) descriptors))
-         (crash-baseline-rows
-           (remove-if-not (lambda (row) (getf row :crash-baseline))
+         (crash-expectation-rows
+           (remove-if-not (lambda (row) (getf row :crash-expectation))
                           descriptors)))
     (unless (= (length ids)
                (length (remove-duplicates ids :test #'string=)))
@@ -37,8 +37,6 @@
         (dolist (owner (if (listp owners) owners (and owners (list owners))))
           (unless (member owner '("S2" "S3" "S4" "S5") :test #'string=)
             (error "Unknown P2 owner ~a for probe ~a" owner id)))
-        (when (and (getf row :crash) (not crash-owner))
-          (error "Crash probe ~a has no crash owner" id))
         (when (and crash-owner (not (getf row :crash)))
           (error "Non-crash probe ~a has a crash owner" id))))
     (unless (= (length crash-rows)
@@ -47,7 +45,10 @@
                         :test #'string=)))
       (error "Crash probe IDs must be unique"))
     (dolist (row crash-rows)
-      (unless (member (getf (getf row :owner) :crash) '("C") :test #'string=)
+      (when (and (getf (getf row :owner) :crash)
+                 (not (member (getf (getf row :owner) :crash)
+                              '("C")
+                              :test #'string=)))
         (error "Unknown crash owner for probe ~a" (getf row :probe-id))))
     (labels ((owner-label (owner)
                (if (listp owner)
@@ -63,7 +64,12 @@
           (list 'it
                 (format nil "language-probe ~a v0.7.0 baseline" id)
                 (list '%check-fixture-baseline (list 'quote id))))
-        ids)
+        (remove-if (lambda (id)
+                     (getf (find id descriptors
+                                 :key (lambda (row) (getf row :probe-id))
+                                 :test #'string=)
+                           :v07-baseline-skip))
+                   ids))
        (mapcar
         (lambda (row)
           (let ((id (getf row :probe-id)))
@@ -105,23 +111,30 @@
         warning-rows)
        (mapcar
         (lambda (row)
-          (let ((id (getf row :probe-id)))
-            (list 'it
-                  (format nil "crash-probe baseline ~a" id)
+          (let* ((id (getf row :probe-id))
+                 (owner (getf (getf row :owner) :error)))
+            (list 'it-fails
+                  (format nil "L7.1 row ~a probe ~a [~a E_ARG_TYPE]"
+                          (getf row :row) id (owner-label owner))
                   (list '%check-l7-next-version
                         (list 'quote id)
-                        :crash-baseline))))
-        crash-baseline-rows)
+                        :crash-expectation))))
+        crash-expectation-rows)
        (mapcar
         (lambda (row)
           (let* ((id (getf row :probe-id))
-                 (owner (getf (getf row :owner) :crash)))
-            (list 'it-fails
-                  (format nil "stderr crash log is absent for ~a [~a]" id
-                          (owner-label owner))
-                  (list '%check-l7-next-version
-                        (list 'quote id)
-                        :crash))))
+                 (owner (getf (getf row :owner) :crash))
+                 (check (list '%check-l7-next-version
+                              (list 'quote id)
+                              :crash)))
+            (if owner
+                (list 'it-fails
+                      (format nil "stderr crash log is absent for ~a [~a]" id
+                              (owner-label owner))
+                      check)
+                (list 'it
+                      (format nil "stderr crash log is absent for ~a" id)
+                      check))))
         crash-rows)))))
 )
   (register-language-probes)

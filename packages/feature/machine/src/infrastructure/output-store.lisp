@@ -39,6 +39,19 @@ $XDG_CACHE_HOME/nshell/out/ when XDG_CACHE_HOME is absolute, otherwise
                  (error condition))))
         while slash))
 
+(defun %private-descriptor-refusal (fd type)
+  "Return NIL when open descriptor FD is of file TYPE (an S_IF constant), is
+owned by this user, and gives group and other no access; otherwise return a
+phrase saying which of these fails."
+  (let* ((stat (sb-posix:fstat fd))
+         (mode (sb-posix:stat-mode stat)))
+    (cond ((/= (logand mode sb-posix:s-ifmt) type)
+           (if (= type sb-posix:s-ifdir) "is not a directory" "is not a regular file"))
+          ((/= (sb-posix:stat-uid stat) (sb-posix:geteuid))
+           "is not owned by this user")
+          ((/= 0 (logand mode #o077))
+           "is accessible by group or other"))))
+
 (defun %private-directory-p (path)
   "Return true when PATH is a real directory owned by this user that group and
 other cannot access. A symlink at PATH is refused, not followed. PATH's mode is
@@ -48,11 +61,7 @@ never changed: a directory with group or other bits is refused."
                                (logior sb-posix:o-rdonly sb-posix:o-nofollow
                                        sb-posix:o-directory))))
         (unwind-protect
-             (let ((stat (sb-posix:fstat fd)))
-               (and (= (logand (sb-posix:stat-mode stat) sb-posix:s-ifmt)
-                       sb-posix:s-ifdir)
-                    (= (sb-posix:stat-uid stat) (sb-posix:geteuid))
-                    (zerop (logand (sb-posix:stat-mode stat) #o077))))
+             (null (%private-descriptor-refusal fd sb-posix:s-ifdir))
           (sb-posix:close fd)))
     (sb-posix:syscall-error () nil)))
 

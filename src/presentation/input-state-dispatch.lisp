@@ -198,6 +198,7 @@ presentation package."
                      state
                      (input-dispatch-action-value action))))
       (:enter (from (%enter-input-state state)))
+      (:insert-newline (from (insert-newline-at-cursor state)))
       (:move-line-up (from (%move-input-state-vertically state :up)))
       (:move-line-down (from (%move-input-state-vertically state :down)))
       (:cycle-completion (from (cycle-completion-state

@@ -34,6 +34,8 @@
 
 (define-key-event-specs +meta-code-specs+
   (8 . :alt-backspace)
+  (10 . :alt-enter)
+  (13 . :alt-enter)
   (127 . :alt-backspace))
 
 (define-key-event-specs +meta-char-specs+

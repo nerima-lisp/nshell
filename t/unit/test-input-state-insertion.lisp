@@ -554,3 +554,41 @@
             (reduce-once state :char #\Space)
             :suggest-update
             (:buffer "echo  tail" :cursor-pos 6))))))
+(describe "alt-enter-input-tests"
+  (it "decodes-esc-carriage-return-as-alt-enter"
+    (let ((event (single-key-event-from-string
+                  (format nil "~c~c" (code-char 27) (code-char 13)))))
+      (expect :alt-enter :to-be
+              (nshell.infrastructure.terminal:key-event-type event))))
+  (it "decodes-esc-line-feed-as-alt-enter"
+    (let ((event (single-key-event-from-string
+                  (format nil "~c~c" (code-char 27) (code-char 10)))))
+      (expect :alt-enter :to-be
+              (nshell.infrastructure.terminal:key-event-type event))))
+  (it "alt-enter-inserts-newline-at-cursor-without-executing"
+    (with-repl-test-state
+      (setf nshell.presentation::*input-state*
+            (input-state :buffer "echo left right" :cursor-pos 9))
+      (let ((events (read-key-events-from-string
+                     (format nil "~c~c" (code-char 27) (code-char 13))))
+            (execution-count 0))
+        (expect 1 :to-equal (length events))
+        (multiple-value-bind (next-state output)
+            (nshell.presentation:reduce-input-state
+             nshell.presentation::*input-state* (first events))
+          (setf nshell.presentation::*input-state* next-state)
+          (with-temporary-functions
+              (((quote nshell.presentation::%process-suggest-update-output-event)
+                (lambda () nil))
+               ((quote nshell.presentation::%process-execute-output-event)
+                (lambda () (incf execution-count))))
+            (nshell.presentation::process-output-event output))
+          (expect (format nil "echo left~% right")
+                  :to-equal
+                  (nshell.presentation:input-state-buffer
+                   nshell.presentation::*input-state*))
+          (expect 10 :to-equal
+                  (nshell.presentation:input-state-cursor-pos
+                   nshell.presentation::*input-state*))
+          (expect :suggest-update :to-be output)
+          (expect 0 :to-equal execution-count))))))

@@ -1143,11 +1143,16 @@ EOF
                "language/L2-resolution.md:28" "inventory/I2-language.md:43")))
 
 (:probe "handler-upper"
- :input nil
+ ;; The marker line before the form makes a binary that prints nothing fail;
+ ;; it cannot follow the form, which must stay last for the exit code (L6:9).
+ :input "(echo before-handler)
+(handler-case (^false) (COMMAND-FAILED () (echo caught-upper)))
+"
+ :input-basis ("language/L6-execution-and-errors.md:9")
  ;; Same rule: nothing is signalled, the clause does not run, nothing is printed. Exit = the
  ;; last command, (^false) (L6:9); false exits 1 (coreutils). COMMAND-FAILED and
  ;; command-failed name the same symbol (L1:47), which this input no longer exercises.
- :v08 (:expect (:exit 1 :stdout () :stdout-final-newline nil)
+ :v08 (:expect (:exit 1 :stdout ("before-handler") :stdout-final-newline t)
        :warning nil
        :owners ("S3")
        :basis ("language/L6-execution-and-errors.md:37" "language/L6-execution-and-errors.md:43"

@@ -590,3 +590,36 @@ an orphan needs its new parent to reap it before kill 0 fails."
           (nshell.infrastructure.acl:kill-process
            (nshell.infrastructure.acl:process-pid process) :sigkill))
         (ignore-errors (nshell.infrastructure.acl:process-wait process))))))
+
+(describe "machine json typo fixes"
+  (it "replaces only the name of the command that was not found"
+    (loop for (input prefix fix) in '(("echo gti; gti status" "echo gti; "
+                                        "echo gti; git status")
+                                       ("echo gti | gti status" "echo gti | "
+                                        "echo gti | git status"))
+          do (let* ((envelope (json-command input))
+                    (fixes (json-fixes envelope)))
+               (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
+               ;; The names diagnose/typo compares include the host's PATH.
+               (expect (list input (and (member (list fix "edit distance 1" "diagnose/typo")
+                                                fixes :test #'equal)
+                                        t))
+                       :to-equal (list input t))
+               (expect (list input (every (lambda (each)
+                                            (string= prefix (first each)
+                                                     :end2 (min (length prefix)
+                                                                (length (first each)))))
+                                          fixes))
+                       :to-equal (list input t)))))
+
+  (it "gives no fix for a command named through an alias or in a sourced file"
+    (let ((envelope (json-command "alias g2 gti; g2 status")))
+      (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
+      (expect (json-fixes envelope) :to-be-null))
+    (host-kit:with-temporary-directory (directory)
+      (let ((script (sb-ext:native-namestring (merge-pathnames "script.nsh" directory))))
+        (with-open-file (out script :direction :output)
+          (format out "gti status~%"))
+        (let ((envelope (json-command (format nil "echo gti; source ~A" script))))
+          (expect (json-at envelope "error" "code") :to-equal "E_COMMAND_NOT_FOUND")
+          (expect (json-fixes envelope) :to-be-null))))))

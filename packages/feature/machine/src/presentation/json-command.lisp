@@ -289,6 +289,16 @@ only a span into INPUT itself, the string the batch run reads, is one."
     (values (nshell.domain.parsing:text-span-start name-span)
             (nshell.domain.parsing:text-span-end name-span))))
 
+(defun %input-fix-range (input name-span)
+  "Return the start and end in INPUT of the command name NAME-SPAN covers
+when a fix may replace it there: NAME-SPAN is a position in INPUT (see
+%INPUT-NAME-SPAN) and not an alias word, whose expansion is not in INPUT, so
+no rewrite of INPUT runs another command in its place."
+  (multiple-value-bind (start end) (%input-name-span input name-span)
+    (when (and start
+               (not (nshell.domain.parsing:text-span-alias-word-p name-span)))
+      (values start end))))
+
 (defun %full-screen-program-fixes (input program start end)
   "The fixes for the full-screen PROGRAM, (COMMAND ARGUMENTS NAME-SPAN), refused
 in INPUT with its name written between START and END: INPUT with the name
@@ -373,11 +383,9 @@ did."
            (values "E_INTERACTIVE_PROGRAM" nil
                    (format nil "~A is a full-screen program; it was not started" command)
                    (and start (%input-span input start (- end start)))
-                   ;; An alias word's expansion is not in INPUT, so no
-                   ;; rewrite of INPUT runs the noninteractive form.
-                   (and start
-                        (not (nshell.domain.parsing:text-span-alias-word-p name-span))
-                        (%full-screen-program-fixes input full-screen start end))))))
+                   (multiple-value-bind (start end) (%input-fix-range input name-span)
+                     (and start
+                          (%full-screen-program-fixes input full-screen start end)))))))
       ;; The input did not run as given once the AI gate refused part of it,
       ;; whatever the status of the commands after that part.
       (refusal (values refusal nil message))
@@ -396,7 +404,9 @@ did."
            (values "E_COMMAND_NOT_FOUND" nil
                    (format nil "~A: command not found" command)
                    (and start (%input-span input start (- end start)))
-                   (and start (%missing-command-fixes input status start end))))))
+                   (multiple-value-bind (start end) (%input-fix-range input name-span)
+                     (and start
+                          (%missing-command-fixes input status start end)))))))
       ((eql status 126) (values "E_PERMISSION" nil message))
       ((eql status 130) (values "E_INTERRUPTED" nil message))
       (t

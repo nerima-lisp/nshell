@@ -568,6 +568,26 @@
           '';
         });
 
+      # Script-mode probes run with one closed PATH. Stub `last` so host login
+      # records cannot vary the PATH-first compatibility case.
+      specBinEnvFor =
+        ctx:
+        let
+          lastStub = ctx.pkgs.writeShellScriptBin "last" ''
+            printf '%s\n' 'nshell-spec-last'
+          '';
+        in
+        ctx.pkgs.buildEnv {
+          name = "nshell-spec-bin";
+          paths = [
+            ctx.pkgs.coreutils
+            ctx.pkgs.bash
+            ctx.pkgs.findutils
+            lastStub
+          ];
+          pathsToLink = [ "/bin" ];
+        };
+
       # `packages.releaseBundle`: a relocatable artifact for users without
       # Nix, as opposed to `deliveryFor`'s `$out/bin/nshell`, which is a
       # `makeWrapper` script that execs a Lisp core through paths under the
@@ -790,9 +810,11 @@
       # the bug-report golden test, the response envelope schema
       # conformance test, and the machine --json golden tests, which read
       # the examples from the two design documents.
+      # Language conformance tests also read the v0.7 probe fixture.
       sourceInclude = [
         ./docs/src/reference/builtins.md
         ./docs/src/reference/error-codes.md
+        ./docs/design/conformance/language-probes-v0.7.0.json
         ./t/golden/bug-report.txt
         ./docs/design/conformance/envelope.schema.json
         ./docs/design/proposal/02-machine-interface.md
@@ -919,6 +941,7 @@
         ctx:
         let
           delivery = deliveryFor ctx;
+          specBinEnv = specBinEnvFor ctx;
           app = ctx.cl.mkApp { drv = delivery; };
           testApp = ctx.pkgs.writeShellApplication {
             name = "nshell-test";
@@ -951,6 +974,32 @@
                 ctx.pkgs.coreutils
                 ctx.pkgs.git
               ];
+              NSHELL_BIN = "${delivery}/bin/nshell";
+              postCheck =
+                (ctx.pkgs.lib.optionalString
+                  ((previous.postCheck or null) != null)
+                  "${previous.postCheck}\n")
+                + ''
+                  export PATH="${specBinEnv}/bin"
+                  printf 'NSHELL_CHECK_PATH=%s\n' "$PATH"
+                  ${ctx.pkgs.sbcl}/bin/sbcl --noinform --non-interactive \
+                    --eval '(require :asdf)' \
+                    --eval '(load "scripts/asdf-runtime.lisp")' \
+                    --eval '(nshell-configure-writable-asdf-output)' \
+                    --eval '(let* ((root (uiop:pathname-directory-pathname (truename "nshell.asd")))
+                                   (parent (uiop:pathname-parent-directory-pathname root)))
+                              (if (uiop:getenv "CL_SOURCE_REGISTRY")
+                                  (progn (asdf:clear-source-registry)
+                                         (asdf:initialize-source-registry))
+                                  (asdf:initialize-source-registry
+                                   `(:source-registry
+                                     (:directory ,root)
+                                     (:tree ,parent)
+                                     :inherit-configuration))))' \
+                    --eval '(setf asdf:*compile-file-warnings-behaviour* :warn asdf:*compile-file-failure-behaviour* :warn)' \
+                    --eval '(asdf:load-asd (truename "nshell.asd"))' \
+                    --eval '(asdf:test-system "nshell/spec")'
+                '';
             }
             // ptyBootstrapEnvironmentFor ctx
           );

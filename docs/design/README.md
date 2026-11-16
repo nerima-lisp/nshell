@@ -38,6 +38,7 @@ nshell を「必要十分で、人にも AI にも使いやすいシェル」に
 - `language-probes-v0.7.0.json` — v0.7.0 (main 083f1603) を SBCL 2.6.9 でビルドし、151 個の入力を実行した結果 (exit / stdout / stderr)。言語仕様はこの実測をもとに書いた
 - `run_probes.py` — 同じ入力を任意のビルドで流すスクリプト (`NSHELL_BIN=./result/bin/nshell python3 run_probes.py language-probes-v0.7.0.json out.json`)
 - 期待値: `language/L7-diff-and-migration.md` の 7.1 の表が、仕様での結果。P1-7 で `t/spec/` のテストに取り込む
+- `envelope.schema.json` — 機械向けの応答 (ux/U6) の JSON Schema。cl-json-kit の検証器が扱うキーワード (type・required・properties・enum・items・additionalProperties・oneOf) だけで書く。`t/unit/test-machine-envelope.lisp` が、応答がこれに通ることと、error.code と warnings[].code の列挙がエラーコードの表 (`data/domain/error-codes-data.lisp`) と一致することを確かめる。`ok` の条件 (true なら status は 0 で error はない。false なら status が 0 以外か error がある) は `not` を使わずに書く。否定は `oneOf: [X, {}]` で表す (X に当てはまらないときだけ、ちょうど 1 つに当てはまる)
 
 ## 用語
 

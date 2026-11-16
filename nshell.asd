@@ -485,6 +485,7 @@
    (:file "unit/test-package-by-feature")
    (:file "unit/test-assistant-safety")
    (:file "unit/test-kb-rules")
+   (:file "unit/test-safety-closed-world")
    (:file "unit/legacy-assistant-safety")
    (:file "unit/test-safety-rule-migration")
    (:file "unit/test-assistant-redaction")

@@ -81,6 +81,28 @@ its own."
     (setf environment (nshell.domain.environment:env-set environment "status" "0" nil)))
   environment)
 
+(defun %assistant-command-stage-node (node)
+  "Return NODE as the gate sees a stage the executor runs as a command.  A
+NAME=value command word left by expansion or an alias names a command there,
+so it is marked quoted and never read as an assignment-only line."
+  (cond
+    ((nshell.domain.parsing:pipeline-node-p node)
+     (nshell.domain.parsing:make-pipeline-node
+      (mapcar #'%assistant-command-stage-node
+              (nshell.domain.parsing:pipeline-node-commands node))))
+    ((nshell.domain.parsing:command-node-assignment-words node)
+     (nshell.domain.parsing:make-command-node
+      (nshell.domain.parsing:command-node-command node)
+      (nshell.domain.parsing:command-node-args node)
+      (nshell.domain.parsing:ast-node-span node)
+      :single
+      nil
+      (nshell.domain.parsing:command-node-redirects node)
+      (nshell.domain.parsing:command-node-force-external-p node)
+      (nshell.domain.parsing:command-node-argument-forms node)
+      (nshell.domain.parsing:command-node-environment-assignments node)))
+    (t node)))
+
 (defun %assistant-effective-ast-for-gate (context ast)
   (cond
     ((nshell.domain.parsing:command-node-p ast)
@@ -108,9 +130,12 @@ its own."
                                 result)))
                          results)
                 (first results))))
-         (t
-          (nshell.application:expand-command-alias-node
-           ast (shell-context-alias-table context))))))
+         ((gethash (nshell.domain.parsing:command-node-command ast)
+                   (shell-context-alias-table context))
+          (%assistant-command-stage-node
+           (nshell.application:expand-command-alias-node
+            ast (shell-context-alias-table context))))
+         (t ast))))
     (t ast)))
 
 (defun %assistant-gate-active-p ()

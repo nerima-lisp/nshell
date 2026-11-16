@@ -30,7 +30,7 @@
 (defun %assistant-gate-expanded-node (context node)
   "Re-check an expanded node immediately before dispatch for AI execution."
   (let ((*execution-gate-parent-kind* nil))
-    (%assistant-execution-gate context node)))
+    (%assistant-execution-gate context (%assistant-command-stage-node node))))
 
 (defun %process-substitution-inner-commands (ast)
   (cond

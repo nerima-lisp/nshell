@@ -61,8 +61,9 @@ pressing Tab repeatedly does not fork a git subprocess per keystroke.")
   "Function of no arguments returning the current time; tests rebind it for
 a deterministic clock.")
 
-(defvar *git-dynamic-cache* (make-hash-table :test #'equal)
-  "Directory- and kind-keyed cache of git dynamic completion listings.")
+(defvar *git-dynamic-cache* (make-hash-table :test #'equal :synchronized t)
+  "Directory- and kind-keyed cache of git dynamic completion listings.
+Synchronized because Tab completion and the autosuggestion worker share it.")
 
 (defun %git-dynamic-cache-key (kind directory)
   (list kind (princ-to-string directory)))

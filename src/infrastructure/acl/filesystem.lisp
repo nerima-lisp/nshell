@@ -16,7 +16,9 @@
   "Entries kept before the cache is dropped whole; walking a deep tree must not
 grow it without bound.")
 
-(defvar *directory-listing-cache* (make-hash-table :test #'equal))
+;; Synchronized: Tab completion on the main thread and the autosuggestion
+;; worker both read and write it.
+(defvar *directory-listing-cache* (make-hash-table :test #'equal :synchronized t))
 
 (defun clear-directory-listing-cache ()
   (clrhash *directory-listing-cache*))

@@ -24,7 +24,11 @@
   (origin nil :type (member nil :typed :proposal :agent) :read-only t)
   (host nil :type (or null string) :read-only t))
 
-(defvar *history-record-tables* (make-hash-table :test #'eq))
+;; Weak: the autosuggestion worker gets a fresh history copy after each
+;; command, and a dropped copy must not keep its record table alive.
+;; Synchronized: that worker looks up its copy while the main thread adds.
+(defvar *history-record-tables*
+  (make-hash-table :test #'eq :weakness :key :synchronized t))
 (defvar *history-record-to-append* nil)
 (defvar *history-file-mutations-enabled-p* nil
   "Whether this session may change the persisted history file.")

@@ -206,8 +206,9 @@
   (if args
       (let ((gate (%assistant-execution-gate
                    context
-                   (nshell.domain.parsing:make-command-node
-                    (first args) (rest args)))))
+                   (%assistant-command-stage-node
+                    (nshell.domain.parsing:make-command-node
+                     (first args) (rest args))))))
         (if gate
             (values (first gate) (second gate))
             (progn

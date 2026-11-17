@@ -66,6 +66,13 @@ jobs:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
           cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
+      # The t/golden cases run the built binary with the fixed bin on PATH;
+      # with CI set, a missing NSHELL_BIN or NSHELL_SPEC_BIN_DIR fails them.
+      - name: Build the nshell binary and the golden fixed bin
+        run: |
+          nix build .#default --print-build-logs --out-link "$RUNNER_TEMP/nshell-bin"
+          nix build .#spec-bin --print-build-logs --out-link "$RUNNER_TEMP/nshell-spec-bin"
+
       - name: Run full test suite in a dev shell (non-sandboxed)
         env:
           HOME: ${{ runner.temp }}/nshell-home
@@ -74,6 +81,8 @@ jobs:
           XDG_STATE_HOME: ${{ runner.temp }}/nshell-state
           NSHELL_AI_COMMAND: /nonexistent
           NSHELL_TEST_PTY: "1"
+          NSHELL_BIN: ${{ runner.temp }}/nshell-bin/bin/nshell
+          NSHELL_SPEC_BIN_DIR: ${{ runner.temp }}/nshell-spec-bin/bin
         run: nix develop -c sbcl --script run-tests.lisp
 
       - name: Verify dependency suites and private history storage
@@ -143,6 +152,13 @@ jobs:
           cachix-cache: ${{ vars.CACHIX_CACHE || 'takeokunn-nshell' }}
           cachix-auth-token: ${{ github.event_name != 'pull_request' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
+      # The t/golden cases run the built binary with the fixed bin on PATH;
+      # with CI set, a missing NSHELL_BIN or NSHELL_SPEC_BIN_DIR fails them.
+      - name: Build the nshell binary and the golden fixed bin
+        run: |
+          nix build .#default --print-build-logs --out-link "$RUNNER_TEMP/nshell-bin"
+          nix build .#spec-bin --print-build-logs --out-link "$RUNNER_TEMP/nshell-spec-bin"
+
       - name: Generate source coverage report
         env:
           HOME: ${{ runner.temp }}/nshell-home
@@ -150,6 +166,8 @@ jobs:
           XDG_CONFIG_HOME: ${{ runner.temp }}/nshell-config
           XDG_STATE_HOME: ${{ runner.temp }}/nshell-state
           NSHELL_AI_COMMAND: /nonexistent
+          NSHELL_BIN: ${{ runner.temp }}/nshell-bin/bin/nshell
+          NSHELL_SPEC_BIN_DIR: ${{ runner.temp }}/nshell-spec-bin/bin
         run: |
           coverage_dir="$RUNNER_TEMP/nshell-coverage"
           mkdir -p "$coverage_dir"

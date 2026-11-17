@@ -24,14 +24,14 @@ executable scenarios and manual checks.
 | --- | --- | ---: | ---: | --- |
 | A01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | A02 | removed in P2-6 (checked by tests) | 0 | 0 | — |
-| A03 | direct, manual | 1 | 1 | `t/scenarios/A03/login-shell-command.json`, `t/scenarios/A03/manual.md` |
+| A03 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/A03/manual.md` |
 | A04 | direct, manual | 1 | 1 | `t/scenarios/A04/login-path-handoff.json`, `t/scenarios/A04/manual.md` |
 | A05 | direct, manual | 1 | 1 | `t/scenarios/A04/login-path-handoff.json`, `t/scenarios/A05/manual.md` |
-| A06 | direct, manual | 1 | 1 | `t/scenarios/A06/login-environment.json`, `t/scenarios/A06/manual.md` |
-| A07 | direct, manual | 1 | 1 | `t/scenarios/A07/quiet-login-command.json`, `t/scenarios/A07/manual.md` |
+| A06 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/A06/manual.md` |
+| A07 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/A07/manual.md` |
 | A08 | direct | 2 | 0 | `t/scenarios/A08/ctrl-d-exits.json`, `t/scenarios/A08/exit-warns-about-job.json` |
 | A09 | approximation, manual | 1 | 1 | `t/scenarios/A09/WP-R01-hup-forwards-to-job.json`, `t/scenarios/A09/manual.md` |
-| A10 | direct | 1 | 0 | `t/scenarios/A10/exec-replaces-shell.json` |
+| A10 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | A11 | direct, manual | 1 | 1 | `t/scenarios/A11/nested-nshell-session.json`, `t/scenarios/A11/manual.md` |
 | A12 | direct | 1 | 0 | `t/scenarios/A12/no-config-skips-startup.json` |
 | A13 | direct | 1 | 0 | `t/scenarios/A13/config-error-keeps-prompt.json` |
@@ -40,28 +40,28 @@ executable scenarios and manual checks.
 | B03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | B04 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/B04/manual.md` |
 | B05 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/B05/manual.md` |
-| B06 | approximation | 1 | 0 | `t/scenarios/B06/approx-shell-c-command-contract.json` |
+| B06 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | B07 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B07/manual.md` |
 | B08 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B08/manual.md` |
-| B09 | direct | 5 | 0 | `t/scenarios/B09/batch-command-uses-nshell-builtins.json`, `t/scenarios/B09/command-stdio-and-status.json`, `t/scenarios/B09/empty-shell-command.json`, `t/scenarios/B09/pty-command-uses-nshell-builtins.json`, `t/scenarios/B09/shell-command-argv.json` |
+| B09 | direct | 1 | 0 | `t/scenarios/B09/pty-command-uses-nshell-builtins.json` |
 | B10 | direct, manual | 1 | 1 | `t/scenarios/B10/login-command-environment.json`, `t/scenarios/B10/manual.md` |
-| C01 | direct | 3 | 0 | `t/scenarios/C01/batch-command.json`, `t/scenarios/C01/batch-stdin.json`, `t/scenarios/C01/pty-paste.json` |
+| C01 | direct | 1 | 0 | `t/scenarios/C01/pty-paste.json` |
 | C02 | direct | 1 | 0 | `t/scenarios/C02/quoted-unicode-arguments.json` |
-| C03 | direct | 1 | 0 | `t/scenarios/C03/path-search-and-absolute-path.json` |
-| C04 | direct | 1 | 0 | `t/scenarios/C04/missing-command-suggestion-and-status.json` |
-| C05 | direct | 1 | 0 | `t/scenarios/C05/last-exit-status-is-visible.json` |
-| C06 | direct | 1 | 0 | `t/scenarios/C06/pipeline-streams-all-stages.json` |
-| C07 | direct | 1 | 0 | `t/scenarios/C07/redirection-family.json` |
-| C08 | direct | 1 | 0 | `t/scenarios/C08/here-doc-and-here-string.json` |
-| C09 | direct | 1 | 0 | `t/scenarios/C09/background-command-returns.json` |
-| C10 | direct | 1 | 0 | `t/scenarios/C10/short-circuit-followed-by-sequence.json` |
-| C11 | direct | 1 | 0 | `t/scenarios/C11/temporary-command-environment.json` |
+| C03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C04 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C05 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C06 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C07 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C08 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C09 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C10 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C11 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | C12 | approximation | 1 | 0 | `t/scenarios/C12/approx-privileged-command-dispatch.json` |
 | C13 | direct | 1 | 0 | `t/scenarios/C13/glob-patterns-and-unmatched-path.json` |
-| C14 | direct | 1 | 0 | `t/scenarios/C14/tilde-and-brace-expansion.json` |
+| C14 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | C15 | approximation | 1 | 0 | `t/scenarios/C15/approx-captured-command-value.json` |
-| C16 | approximation | 1 | 0 | `t/scenarios/C16/approx-process-substitution-input.json` |
-| C17 | approximation | 1 | 0 | `t/scenarios/C17/approx-large-binary-and-invalid-utf8-output.json` |
+| C16 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| C17 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | C18 | approximation | 1 | 0 | `t/scenarios/C18/approx-sigpipe-is-quiet.json` |
 | D01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | D02 | removed in P2-6 (checked by tests) | 0 | 0 | — |
@@ -157,46 +157,46 @@ executable scenarios and manual checks.
 | K04 | direct | 1 | 0 | `t/scenarios/K04/unbalanced-parenthesis-diagnostic.json` |
 | K05 | direct | 1 | 0 | `t/scenarios/K05/string-highlighting.json` |
 | K06 | direct | 1 | 0 | `t/scenarios/K06/sexp-and-command-island-evaluation.json` |
-| K07 | direct | 1 | 0 | `t/scenarios/K07/one-line-source-diagnostic.json` |
-| K08 | direct | 1 | 0 | `t/scenarios/K08/macro-expansion-error-location.json` |
+| K07 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| K08 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | L01 | direct | 1 | 0 | `t/scenarios/L01/left-and-right-prompt.json` |
 | L02 | direct, manual | 2 | 1 | `t/scenarios/L02/git-prompt-responsiveness.json`, `t/scenarios/L02/slow-git-status-does-not-block-input.json`, `t/scenarios/L02/manual.md` |
 | L03 | direct | 1 | 0 | `t/scenarios/L03/status-duration-jobs-prompt-segments.json` |
 | L04 | approximation | 1 | 0 | `t/scenarios/L04/approx-transient-prompt-keeps-current-prompt.json` |
 | L05 | approximation | 1 | 0 | `t/scenarios/L05/approx-custom-prompt-format.json` |
 | L06 | approximation | 1 | 0 | `t/scenarios/L06/approx-narrow-terminal-redraw.json` |
-| L07 | direct | 1 | 0 | `t/scenarios/L07/theme-can-be-selected.json` |
-| M01 | direct | 1 | 0 | `t/scenarios/M01/cd-dash.json` |
-| M02 | direct | 1 | 0 | `t/scenarios/M02/logical-pwd-and-pwd-variable.json` |
+| L07 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| M01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| M02 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | M03 | removed (prevd/nextd deleted in P2-6) | 0 | 0 | — |
 | M04 | manual | 0 | 1 | `t/scenarios/M04/manual.md` |
-| M05 | direct | 1 | 0 | `t/scenarios/M05/pushd-popd-stack-round-trip.json` |
+| M05 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | M06 | direct | 1 | 0 | `t/scenarios/M06/shell-continues-after-current-directory-is-removed.json` |
-| N01 | direct | 1 | 0 | `t/scenarios/N01/session-variable.json` |
-| N02 | direct | 1 | 0 | `t/scenarios/N02/export-reaches-child-process.json` |
-| N03 | direct | 1 | 0 | `t/scenarios/N03/colon-separated-path-list.json` |
-| N04 | direct | 1 | 0 | `t/scenarios/N04/unset-removes-variable.json` |
-| N05 | approximation | 1 | 0 | `t/scenarios/N05/approx-lexical-let-scope.json` |
+| N01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| N02 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| N03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| N04 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| N05 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | N06 | manual | 0 | 1 | `t/scenarios/N06/manual.md` |
-| N07 | direct | 1 | 0 | `t/scenarios/N07/status-and-pipeline-status.json` |
+| N07 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | O01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
-| O02 | direct | 1 | 0 | `t/scenarios/O02/O02-command-island-evaluation.json` |
-| O03 | direct | 1 | 0 | `t/scenarios/O03/O03-let-and-set.json` |
-| O04 | direct | 1 | 0 | `t/scenarios/O04/O04-control-forms.json` |
-| O05 | direct | 1 | 0 | `t/scenarios/O05/O05-nested-command-definitions.json` |
-| O06 | direct | 1 | 0 | `t/scenarios/O06/O06-macro-expansion.json` |
-| O07 | direct | 2 | 0 | `t/scenarios/O07/O07-conditional-and-handler-case.json`, `t/scenarios/O07/O07-interactive-command-failed-restart.json` |
-| O08 | direct | 1 | 0 | `t/scenarios/O08/O08-structured-pipeline.json` |
-| O09 | direct | 1 | 0 | `t/scenarios/O09/O09-json-tsv-lines-conversion.json` |
-| O10 | direct | 1 | 0 | `t/scenarios/O10/O10-regex-and-string-library.json` |
-| O11 | direct | 1 | 0 | `t/scenarios/O11/O11-native-arithmetic.json` |
-| O12 | direct | 1 | 0 | `t/scenarios/O12/O12-comments.json` |
-| O13 | approximation | 1 | 0 | `t/scenarios/O13/approx-O13-script-shebang-and-source.json` |
-| O14 | direct | 1 | 0 | `t/scenarios/O14/O14-function-directory-autoload.json` |
-| O15 | direct | 1 | 0 | `t/scenarios/O15/O15-asdf-library-load.json` |
-| O16 | direct | 1 | 0 | `t/scenarios/O16/O16-preserve-case.json` |
+| O02 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O04 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O05 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O06 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O07 | direct | 1 | 0 | `t/scenarios/O07/O07-interactive-command-failed-restart.json` |
+| O08 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O09 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O10 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O11 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O12 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O13 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O14 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O15 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| O16 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | O17 | removed in P2-6 (checked by tests) | 0 | 0 | — |
-| O18 | direct | 1 | 0 | `t/scenarios/O18/O18-alias-eval-and-string-execution.json` |
+| O18 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | P01 | approximation | 1 | 0 | `t/scenarios/P01/approx-P01-xdg-init-file.json` |
 | P02 | approximation | 1 | 0 | `t/scenarios/P02/approx-P02-conf-d-order.json` |
 | P03 | approximation | 1 | 0 | `t/scenarios/P03/approx-P03-function-directory.json` |
@@ -226,11 +226,11 @@ executable scenarios and manual checks.
 | S07 | approximation | 2 | 0 | `t/scenarios/S07/approx-S07-shell-without-claude.json`, `t/scenarios/S07/cancel-resumes-after-new-request.json` |
 | T01 | direct, manual | 1 | 1 | `t/scenarios/T01/platform-support-matches-flake.json`, `t/scenarios/T01/manual.md` |
 | T02 | direct, manual | 1 | 1 | `t/scenarios/T02/etc-shells-guidance.json`, `t/scenarios/T02/manual.md` |
-| T03 | approximation | 1 | 0 | `t/scenarios/T03/approx-T03-help-output.json` |
+| T03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | T04 | manual | 0 | 1 | `t/scenarios/T04/manual.md` |
 | T05 | direct, approximation | 2 | 0 | `t/scenarios/T05/legacy-history-import-is-idempotent.json`, `t/scenarios/T05/approx-T05-legacy-history-load.json` |
 | T06 | direct, manual | 1 | 1 | `t/scenarios/T06/copied-release-bundle-pty-smoke.json`, `t/scenarios/T06/manual.md` |
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | removed in P2-6 (checked by the F07 scenario) | 0 | 0 | — |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 238 | 47 | — |
+| Total | expected corpus | 186 | 47 | — |

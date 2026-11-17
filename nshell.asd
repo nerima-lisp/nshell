@@ -698,6 +698,7 @@
    (:file "integration/test-package-topology")
    (:file "e2e/test-smoke")
    (:file "e2e/test-smoke-script")
+   (:file "e2e/test-smoke-scenarios")
    (:file "e2e/test-smoke-input")
    (:file "e2e/test-smoke-editing")
    (:file "e2e/test-smoke-pipeline")

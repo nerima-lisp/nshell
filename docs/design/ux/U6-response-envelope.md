@@ -84,3 +84,4 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 - 子プロセスが端末からの入力を待ったら E_WAITING_FOR_INPUT で止め、最後の出力 (例: Password:) を返す。子を PTY と背景プロセスグループで動かし、SIGTTIN と WUNTRACED で検出する。
 - vim・less・top など全画面のプログラムは E_INTERACTIVE_PROGRAM。コマンド名の表と `ESC[?1049h` で検出する。代わりの書き方 (git --no-pager など) を fixes に。
 - timeout は必ずかかる。--timeout は実行全体の期限で、--json の既定は 120 秒 (initialize の応答で知らせる)。超えたらプロセスグループごと止めて E_TIMEOUT、そこまでの出力は返す。
+- --json で SIGINT・SIGTERM・SIGHUP を受けたら、プロセスグループごと止めて E_INTERRUPTED を返す。シグナルによらず終了コードは 130 とし、そこまでの stdout と stderr を返す。

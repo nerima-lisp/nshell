@@ -122,7 +122,7 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 | E_COMMAND_NOT_FOUND | コマンドが見つからない。近い候補を fixes に | 127 |
 | E_PERMISSION | 権限不足 | 126 |
 | E_TIMEOUT | --timeout 超過。プロセスグループごと停止 | 124 |
-| E_INTERRUPTED | SIGINT などで中断 | 130 |
+| E_INTERRUPTED | --json で SIGINT・SIGTERM・SIGHUP を受けて中断。シグナルによらず 130 で終了し、そこまでの出力を返す | 130 (--json) |
 | E_NEEDS_APPROVAL | confirm 判定で承認が得られていない | 3 |
 | E_BLOCKED_BY_POLICY | block 判定 | 4 |
 | E_WAITING_FOR_INPUT | 子プロセスが端末からの入力を待った (U6) | 5 |

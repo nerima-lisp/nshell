@@ -552,12 +552,12 @@ envelope, and isError is set exactly when the envelope is not ok."
       (declare (ignorable root))
       (with-temporary-function
           ((quote nshell.feature.machine::%run-batch-with-deadline)
-           (lambda (&rest arguments)
+           ;; RUN-JSON-COMMAND makes the run and passes it first.
+           (lambda (run &rest arguments)
              (declare (ignore arguments))
-             (let ((run (nshell.feature.machine::%make-json-run)))
-               (setf (nshell.feature.machine::json-run-timed-out-p run) t
-                     (nshell.feature.machine::json-run-worker-alive-p run) t)
-               run)))
+             (setf (nshell.feature.machine::json-run-timed-out-p run) t
+                   (nshell.feature.machine::json-run-worker-alive-p run) t)
+             run))
         (let ((messages (%mcp-exchange (%mcp-initialize)
                                        (%mcp-run-call 2 "echo stuck")
                                        (%mcp-run-call 3 "echo next")

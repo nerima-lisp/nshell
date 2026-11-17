@@ -10,6 +10,11 @@
 ;;; groups while nothing can start a new one, lets the output copiers drain,
 ;;; and then releases the worker, which unwinds out of the batch run instead of
 ;;; going on to the next command.
+;;;
+;;; SIGINT, SIGTERM and SIGHUP stop the run the same way and give
+;;; E_INTERRUPTED. The deadline, a program on the alternate screen and these
+;;; signals all claim the run's NONINTERACTIVE-STOP, and only the first claim
+;;; stops the run: a later one changes neither the error nor the cleanup.
 
 (defparameter *json-park-wait-seconds* 0.5
   "How long the deadline waits for the worker to acknowledge being parked.")
@@ -95,7 +100,13 @@ SBCL thread otherwise sees only global values.")
   ;; may still be written and its locks still held.
   (worker-alive-p nil)
   ;; The car lists every process group the run created (*PROCESS-GROUP-LOG*).
-  (group-log (list nil)))
+  (group-log (list nil))
+  (stop (nshell.infrastructure.acl:make-noninteractive-stop))
+  ;; The worker thread, the tag it catches, and the processes registered
+  ;; before it started.
+  (worker nil)
+  (tag (list :json-run))
+  (before nil))
 
 (defun %exec-exit-function (run tag)
   "Return the *EXEC-EXIT-FUNCTION* of RUN, which gives exec under --json the
@@ -164,7 +175,12 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
   (lambda ()
     (let ((scan (make-alternate-screen-scanner)))
       (lambda (buffer end)
-        (when (and (not (json-run-alternate-screen-p run)) (funcall scan buffer end))
+        (when (and (not (json-run-alternate-screen-p run))
+                   (null (nshell.infrastructure.acl:noninteractive-stop-reason
+                          (json-run-stop run)))
+                   (funcall scan buffer end)
+                   (nshell.infrastructure.acl:claim-noninteractive-stop
+                    (json-run-stop run) :interactive-program))
           (setf (json-run-alternate-screen-p run) t)
           (sb-thread:signal-semaphore (json-run-wake run)))))))
 
@@ -228,14 +244,22 @@ Return true when the worker has exited."
           (reap late))
         exited-p))))
 
-(defun %run-batch-with-deadline (input timeout approval errexit-p script-args out err
+(defun %stop-run (run)
+  "Stop RUN's worker and every process group of the run (%PARK-AND-STOP)."
+  (setf (json-run-worker-alive-p run)
+        (not (%park-and-stop (json-run-worker run) (json-run-tag run)
+                             (json-run-before run) (json-run-group-log run)))))
+
+(defun %run-batch-with-deadline (run input timeout approval errexit-p script-args out err
                                  reset-state-p)
-  (let* ((run (%make-json-run))
-         (tag (list :json-run))
-         (before (nshell.infrastructure.acl:registered-processes)))
+  (let ((tag (json-run-tag run))
+        (stop (json-run-stop run)))
+    (setf (json-run-before run) (nshell.infrastructure.acl:registered-processes))
     (multiple-value-bind (symbols values)
         (%worker-bindings run tag out err timeout approval)
-      (let ((worker
+      ;; A signal that unwinds this thread finds the worker in RUN to stop.
+      (sb-sys:without-interrupts
+        (setf (json-run-worker run)
               (sb-thread:make-thread
                (lambda ()
                  (unwind-protect
@@ -248,12 +272,17 @@ Return true when the worker has exited."
                                  :reset-state-p reset-state-p))))
                    (sb-thread:signal-semaphore (json-run-wake run))))
                :name "nshell json command")))
-        (let ((woken-p (sb-thread:wait-on-semaphore (json-run-wake run) :timeout timeout)))
-          (if (or (not woken-p) (json-run-alternate-screen-p run))
-              (setf (json-run-timed-out-p run) (not woken-p)
-                    (json-run-worker-alive-p run)
-                    (not (%park-and-stop worker tag before (json-run-group-log run))))
-              (sb-thread:join-thread worker :default nil)))))
+      (let ((woken-p (sb-thread:wait-on-semaphore (json-run-wake run) :timeout timeout)))
+        (cond
+          ((json-run-alternate-screen-p run) (%stop-run run))
+          (woken-p (sb-thread:join-thread (json-run-worker run) :default nil))
+          ((nshell.infrastructure.acl:claim-noninteractive-stop stop :timeout)
+           (setf (json-run-timed-out-p run) t)
+           (%stop-run run))
+          (t
+           ;; A signal or the alternate screen was claimed first.
+           (nshell.infrastructure.acl:unwind-to-noninteractive-signal stop)
+           (%stop-run run)))))
     run))
 
 ;;; Envelope
@@ -380,6 +409,12 @@ did."
          (full-screen (car (json-run-full-screen-program run)))
          (message (%first-line stderr-text)))
     (cond
+      ((nshell.infrastructure.acl:noninteractive-stop-signal (json-run-stop run))
+       (values "E_INTERRUPTED" nil
+               (format nil "the run was interrupted by ~A"
+                       (nshell.infrastructure.acl:stop-signal-name
+                        (nshell.infrastructure.acl:noninteractive-stop-signal
+                         (json-run-stop run))))))
       ((json-run-timed-out-p run)
        (values "E_TIMEOUT" nil (format nil "the run exceeded its ~A s deadline"
                                        (%seconds-text timeout))))
@@ -504,66 +539,92 @@ run SEQ."
         ;; this run only, and a caller in the same image keeps its own.
         (nshell.presentation:*noninteractive-batch-p* t)
         (nshell.infrastructure.acl:*detach-child-standard-input* nil)
-        (nshell.infrastructure.terminal:*terminal-color-depth* nil))
-    ;; The classifier resolves names in the batch shell state the run uses.
-    (if reset-state-p
-        (nshell.presentation::%initialize-batch-state)
-        ;; The kept state is a batch state already; only the two settings
-        ;; bound above for this run are set as %initialize-batch-state sets them.
-        (setf nshell.infrastructure.acl:*detach-child-standard-input* t
-              nshell.infrastructure.terminal:*terminal-color-depth* :none))
-    (multiple-value-bind (verdict readable-p) (%classify-input input)
-      ;; Judged before the run, as the verdict is: the run may change what
-      ;; the names resolve to.
-      (let ((level (first verdict))
-            (effects (and readable-p (%input-effects input)))
-            ;; Approval holds only for the verdict the person saw.
-            (approved-p (and approved-verdict (equal approved-verdict verdict))))
-        (when (and environment-agent-p readable-p
-                   (member level (if approved-p '(:block) '(:confirm :block))))
-          (let ((envelope (%refusal-envelope verdict effects (%elapsed-ms start)
-                                             :session session :seq (and session seq))))
-            (return-from run-json-command
-              (values (envelope-to-json envelope) (envelope-status envelope)
-                      envelope))))
-        (let* ((out (make-string-output-stream))
-               (err (make-string-output-stream))
-               (run (%run-batch-with-deadline input timeout
-                                              (and environment-agent-p
-                                                   (if approved-p :confirm :safe))
-                                              errexit-p script-args out err
-                                              reset-state-p))
-               ;; A worker that survived the deadline may still write them.
-               (out-text (if (json-run-worker-alive-p run)
-                             ""
-                             (get-output-stream-string out)))
-               (err-text (if (json-run-worker-alive-p run)
-                             ""
-                             (get-output-stream-string err)))
-               (status (or (json-run-status run) 1))
-               (stdout (envelope-output-for-text out-text))
-               (stderr (envelope-output-for-text err-text))
-               (saved (and (not private)
-                           (or (envelope-output-truncated stdout)
-                               (envelope-output-truncated stderr))
-                           (or (not session) output-session)
-                           (%store-full-output stdout stderr out-text err-text
-                                               :session output-session :seq seq)))
-               (parts (list :duration-ms (%elapsed-ms start)
-                            :stdout stdout
-                            :stderr stderr
-                            :effects effects
-                            :safety (%envelope-safety-of verdict)
-                            :state (%state)
-                            :session (or session (and saved (output-session-id saved)))
-                            :seq (cond (session seq) (saved 1))))
-               (envelope
-                 (multiple-value-bind (code code-status message span fixes)
-                     (%failure run input status (clean-output-text err-text) timeout)
-                   (if code
-                       (apply #'error-envelope code :status code-status
-                                                    :message message :span span
-                                                    :fixes fixes parts)
-                       (apply #'result-envelope :status 0 parts)))))
-          (values (envelope-to-json envelope) (envelope-status envelope)
-                  envelope (json-run-worker-alive-p run)))))))
+        (nshell.infrastructure.terminal:*terminal-color-depth* nil)
+        (run (%make-json-run))
+        (out (make-string-output-stream))
+        (err (make-string-output-stream))
+        (verdict nil)
+        (readable-p nil)
+        (effects nil)
+        (approved-p nil)
+        (out-text nil)
+        (err-text nil))
+    (flet ((run-envelope ()
+             (let* (;; A worker that survived the deadline may still write them.
+                    ;; Taken once: a signal after the envelope of a finished
+                    ;; run was begun makes it again from the same output.
+                    (out-text (or out-text
+                                  (setf out-text (if (json-run-worker-alive-p run)
+                                                     ""
+                                                     (get-output-stream-string out)))))
+                    (err-text (or err-text
+                                  (setf err-text (if (json-run-worker-alive-p run)
+                                                     ""
+                                                     (get-output-stream-string err)))))
+                    (status (or (json-run-status run) 1))
+                    (stdout (envelope-output-for-text out-text))
+                    (stderr (envelope-output-for-text err-text))
+                    (saved (and (not private)
+                                (or (envelope-output-truncated stdout)
+                                    (envelope-output-truncated stderr))
+                                (or (not session) output-session)
+                                (%store-full-output stdout stderr out-text err-text
+                                                    :session output-session :seq seq)))
+                    (parts (list :duration-ms (%elapsed-ms start)
+                                 :stdout stdout
+                                 :stderr stderr
+                                 :effects effects
+                                 :safety (%envelope-safety-of verdict)
+                                 :state (%state)
+                                 :session (or session (and saved (output-session-id saved)))
+                                 :seq (cond (session seq) (saved 1))))
+                    (envelope
+                      (multiple-value-bind (code code-status message span fixes)
+                          (%failure run input status (clean-output-text err-text) timeout)
+                        (if code
+                            (apply #'error-envelope code :status code-status
+                                                         :message message :span span
+                                                         :fixes fixes parts)
+                            (apply #'result-envelope :status 0 parts)))))
+               (values (envelope-to-json envelope) (envelope-status envelope)
+                       envelope (json-run-worker-alive-p run)))))
+      (nshell.infrastructure.acl:call-with-noninteractive-signals
+       (json-run-stop run)
+       (lambda ()
+         ;; A signal takes effect once the verdict every envelope reports is
+         ;; known; nothing here waits on another process.
+         (sb-sys:without-interrupts
+           ;; The classifier resolves names in the batch shell state the run
+           ;; uses.
+           (if reset-state-p
+               (nshell.presentation::%initialize-batch-state)
+               ;; The kept state is a batch state already; only the two
+               ;; settings bound above for this run are set as
+               ;; %initialize-batch-state sets them.
+               (setf nshell.infrastructure.acl:*detach-child-standard-input* t
+                     nshell.infrastructure.terminal:*terminal-color-depth* :none))
+           (multiple-value-setq (verdict readable-p) (%classify-input input))
+           ;; Judged before the run, as the verdict is: the run may change
+           ;; what the names resolve to.
+           (setf effects (and readable-p (%input-effects input))
+                 ;; Approval holds only for the verdict the person saw.
+                 approved-p (and approved-verdict (equal approved-verdict verdict))))
+         (if (and environment-agent-p readable-p
+                  (member (first verdict) (if approved-p '(:block) '(:confirm :block))))
+             (let ((envelope (%refusal-envelope verdict effects (%elapsed-ms start)
+                                                :session session :seq (and session seq))))
+               (values (envelope-to-json envelope) (envelope-status envelope)
+                       envelope))
+             (progn
+               (%run-batch-with-deadline run input timeout
+                                         (and environment-agent-p
+                                              (if approved-p :confirm :safe))
+                                         errexit-p script-args out err
+                                         reset-state-p)
+               (run-envelope))))
+       :after-signal
+       (lambda (signal)
+         (declare (ignore signal))
+         (when (json-run-worker run)
+           (%stop-run run))
+         (run-envelope))))))

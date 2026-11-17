@@ -1,69 +1,9 @@
 (in-package #:nshell/test)
 
-(describe "builtin-math-tests"
-  (it "math-evaluates-the-four-basic-operators-with-standard-precedence"
-    "* and / bind tighter than + and -, and parentheses override precedence."
-    (with-builtins-context (context)
-      (assert-builtin-cases (context "math")
-        (("1+2") :code 0 :output (format nil "3~%"))
-        (("5-2") :code 0 :output (format nil "3~%"))
-        (("2*3+4") :code 0 :output (format nil "10~%"))
-        (("2+3*4") :code 0 :output (format nil "14~%"))
-        (("(2+3)*4") :code 0 :output (format nil "20~%")))))
-
-  (it "math-supports-exponent-modulo-and-unary-minus"
-    "^ is right-associative exponentiation (not $((...))'s bitwise XOR), and
-unary minus binds looser than ^ but tighter than the following * / %."
-    (with-builtins-context (context)
-      (assert-builtin-cases (context "math")
-        (("2^10") :code 0 :output (format nil "1024~%"))
-        (("10 % 3") :code 0 :output (format nil "1~%"))
-        (("-3+5") :code 0 :output (format nil "2~%"))
-        (("-2^2") :code 0 :output (format nil "-4~%"))
-        (("2^-1") :code 0 :output (format nil "0.5~%")))))
-
-  (it "math-formats-decimals-with-up-to-six-fraction-digits-trimmed"
-    "Non-integral results render as decimals, trailing zeros trimmed, exact
-rational arithmetic underneath so 10/4 never picks up floating-point noise."
-    (with-builtins-context (context)
-      (assert-builtin-cases (context "math")
-        (("10 / 4") :code 0 :output (format nil "2.5~%"))
-        (("1 / 3") :code 0 :output (format nil "0.333333~%"))
-        (("1 / 8") :code 0 :output (format nil "0.125~%")))))
-
-  (it "math-reports-division-by-zero-distinctly"
-    "Division or modulo by zero is its own error, not folded into a parse error."
-    (with-builtins-context (context)
-      (assert-builtin-call (context "math" '("1/0"))
-        :code 1
-        :output (format nil "math: division by zero~%"))
-      (assert-builtin-call (context "math" '("1%0"))
-        :code 1
-        :output (format nil "math: division by zero~%"))))
-
-  (it "math-reports-parse-errors"
-    "An incomplete expression or an unrecognized character is a parse error, exit 2."
-    (with-builtins-context (context)
-      (assert-builtin-call (context "math" '("1+"))
-        :code 2
-        :contains '("math: error:"))
-      (assert-builtin-call (context "math" '("1+@"))
-        :code 2
-        :contains '("math: error:"))))
-
-  (it "math-requires-an-expression"
-    "math with no arguments reports usage rather than evaluating nothing."
-    (with-builtins-context (context)
-      (assert-builtin-call (context "math" nil)
-        :code 2
-        :contains '("math: usage:")))))
-
 (describe "builtin-directory-stack-tests"
   (it "pushd-and-popd-round-trip-the-directory-stack"
     "pushd DIR changes directory and remembers the old one; popd reverses it."
     (let ((nshell.application::*directory-stack* nil)
-          (nshell.application::*directory-history* nil)
-          (nshell.application::*directory-history-index* 0)
           (current-cwd "/start"))
       (with-temporary-functions
           (('host-kit:getcwd (lambda () (pathname current-cwd)))
@@ -83,8 +23,6 @@ rational arithmetic underneath so 10/4 never picks up floating-point noise."
   (it "pushd-with-no-argument-swaps-current-directory-with-stack-top"
     "A bare pushd swaps the current directory with the top of the stack."
     (let ((nshell.application::*directory-stack* nil)
-          (nshell.application::*directory-history* nil)
-          (nshell.application::*directory-history-index* 0)
           (current-cwd "/start"))
       (with-temporary-functions
           (('host-kit:getcwd (lambda () (pathname current-cwd)))
@@ -124,36 +62,11 @@ rational arithmetic underneath so 10/4 never picks up floating-point noise."
         (with-builtins-context-environment
             (context (make-test-builtins-context) ("HOME" "/home/test"))
           (assert-builtin-call (context "dirs" nil)
-            :code 0 :output (format nil "~~/project~%"))))))
-
-  (it "prevd-and-nextd-navigate-directory-history-without-touching-the-pushd-stack"
-    "prevd/nextd move a pointer through every directory visited via pushd/popd."
-    (let ((nshell.application::*directory-stack* nil)
-          (nshell.application::*directory-history* nil)
-          (nshell.application::*directory-history-index* 0)
-          (current-cwd "/start"))
-      (with-temporary-functions
-          (('host-kit:getcwd (lambda () (pathname current-cwd)))
-           ('host-kit:chdir (lambda (path) (setf current-cwd (namestring (pathname path))))))
-        (with-builtins-context (context)
-          (assert-builtin-call (context "pushd" '("/a")) :code 0 :output-null t)
-          (assert-builtin-call (context "pushd" '("/b")) :code 0 :output-null t)
-          (expect "/b" :to-equal current-cwd)
-          (assert-builtin-call (context "prevd" nil) :code 0 :output-null t)
-          (expect "/a" :to-equal current-cwd)
-          (assert-builtin-call (context "prevd" nil) :code 0 :output-null t)
-          (expect "/start" :to-equal current-cwd)
-          (assert-builtin-call (context "prevd" nil)
-            :code 1 :contains '("prevd: no previous directory"))
-          (assert-builtin-call (context "nextd" '("2")) :code 0 :output-null t)
-          (expect "/b" :to-equal current-cwd)
-          (assert-builtin-call (context "nextd" nil)
-            :code 1 :contains '("nextd: no next directory")))))))
+            :code 0 :output (format nil "~~/project~%")))))))
 
 (describe "builtin-functions-tests"
   (it "functions-with-no-arguments-lists-names-only-sorted"
-    "Bare `functions` lists just the names, one per line, unlike `function`'s
-full-definition listing."
+    "Bare `functions` lists just the names, one per line."
     (with-builtins-context (context)
       (let ((table (nshell.application:shell-context-function-table context)))
         (setf (gethash "greet" table) '("echo hi")
@@ -205,33 +118,6 @@ function of the same name."
         :code 1 :contains '("builtin: not-a-builtin: not a builtin"))
       (assert-builtin-call (context "builtin" nil)
         :code 2 :contains '("usage: builtin")))))
-
-(describe "builtin-and-or-tests"
-  (it "and-runs-its-command-only-after-a-success-status"
-    "and executes its command when $status is 0, and otherwise passes that
-prior nonzero status through unchanged without running anything."
-    (with-builtins-context (context)
-      (setf (nshell.application:shell-context-last-exit-code context) 0)
-      (assert-builtin-call (context "and" '("echo" "ran"))
-        :code 0 :output (format nil "ran~%"))
-      (setf (nshell.application:shell-context-last-exit-code context) 7)
-      (assert-builtin-call (context "and" '("echo" "should-not-run"))
-        :code 7 :output-null t)
-      (assert-builtin-call (context "and" nil)
-        :code 2 :contains '("usage: and"))))
-
-  (it "or-runs-its-command-only-after-a-failure-status"
-    "or executes its command when $status is nonzero, and otherwise passes
-that prior success status through unchanged without running anything."
-    (with-builtins-context (context)
-      (setf (nshell.application:shell-context-last-exit-code context) 1)
-      (assert-builtin-call (context "or" '("echo" "ran"))
-        :code 0 :output (format nil "ran~%"))
-      (setf (nshell.application:shell-context-last-exit-code context) 0)
-      (assert-builtin-call (context "or" '("echo" "should-not-run"))
-        :code 0 :output-null t)
-      (assert-builtin-call (context "or" nil)
-        :code 2 :contains '("usage: or")))))
 
 (describe "builtin-history-nil-tests"
   (it "history-subcommands-treat-a-nil-history-as-empty-rather-than-crashing"

@@ -1,40 +1,7 @@
 (in-package #:nshell.application)
 
-;;; `and` / `or` command builtins -- distinct from the `&&` / `||` sequence
-;;; separators in execute-pipeline-control.lisp: these run as ordinary
-;;; commands (`echo a; and echo b`), gated on the exit status the *previous*
-;;; command already recorded via %RECORD-LAST-EXIT-CODE. They live here
-;;; rather than alongside that dispatcher because DEFINE-BUILTIN
-;;; (builtin-macros.lisp) is not yet defined at the point execute-pipeline-
-;;; control.lisp loads (see nshell.asd's file order) -- every other builtin
-;;; already lives in a file the system loads after builtin-macros.lisp, and
-;;; this one is no exception. Like %BUILTIN-NOT, the gated command runs
-;;; through the existing application entry point rather than a bespoke
-;;; dispatch path.
-
-(define-builtin %builtin-and (context args) ()
-  (if args
-      (if (zerop (shell-context-last-exit-code context))
-          (%assistant-gated-command-dispatch
-           context (first args) (rest args)
-           (lambda ()
-             (%execute-command-by-name-in-context context (first args) (rest args))))
-          (values nil (shell-context-last-exit-code context)))
-      (%builtin-usage "and" "and command [args...]" 2)))
-
-(define-builtin %builtin-or (context args) ()
-  (if args
-      (if (zerop (shell-context-last-exit-code context))
-          (values nil (shell-context-last-exit-code context))
-          (%assistant-gated-command-dispatch
-           context (first args) (rest args)
-           (lambda ()
-             (%execute-command-by-name-in-context context (first args) (rest args)))))
-      (%builtin-usage "or" "or command [args...]" 2)))
-
-;;; `functions` (fish's function inspector, distinct from the singular
-;;; `function` builtin in builtin-state-functions.lisp which defines/erases)
-;;; and `builtin` (bypass functions and aliases, run a builtin directly).
+;;; `functions` (lists, shows, and erases shell functions) and `builtin`
+;;; (bypass functions and aliases, run a builtin directly).
 
 (defun %builtin-functions-names (context)
   (let ((names nil))

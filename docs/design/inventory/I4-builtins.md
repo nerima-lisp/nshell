@@ -10,7 +10,7 @@
 
 7
 
-削除候補
+削除
 
 9
 
@@ -30,8 +30,8 @@
 
 | 機能 — 現状 | 判定 | 方針 |
 |---|---|---|
-| and / or / not — fish 形式 | [削除候補] | bare-line の && \|\| と S式の and / or / not で足りる。v0.8 で削除し、E_UNSUPPORTED_SYNTAX で拒否する。 |
-| break / continue — bare-line ループ用 | [削除候補] | bare-line の制御構文と一緒に v0.8 で削除。 |
+| and / or / not — fish 形式 | [削除] | bare-line の && \|\| と S式の and / or / not で足りる。v0.8 で削除し、E_UNSUPPORTED_SYNTAX で拒否する。 |
+| break / continue — bare-line ループ用 | [削除] | bare-line の制御構文と一緒に v0.8 で削除。 |
 | true / false | [残す] | そのまま。 |
 | test / [ — -e -f -d -n -z = != -eq ほか | [残す] | そのまま。使い方の誤りは status 2。 |
 
@@ -39,7 +39,7 @@
 
 | 機能 — 現状 | 判定 | 方針 |
 |---|---|---|
-| function — fish 形式の定義 | [削除候補] | defcmd に一本化 (L5.3)。v0.8 で削除。 |
+| function — fish 形式の定義 | [削除] | defcmd に一本化 (L5.3)。v0.8 で削除。 |
 | functions — 定義の一覧・表示 | [残す] | defun・defcmd で定義したものの一覧に。値の位置ではレコード (L4.4)。 |
 | eval / source / . | [残す] | そのまま。 |
 | builtin / command / exec / exit | [残す] | そのまま。 |
@@ -51,10 +51,10 @@
 | echo / read | [残す] | そのまま。 |
 | printf — 書式・エスケープ・数値 | [簡素化] | %s %d %f %x と \n \t 程度に絞り、残りは format へ。 |
 | string — 11 サブコマンド (collect length lower upper join split replace match repeat sub trim) | [簡素化] | match / replace / split / join / trim の 5 つに絞り、Lisp 関数の薄いラッパにする。 |
-| count — 引数や行を数える | [削除候補] | wc -l と (length …) で代替。 |
-| contains | [削除候補] | (member …) で代替。 |
-| seq | [削除候補] | 外部の seq と (loop …) で代替。 |
-| math | [削除候補] | $((…)) と ,(…) で代替。 |
+| count — 引数や行を数える | [削除] | wc -l と (length …) で代替。 |
+| contains | [削除] | (member …) で代替。 |
+| seq | [削除] | 外部の seq と (loop …) で代替。 |
+| math | [削除] | $((…)) と ,(…) で代替。 |
 
 ### ディレクトリ
 
@@ -63,7 +63,7 @@
 | cd / pwd — cd - に対応 | [残す] | そのまま。 |
 | pushd / popd | [残す] | そのまま。 |
 | dirs | [簡素化] | pushd のスタック表示だけに。 |
-| prevd / nextd — 訪問履歴を前後に移動 | [削除候補] | cd - と Ctrl-R で足りる。 |
+| prevd / nextd — 訪問履歴を前後に移動 | [削除] | cd - と Ctrl-R で足りる。 |
 
 ### ジョブ
 
@@ -96,4 +96,4 @@
 |---|---|---|
 | ai — status / reset / log / set | [残す] | why / explain を追加 (03 を参照)。 |
 | agent — 複数ステップの提案と承認 | [残す] | 表示を簡素化。 |
-| pipeline-graph — DOT / Mermaid | [削除候補] | explain --json の AST から外部で描ける。 |
+| pipeline-graph — DOT / Mermaid | [削除] | explain --json の AST から外部で描ける。 |

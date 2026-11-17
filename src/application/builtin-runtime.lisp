@@ -21,23 +21,6 @@
        (char= (char arg 0) #\-)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defmacro %with-option-arguments ((remaining option)
-                                    on-sentinel
-                                    on-unknown
-                                    on-operand
-                                    &body clauses)
-    `(block nil
-       (loop while ,remaining
-             for ,option = (first ,remaining)
-             do (cond
-                  ((string= ,option "--")
-                   (setf ,remaining (rest ,remaining))
-                   ,on-sentinel)
-                  ,@clauses
-                  ((%builtin-option-like-p ,option)
-                   ,on-unknown)
-                  (t ,on-operand)))))
-
   (defmacro %with-required-argument ((return-target remaining builtin option
                                       requirement status)
                                      &body body)

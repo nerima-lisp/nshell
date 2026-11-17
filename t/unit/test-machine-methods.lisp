@@ -113,6 +113,15 @@ schema accepts it."
       (expect (gethash "code" error-object) :to-equal "E_PARSE")
       (expect (gethash "line" (gethash "span" error-object)) :to-be-truthy)))
 
+  (it "answers the reader's own code for syntax v0.8 removed"
+    (let* ((parsed (%machine-parsed (%machine-explain "echo hi; and true")))
+           (error-object (gethash "error" parsed)))
+      (expect (gethash "status" parsed) :to-equal 2)
+      (expect (gethash "code" error-object) :to-equal "E_UNSUPPORTED_SYNTAX")
+      (expect (search "(and (echo hi) (true))" (gethash "message" error-object))
+              :to-be-truthy)
+      (expect (gethash "column" (gethash "span" error-object)) :to-equal 10)))
+
   (it "answers E_PARSE for empty input"
     (dolist (text '("" "   "))
       (let ((parsed (%machine-parsed (%machine-explain text))))
@@ -353,6 +362,13 @@ of the same input differ only in how long they took."
       (expect status :to-equal 2)
       (expect (gethash "code" (gethash "error" (json-kit:parse output)))
               :to-equal "E_PARSE")))
+
+  (it "exits 2 with E_UNSUPPORTED_SYNTAX for a removed bare-line builtin"
+    (destructuring-bind (status output)
+        (%machine-cli-run '("--json" "explain" "echo hi; and true"))
+      (expect status :to-equal 2)
+      (expect (gethash "code" (gethash "error" (json-kit:parse output)))
+              :to-equal "E_UNSUPPORTED_SYNTAX")))
 
   (it "prints the same envelope without --json"
     ;; language/L2 2.5 and the ux chapters define only the JSON form, so the

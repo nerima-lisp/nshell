@@ -186,24 +186,3 @@
       (expect "second" :to-equal (nshell.domain.environment:env-get
                   (nshell.application:shell-context-environment context)
                   "item")))))
-(describe "legacy-source-function-reader-tests"
-  (it "source-function-definition-supports-inline-body"
-    "source registers functions defined on a single line with an inline body."
-    (with-builtins-source-ok (output code context
-                                     '("function foo; echo hi; end"
-                                       "foo"))
-        (format nil "hi~%")
-      (expect '("echo hi") :to-equal
-              (gethash "foo"
-                       (nshell.application:shell-context-function-table
-                        context)))))
-  (it "source-function-definition-preserves-trailing-inline-commands"
-    "source keeps commands that follow an inline function definition on the same line."
-    (with-builtins-source-ok (output code context
-                                     '("function foo; echo hi; end; foo"))
-        (format nil "hi~%")
-      (expect '("echo hi") :to-equal
-              (gethash "foo"
-                       (nshell.application:shell-context-function-table
-                        context))))))
-

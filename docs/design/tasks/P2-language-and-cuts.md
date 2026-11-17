@@ -60,7 +60,7 @@ language/L7.1 の各行は、v0.8 で新しい挙動に切り替えるものと�
 
 - [ ] contracts 層 (src/application/contracts, src/presentation/contracts) を unit テストに吸収して削除
 - [ ] NFR 計測・競合ベンチのスクリプトのうち、P0-7 の計測で置き換えたものだけを削除する。fuzz の入力 (`scripts/measure-nfr-07-09.py` の `lisp_fuzz_source`) は P5-3 のために残す
-- [ ] fish 形式のビルトイン 10 個 (and or not break continue function count contains seq math)、prevd / nextd、pipeline-graph
+- [x] fish 形式のビルトイン 10 個 (and or not break continue function count contains seq math)、prevd / nextd、pipeline-graph
 - [x] slurp / barf、マウス、Ctrl-X 再実行、Alt-C / Alt-L / Alt-U / Alt-T の既定割り当て
 - [ ] シナリオコーパスを、30〜40 本を目安に (基準に当たる 41 本) 絞る。batch のものは golden へ移し、それ以外は 1 本ずつ削除の理由を記録する。CI が ID を指定している P12・L02・T06・J05・Q03・Q07・Q08 は残す。1 本ずつの判定は [P1-7c-scenario-corpus.md](P1-7c-scenario-corpus.md) に従う。Q05 の NFS VM 専用ジョブと試行は、2026-11-15 の別々の試行で delayed glob の 3 回目と baseline glob の 1 回目が失敗し、nshell の変更ごとに CI が不安定になっていたため前倒しで外した (`e0c76568`)。`Q05-git-probe-timeout-does-not-block-input` シナリオは、前倒しで外したものに含まれない
   - [ ] [P1-7c-scenario-corpus.md](P1-7c-scenario-corpus.md) で [削除 (先にテストを足す)] にしたシナリオは、一覧の「削除の前に」に書いたテストを足し、そのテストと同じコミットで消す。系統ごとに次の小項目で進める

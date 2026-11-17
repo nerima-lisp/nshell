@@ -84,9 +84,6 @@ nshell uses these `nerima-lisp` Common Lisp toolkits:
   rule-based tokenizer and Pratt (operator-precedence) parser drive `$((...))`
   arithmetic, which parses to an AST and then evaluates, adding `**`, bitwise
   `& | ^ ~`, shifts `<< >>`, and the ternary `?:`.
-- **[cl-dataflow-kit](https://github.com/nerima-lisp/cl-dataflow-kit)**: renders
-  pipelines as validated computation graphs (`pipeline-graph`) and models the
-  job lifecycle as an analyzable state machine.
 - **[cl-boundary-kit](https://github.com/nerima-lisp/cl-boundary-kit)**: makes
   the REPL edge's OS effects (hostname, working directory, clock) explicit,
   swappable boundaries, so the prompt and command timing are deterministic

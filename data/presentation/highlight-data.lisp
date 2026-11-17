@@ -4,8 +4,8 @@
 
 (defvar *builtin-commands*
   '("echo" "printf" "pwd" "cd" "exit" "fg" "bg" "jobs" "disown" "agent" "ai"
-    "set" "export" "unset" "alias" "abbr" "function" "source" "exec"
-    "true" "false" "contains" "test" "type" "which" "history" "help")
+    "set" "export" "unset" "alias" "abbr" "source" "exec"
+    "true" "false" "test" "type" "which" "history" "help")
   "Commands built into nshell that get distinct highlighting.")
 
 (defparameter +operator-token-types+

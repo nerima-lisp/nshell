@@ -1,5 +1,8 @@
 (in-package #:nshell.domain.parsing)
 
+;; Defined in unsupported-syntax.lisp, which needs SEXP-READER-ERROR first.
+(declaim (ftype function reject-unsupported-bare-line-syntax))
+
 (progn
   (define-condition sexp-reader-error
     (error nshell.domain.error-codes:nshell-error-code-mixin)
@@ -899,6 +902,11 @@ unchanged when it cannot be mapped."
             (%sexp-reader-read-sexps)
             (multiple-value-bind (form span)
                 (%sexp-reader-read-bare-line source)
+              (when form
+                (reject-unsupported-bare-line-syntax
+                 form source
+                 :source-path source-path
+                 :source-map source-map))
               (if form
                   (list (%sexp-reader-make-result form span t))
                   nil)))

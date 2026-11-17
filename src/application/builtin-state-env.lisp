@@ -236,30 +236,3 @@
                                        nil)
             (values nil 0))
           (values nil 1)))))
-
-(defun %parse-loop-control-count (args)
-  (cond
-    ((null args) 1)
-    ((cdr args) nil)
-    (t
-     (handler-case
-         (let ((count (parse-integer (first args) :junk-allowed nil)))
-           (and (plusp count) count))
-       (parse-error () nil)))))
-
-(defun %builtin-loop-control (command kind args)
-  (unless (plusp *loop-control-depth*)
-    (return-from %builtin-loop-control
-      (values (format nil "~a: only meaningful in a loop~%" command) 1)))
-  (let ((count (%parse-loop-control-count args)))
-    (unless count
-      (return-from %builtin-loop-control
-        (values (format nil "~a: usage: ~a [N]~%" command command) 2)))
-    (setf *loop-control-signal* (cons kind count))
-    (values nil 0)))
-
-(define-builtin %builtin-break (context args) (context)
-  (%builtin-loop-control "break" :break args))
-
-(define-builtin %builtin-continue (context args) (context)
-  (%builtin-loop-control "continue" :continue args))

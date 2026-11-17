@@ -29,26 +29,6 @@ records and `select` keeps the requested fields:
 This prints `1`. The value pipeline carries Lisp records; `|` connects byte
 streams between commands.
 
-## Draw a pipeline without running it
-
-`pipeline-graph` parses a simple command pipeline and prints a Graphviz DOT graph
-without executing the commands. Quote the pipeline so `|` is passed as part of
-one argument:
-
-```text
-pipeline-graph 'echo hello | tr a-z A-Z' > pipeline.dot
-```
-
-Open `pipeline.dot` with a Graphviz renderer. To print a Mermaid flowchart
-instead, add `--mermaid` before the quoted pipeline; the Mermaid source goes to
-standard output. If Graphviz is installed, render the DOT file as SVG with:
-
-```sh
-dot -Tsvg pipeline.dot -o pipeline.svg
-```
-
-Open `pipeline.svg` in an image viewer or browser.
-
 ## Convert JSON, TSV, and lines
 
 The value library converts JSON and TSV strings to records and back. It also

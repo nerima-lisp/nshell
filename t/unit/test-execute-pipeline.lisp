@@ -2285,16 +2285,17 @@ process; those children still need the shell's exported variables."
                 (nshell.application:pipeline-execution-result-status result))))))
 
 (describe "pipeline-upstream-broken-pipe-tests"
-  ;; The builtin seq writes about 590 KB, more than any default pipe capacity,
-  ;; so its write either blocks until the reader exits or starts after it;
-  ;; both end in EPIPE. The nested producer runs seq as the last stage of the
-  ;; function's own pipeline, so its EPIPE reaches the outer stage wrapped.
-  (labels ((broken-pipe-line (consumer &key nested)
+  ;; The builtin string repeat writes 600 KB, more than any default pipe
+  ;; capacity, so its write either blocks until the reader exits or starts
+  ;; after it; both end in EPIPE. The nested producer runs it as the last stage
+  ;; of the function's own pipeline, so its EPIPE reaches the outer stage
+  ;; wrapped.
+  (labels ((broken-pipe-lines (consumer &key nested)
              (if nested
-                 (format nil "function f; true | seq 1 100000; end; f | ~A"
-                         consumer)
-                 (format nil "seq 1 100000 | ~A" consumer)))
-           (run-batch (line)
+                 (list "(defun f () (| (true) (string repeat -n 100000 123456)))"
+                       (format nil "f | ~A" consumer))
+                 (list (format nil "string repeat -n 100000 123456 | ~A" consumer))))
+           (run-batch (lines)
              (with-repl-test-state
                (let* ((code nil)
                       (stdout nil)
@@ -2302,9 +2303,11 @@ process; those children still need the shell's exported variables."
                         (with-output-to-string (*error-output*)
                           (setf stdout
                                 (with-output-to-string (*standard-output*)
-                                  (setf code
-                                        (nshell.presentation:run-repl-batch
-                                         :line line)))))))
+                                  (let ((*standard-input*
+                                          (make-string-input-stream
+                                           (format nil "~{~A~%~}" lines))))
+                                    (setf code
+                                          (nshell.presentation:run-repl-batch))))))))
                  (values code stdout stderr)))))
     (dolist (nested '(nil t))
       (let ((nested nested)
@@ -2313,8 +2316,8 @@ process; those children still need the shell's exported variables."
                     suffix)
           "A builtin writing into a pipe whose reader was killed by SIGTERM yields the reader's 143, not a shell error."
           (multiple-value-bind (code stdout stderr)
-              (run-batch (broken-pipe-line "sh -c 'exec 0<&-; kill -TERM $$'"
-                                           :nested nested))
+              (run-batch (broken-pipe-lines "sh -c 'exec 0<&-; kill -TERM $$'"
+                                            :nested nested))
             (expect stderr :to-equal "")
             (expect code :to-equal 143)
             (expect stdout :to-equal "")))
@@ -2323,9 +2326,8 @@ process; those children still need the shell's exported variables."
                     suffix)
           "The upstream stage that hit EPIPE reports 128+SIGPIPE while the pipeline keeps the last stage's status."
           (multiple-value-bind (code stdout stderr)
-              (run-batch (format nil "~A; echo $pipestatus"
-                                 (broken-pipe-line "sh -c 'exec 0<&-; exit 0'"
-                                                   :nested nested)))
+              (run-batch (broken-pipe-lines "sh -c 'exec 0<&-; exit 0'; echo $pipestatus"
+                                            :nested nested))
             (expect stderr :to-equal "")
             (expect code :to-equal 0)
             (expect stdout

@@ -50,11 +50,9 @@ Return the exit status, the error output, and the crash log count."
 
 (describe "crash-cause-regressions"
   (it "scanner-rejected-script-forms-are-e-parse-diagnostics-without-a-crash-log"
-    ;; Probes sort-in-value, redir-value-target, and pipe-mixed-2: the reader
-    ;; accepts each form but the scanner reports it invalid or incomplete.
-    (dolist (case '(("(echo ,(sort (list 3 1 2) (function <)))
-" 2 "case.nsh:1:38: syntax error [37,38)")
-                    ("(echo hi > ,(concatenate (quote string) \"o\" \"3.txt\"))
+    ;; Probes redir-value-target and pipe-mixed-2: the reader accepts each
+    ;; form but the scanner reports it invalid or incomplete.
+    (dolist (case '(("(echo hi > ,(concatenate (quote string) \"o\" \"3.txt\"))
 (^cat o3.txt)
 " 2 "case.nsh:1:13: syntax error [12,13)")
                     ;; An empty span at the end of the input exits 1, as
@@ -70,6 +68,17 @@ Return the exit status, the error output, and the crash log count."
           (expect "" :to-equal output)
           (expect (search expected-diagnostic error-output) :to-be-truthy)
           (expect (search "crash log" error-output) :to-be-null)))))
+
+  (it "a-function-form-in-a-value-is-lisp-without-a-crash-log"
+    ;; Probe sort-in-value: with the function builtin gone (P2-6), (function <)
+    ;; is the CL special form, so the sorted list reaches ECHO as an argument.
+    (multiple-value-bind (status output error-output crash-logs)
+        (%crash-cause-run-script "(echo ,(sort (list 3 1 2) (function <)))
+")
+      (expect 0 :to-equal crash-logs)
+      (expect 1 :to-equal status)
+      (expect (search "Command argument (1 2 3) is not a string" output) :to-be-truthy)
+      (expect (search "crash log" error-output) :to-be-null)))
 
   (it "a-non-scalar-command-argument-is-e-arg-type-without-a-crash-log"
     ;; Probe defun-sym-args: ,(+ 1 1) reaches ECHO as an unevaluated comma
@@ -160,8 +169,8 @@ Return the exit status, the error output, and the crash log count."
 
   (it "a-reader-error-in-batch-mode-reports-its-message-and-location"
     (dolist (case '(("(echo hi" "<input>: syntax error [8,8): Expected a datum.")
-                    ("(echo ,(sort (list 3 1 2) (function <)))"
-                     "<input>: syntax error [37,38): Invalid syntax in this form.")))
+                    ("(echo hi > ,(concatenate (quote string) \"o\" \"3.txt\"))"
+                     "<input>: syntax error [12,13): Invalid syntax in this form.")))
       (destructuring-bind (line expected) case
         (multiple-value-bind (status error-output crash-logs)
             (%crash-cause-run-batch line)

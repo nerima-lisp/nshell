@@ -112,20 +112,6 @@ base: a command registered via -c shows up as a -C candidate."
         (expect 0 :to-equal code)
         (expect (search "deploy" output) :to-be-truthy))))
 
-  (it "function-builtin-stores-and-manages-inline-body"
-    "function builtin stores inline fish-style bodies and exposes management operations."
-    (with-builtins-context (context)
-      (assert-fish-style-table-builtin-roundtrip
-          (context "function" (nshell.application:shell-context-function-table context)
-                   "hi" '("echo hello")
-                   '("hi" "echo" "hello" "end")
-                   "function hi"
-                   "function: -e requires a name
-"
-                   '("-e" "hi")
-                   "missing"
-                   :body-contains ("  echo hello" "end")))))
-
   (it "history-builtin-searches-deletes-clears-and-reports-size"
     "history builtin exposes fish-style in-memory history management."
     (let* ((context (make-test-builtins-context))

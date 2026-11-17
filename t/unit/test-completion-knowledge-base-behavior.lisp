@@ -198,7 +198,7 @@
                        kb "c"
                        :path "/mock:/other"
                        :filesystem *completion-test-filesystem*))))
-          (expect texts :to-equal '("cd" "complete" "contains" "count" "cargo" "cat"))))))
+          (expect texts :to-equal '("cd" "complete" "cargo" "cat"))))))
 
   (it "path-command-cache-reuses-entries-and-rechecks-executable-status"
     (let ((directory-reads 0)

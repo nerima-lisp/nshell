@@ -360,9 +360,9 @@ whether the gate stopped it."
                   :to-equal (list 3 t nil)))))))
 
 (defparameter +safety-view-resolution-sources+
-  '((:bare "echo hi") (:bare "ls -la") (:bare "git status") (:bare "not ls")
+  '((:bare "echo hi") (:bare "ls -la") (:bare "git status")
     (:bare "command echo x") (:bare "ls | cat")
-    (:auto "echo hi") (:auto "ls -la") (:auto "git status") (:auto "not ls")
+    (:auto "echo hi") (:auto "ls -la") (:auto "git status") (:auto "command echo x")
     (:auto "(echo hi)") (:auto "(ls)") (:auto "(^ls)") (:auto "(git status)")
     (:auto "ls | cat")
     (:bare "head -n 2 a") (:auto "head -n 2 a")
@@ -440,7 +440,7 @@ DIRECTORY, autoloadable function files named echo, ls, pwd, which, type, and com
                 ;; Each alias runs a command of another resolution.
                 (loop for (name . text) in '(("echo" . "ls -la")
                                              ("ls" . "echo aliased")
-                                             ("git" . "not ls")
+                                             ("git" . "command ls")
                                              ("head" . "echo aliased")
                                              ("tail" . "echo aliased")
                                              ("wc" . "echo aliased")
@@ -560,7 +560,7 @@ the gate, and the executor see them."
                 (incf compared)
                 (expect (list label reader source enter gate)
                         :to-equal (list label reader source executor executor)))))))
-      (expect compared :to-equal 156)))))))
+      (expect compared :to-equal 152)))))))
 
 (describe "safety classification loads no function file"
   (it "leaves function files unread at Enter and at the gate"

@@ -13,7 +13,7 @@
     "type reports aliases, functions, builtins, and commands discovered through PATH."
     (with-builtins-context (context)
       (call-builtin context "alias" '("ll" "ls" "-l"))
-      (call-builtin context "function" '("hi" "echo" "hello" "end"))
+      (define-test-shell-function context "hi" "echo hello")
       (call-builtin context "abbr" '("-a" "gs" "git status"))
       (assert-builtin-call (context "type" '("echo" "ll" "hi" "gs" "/bin/echo" "missing"))
         :code 0
@@ -50,20 +50,15 @@
         :contains '("unknown option --bogus"))
       (assert-builtin-call (context "type" nil)
         :code 1)))
-  (it "function-builtin-stores-inline-body-without-end-marker"
-    "function accepts a body that does not carry the interactive end marker."
-    (with-builtins-context (context)
-      (assert-builtin-call (context "function" (list "plain" "echo" "hello"))
-        :code 0
-        :output-null t)
-      (assert-builtin-call (context "type" (list "plain"))
-        :code 0
-        :contains (list "plain is a function" "echo hello"))))
 
   (it "builtin-registry-exposes-executable-builtins-at-load-time"
     "lookup-builtin returns the executable builtin handlers immediately after load."
-    (dolist (name '("echo" "exit" "pwd" "string" "type" "not"))
-      (expect (nshell.application:lookup-builtin name) :to-be-truthy)))
+    (dolist (name '("echo" "exit" "pwd" "string" "type" "functions"))
+      (expect (nshell.application:lookup-builtin name) :to-be-truthy))
+    ;; v0.8 removed these builtins (P2-6).
+    (dolist (name '("count" "contains" "seq" "math" "prevd" "nextd" "pipeline-graph"
+                    "and" "or" "not" "break" "continue" "function"))
+      (expect (nshell.application:lookup-builtin name) :to-be-null)))
 
   (it "builtin-registry-covers-the-canonical-builtin-catalog"
     "Every builtin listed in the canonical catalog should be registered at load time."
@@ -288,8 +283,8 @@
       (expect error-output :to-contain "usage: type")
       (expect 2 :to-equal code)))
 
-  (it "pure-command-parsers-cover-status-sequences-and-membership"
-    "The command helpers keep parsing and sequence generation deterministic."
+  (it "pure-command-parsers-cover-status-and-assignments"
+    "The command helpers keep exit-status and assignment parsing deterministic."
     (multiple-value-bind (status valid-p)
         (nshell.application::%parse-exit-status "-513")
       (expect 255 :to-equal status)
@@ -298,27 +293,6 @@
         (nshell.application::%parse-exit-status "12x")
       (expect nil :to-equal status)
       (expect valid-p :to-be-falsy))
-    (multiple-value-bind (index-p operands error-output)
-        (nshell.application::%parse-contains-args '("--index" "needle" "needle" "other"))
-      (expect index-p :to-be-truthy)
-      (expect '("needle" "needle" "other") :to-equal operands)
-      (expect nil :to-equal error-output))
-    (multiple-value-bind (index-p operands error-output)
-        (nshell.application::%parse-contains-args '("--bogus" "needle"))
-      (expect index-p :to-be-falsy)
-      (expect nil :to-equal operands)
-      (expect error-output :to-contain "unknown option"))
-    (expect '(1 3) :to-equal
-            (nshell.application::%contains-match-indexes "x" '("x" "y" "x")))
-    (multiple-value-bind (first step last)
-        (nshell.application::%seq-parse-args '("5"))
-      (expect '(1 1 5) :to-equal (list first step last)))
-    (multiple-value-bind (first step last)
-        (nshell.application::%seq-parse-args '("5" "2" "1"))
-      (expect '(5 2 1) :to-equal (list first step last)))
-    (expect '(1 3 5) :to-equal (nshell.application::%seq-values 1 2 5))
-    (expect '(5 3 1) :to-equal (nshell.application::%seq-values 5 -2 1))
-    (expect nil :to-equal (nshell.application::%seq-values 1 0 5))
     (expect t :to-be (nshell.application::%shell-variable-name-p "_ready2026"))
     (expect nil :to-be (nshell.application::%shell-variable-name-p "9invalid"))
     (expect nil :to-be (nshell.application::%shell-variable-name-p "has-dash"))
@@ -331,41 +305,13 @@
         (nshell.application::%export-assignment "EMPTY")
       (expect "EMPTY" :to-equal name)
       (expect nil :to-be value)
-      (expect nil :to-be assignment-p))
-    (expect 1 :to-equal (nshell.application::%parse-loop-control-count nil))
-    (expect 3 :to-equal (nshell.application::%parse-loop-control-count '("3")))
-    (expect nil :to-be (nshell.application::%parse-loop-control-count '("0")))
-    (expect nil :to-be (nshell.application::%parse-loop-control-count '("-1")))
-    (expect nil :to-be (nshell.application::%parse-loop-control-count '("")))
-    (expect nil :to-be (nshell.application::%parse-loop-control-count '("1" "2")))
-    (expect nil :to-be (nshell.application::%parse-loop-control-count '("nope"))))
+      (expect nil :to-be assignment-p)))
 
-  (it "seq-validates-arguments-and-renders-both-directions"
-    "seq exposes deterministic diagnostics for invalid forms and newline-delimited values for valid forms."
-    (with-builtins-context (context)
-      (assert-builtin-call (context "seq" nil)
-        :code 2
-        :contains '("seq: usage:"))
-      (assert-builtin-call (context "seq" '("1" "2" "3" "4"))
-        :code 2
-        :contains '("seq: usage:"))
-      (assert-builtin-call (context "seq" '("not-a-number"))
-        :code 2
-        :contains '("seq: arguments must be integers"))
-      (assert-builtin-call (context "seq" '("1" "0" "3"))
-        :code 2
-        :contains '("seq: STEP must not be zero"))
-      (assert-builtin-call (context "seq" '("3"))
-        :code 0
-        :output (format nil "1~%2~%3~%"))
-      (assert-builtin-call (context "seq" '("3" "-1" "1"))
-        :code 0
-        :output (format nil "3~%2~%1~%"))))
 
   (it "type-colorizes-only-the-function-definition-branch"
     "type --color colors the function definition block without changing short output."
     (with-builtins-context (context)
-      (call-builtin context "function" '("hi" "echo" "hello" "end"))
+      (define-test-shell-function context "hi" "echo hello")
       (multiple-value-bind (output code)
           (call-builtin context "type" '("--color" "hi"))
         (expect 0 :to-equal code)
@@ -397,7 +343,7 @@
         (assert-builtin-call (context "type" '("-t" "sourced-hi"))
           :code 0
           :output (format nil "function~%"))
-        (call-builtin context "function" '("sourced-hi" "echo" "updated" "end"))
+        (define-test-shell-function context "sourced-hi" "echo updated")
         (assert-builtin-call (context "type" '("-p" "sourced-hi"))
           :code 0
           :output-empty t))))
@@ -412,7 +358,7 @@
                      :executable-p
                      (lambda (path)
                        (string= path "/opt/bin/shadowed"))))))
-      (call-builtin context "function" '("shadowed" "echo" "shadowed" "end"))
+      (define-test-shell-function context "shadowed" "echo shadowed")
       (assert-builtin-call (context "type" '("-f" "shadowed"))
         :code 0
         :contains '("shadowed is /opt/bin/shadowed"))
@@ -459,8 +405,7 @@
         :code 0
         :contains '("nshell builtin commands:" "echo [argument ...] - print arguments; use $NAME or ,EXPR for S-expression values"
                     "help [command] - show help"
-                    "history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size] - show and manage command history"
-                    "contains [-i|--index] string [values...] - test whether a value is present"))
+                    "history [search [--prefix|--contains|--exact|--case-sensitive] query | delete command | clear | size] - show and manage command history"))
         (assert-builtin-call (context "help" '("string"))
           :code 0
           :output "string collect|length|lower|upper|join|split|replace|match|repeat|sub|trim ...; string replace|match|repeat|sub|trim ... - manipulate strings
@@ -496,52 +441,6 @@
       (assert-builtin-call (context "test" '("-e" "/nonexistent-xyz")) :code 1)
       (assert-builtin-call (context "test" '("1" "-zz" "2")) :code 2)
       (assert-builtin-call (context "test" '("x" "-eq" "1")) :code 2)))
-
-  (it "not-inverts-command-status-and-preserves-output"
-    "not dispatches a command and flips only its exit status."
-    (with-builtins-context (context)
-      (assert-builtin-call (context "not" '("false")) :code 0 :output-null t)
-      (assert-builtin-call (context "not" '("true")) :code 1 :output-null t)
-      (assert-builtin-call (context "not" '("test" "-f" "/etc/hosts"))
-        :code 1
-        :output-null t)
-      (assert-builtin-call (context "not" '("test" "-f" "/definitely/not/a/nshell-file"))
-        :code 0
-        :output-null t)
-      (assert-builtin-call (context "not" '("echo" "hello"))
-        :code 1
-        :output (format nil "hello~%"))
-      (assert-builtin-call (context "not" nil)
-        :code 2
-        :contains '("usage"))))
-
-  (it "not-inverts-external-runner-status"
-    "preserves the external runner status for non-builtin commands."
-    (let* ((seen nil)
-           (context (make-test-builtins-context)))
-      (with-test-external-capture-runner
-          (lambda (command args)
-            (setf seen (list command args))
-            (values nil 7))
-        (multiple-value-bind (output code)
-            (call-builtin context "not" '("external-cmd" "one" "two"))
-          (expect output :to-be-null)
-          (expect 0 :to-equal code)
-          (expect '("external-cmd" ("one" "two")) :to-equal seen)))))
-
-  (it "not-preserves-captured-external-output"
-    "not preserves captured external command output while flipping its status."
-    (let* ((seen nil)
-           (context (make-test-builtins-context)))
-      (with-test-external-capture-runner
-          (lambda (command args)
-            (setf seen (list command args))
-            (values (format nil "captured output~%") 0))
-        (multiple-value-bind (output code)
-            (call-builtin context "not" '("external-cmd" "one" "two"))
-          (expect (format nil "captured output~%") :to-equal output)
-          (expect 1 :to-equal code)
-          (expect '("external-cmd" ("one" "two")) :to-equal seen)))))
 
   (it "type-option-p-recognizes-dash-prefixed-strings"
     "type-option-p returns true only for strings starting with a dash of length >= 2."

@@ -258,27 +258,6 @@
       (expect 0 :to-equal
               (nshell.application:shell-context-last-exit-code context))))
 
-  (it "loop-control-validates-context-and-count"
-    "break and continue reject invalid contexts/counts and expose their signals."
-    (multiple-value-bind (output code)
-        (nshell.application::%builtin-loop-control "break" :break nil)
-      (expect output :to-equal "break: only meaningful in a loop
-")
-      (expect code :to-equal 1))
-    (let ((nshell.application::*loop-control-depth* 1)
-          (nshell.application::*loop-control-signal* nil))
-      (dolist (args '("0" "1x"))
-        (multiple-value-bind (output code)
-            (nshell.application::%builtin-loop-control "continue" :continue (list args))
-          (expect output :to-equal "continue: usage: continue [N]
-")
-          (expect code :to-equal 2)))
-      (multiple-value-bind (output code)
-          (nshell.application::%builtin-loop-control "break" :break '("2"))
-        (expect output :to-be-null)
-        (expect code :to-equal 0)
-        (expect nshell.application::*loop-control-signal* :to-equal '(:break . 2)))))
-
   (it "alias-adds-lists-queries-and-erases-expansions"
     "alias stores fish-style multi-token command expansions in the current context."
     (with-builtins-context (context)
@@ -474,14 +453,14 @@
         :code 1
         :contains '("abbr: usage:"))))
 
-  (it "function-erase-clears-stored-source-body"
-    "function -e removes generated body and original source table entry together."
+  (it "functions-erase-clears-stored-source-body"
+    "functions -e removes generated body and original source table entry together."
     (with-builtins-context (context)
       (let ((function-table (nshell.application:shell-context-function-table context))
             (source-table (nshell.application:shell-context-function-source-table context)))
         (setf (gethash "greet" function-table) '("echo hi")
               (gethash "greet" source-table) "function greet; echo source; end")
-        (assert-builtin-call (context "function" '("-e" "greet"))
+        (assert-builtin-call (context "functions" '("-e" "greet"))
           :code 0
           :output-null t)
         (expect (nth-value 1 (gethash "greet" function-table)) :to-be-falsy)
@@ -525,10 +504,9 @@
       (expect "a b" :to-equal (join '("a" "b") " "))))
 
   (it "everyday-shell-builtins-are-registered"
-    "math, the directory stack, functions/builtin, and and/or all resolve
-through the same registry the rest of the builtins use."
-    (dolist (name '("math" "dirs" "pushd" "popd" "prevd" "nextd"
-                    "functions" "builtin" "and" "or"))
+    "The directory stack and functions/builtin resolve through the same
+registry the rest of the builtins use."
+    (dolist (name '("dirs" "pushd" "popd" "functions" "builtin"))
       (expect (nshell.application:lookup-builtin name) :to-be-truthy)))
 
   (it "builtin-option-helpers-cover-common-cli-flag-shape"

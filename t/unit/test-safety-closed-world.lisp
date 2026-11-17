@@ -52,7 +52,7 @@
     (%closed-world-expect-levels
      '(("nice -n 10 ls" :safe) ("timeout 5 ls" :safe)
        ("timeout -s KILL -k 1 5 ls -la" :safe) ("time -p ls" :safe)
-       ("not ls" :safe) ("time -o FILE ls" :confirm) ("time -a ls" :confirm)
+       ("time -o FILE ls" :confirm) ("time -a ls" :confirm)
        ("nice -n -5 ls" :confirm) ("timeout --foreground 5 ls" :confirm)
        ("nice -n 10 rm -rf /" :block) ("time -o FILE rm -rf /" :block)))
     (expect (%closed-world-rule-names "time -o FILE ls")

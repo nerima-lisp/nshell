@@ -37,6 +37,21 @@ descriptor, or NIL when no process has it open for reading (ENXIO)."
           nil
           (error condition)))))
 
+(defun %signal-e2e-fifo-reader-p (path)
+  "True when a process has the FIFO at PATH open for reading."
+  (let ((probe (%signal-e2e-open-fifo-writer path)))
+    (when probe
+      (sb-posix:close probe)
+      t)))
+
+(defun %signal-e2e-slow-compile-form (ready)
+  "Two lines of input: an S-expression that writes READY, and one whose macro
+expander sleeps 30 s while nshell has SBCL compile it, so SBCL is inside a
+compilation unit meanwhile."
+  (format nil "(WITH-OPEN-FILE (OUT ~S :DIRECTION :OUTPUT) (WRITE-LINE \"r\" OUT))~%~
+               (MACROLET ((M () (CL:SLEEP 30) NIL)) (M))"
+          (namestring ready)))
+
 (defun %signal-e2e-clean-groups (directory)
   (dolist (file (directory (merge-pathnames "*.pids" directory)))
     (let ((pgid (first (%signal-e2e-pids file))))
@@ -85,10 +100,13 @@ descriptor, or NIL when no process has it open for reading (ENXIO)."
              (%e2e-child-environment)))))
 
 (defun %signal-e2e-run (directory arguments ready-files signal
-                         &key input agent-p second-signal ready-p)
-  "Run nshell with ARGUMENTS in DIRECTORY, send it SIGNAL once every file in
-READY-FILES has content and, with READY-P, once that function of no
-arguments returns true, and return its stdout, stderr and exit status."
+                         &key input agent-p second-signal ready-p (signal-delay 0)
+                           at-envelope)
+  "Run nshell with ARGUMENTS in DIRECTORY, send it SIGNAL SIGNAL-DELAY
+seconds after every file in READY-FILES has content and, with READY-P, that
+function of no arguments returns true, and return its stdout, stderr and exit
+status. AT-ENVELOPE, a function of no arguments, is called as soon as stdout
+holds a whole line, which may be before nshell has exited."
   (let* ((root (or *noninteractive-signal-source-root*
                    (asdf:system-source-directory :nshell)))
          (stdout (merge-pathnames "stdout" directory))
@@ -137,12 +155,16 @@ arguments returns true, and return its stdout, stderr and exit status."
            (expect (truename (string-trim '(#\Newline)
                                          (%signal-e2e-read source-file)))
                    :to-equal (truename root))
+           (sleep signal-delay)
            (sb-posix:kill (sb-ext:process-pid program) signal)
            (when second-signal
              (sleep 0.2)
              (sb-posix:kill (sb-ext:process-pid program) second-signal))
            (%signal-e2e-wait
-            (lambda () (not (sb-ext:process-alive-p program)))
+            (lambda ()
+              (when (and at-envelope (find #\Newline (%signal-e2e-read stdout)))
+                (funcall (shiftf at-envelope nil)))
+              (and (null at-envelope) (not (sb-ext:process-alive-p program))))
             "the interrupted nshell to exit" 10)
            (sb-ext:process-wait program)
            (values (%signal-e2e-read stdout)
@@ -192,12 +214,39 @@ arguments returns true, and return its stdout, stderr and exit status."
                    (%signal-e2e-expect-gone pids)))
             (%signal-e2e-clean-groups directory))))))
 
+  (it "bug4-json-stops-children-before-it-prints-the-envelope"
+    ;; The child ignores SIGTERM, so only the signal path's SIGKILL removes it
+    ;; before the envelope; nshell's exit would stop it only later.
+    (dolist (signal (list (list sb-unix:sigint "SIGINT")
+                         (list sb-unix:sigterm "SIGTERM")
+                         (list sb-unix:sighup "SIGHUP")))
+      (host-kit:with-temporary-directory (directory)
+        (unwind-protect
+             (multiple-value-bind (command pids)
+                 (%signal-e2e-fixture directory "child" :ignore-term-p t)
+               (let ((gone-at-envelope :not-checked))
+                 (multiple-value-bind (stdout stderr status)
+                     (%signal-e2e-run
+                      directory (list "--json" "--command" command)
+                      (list pids) (first signal)
+                      :at-envelope (lambda ()
+                                     (setf gone-at-envelope
+                                           (%signal-e2e-group-gone-p
+                                            (first (%signal-e2e-pids pids))))))
+                   (%signal-e2e-expect-envelope stdout stderr status (second signal)))
+                 (expect gone-at-envelope :to-be t)))
+          (%signal-e2e-clean-groups directory)))))
+
   (it "bug4-agent-json-signals-stop-the-child-and-return-one-envelope"
     ;; NSHELL_AGENT=1 refuses sh, whose script it cannot check, so the child
     ;; is cat reading a FIFO, which classifies :safe and blocks. The test
     ;; holds the FIFO's write end open, so cat waits in read; a FIFO opened
     ;; for writing without blocking fails with ENXIO once no process has it
-    ;; open for reading, which shows that cat is gone.
+    ;; open for reading, which shows that cat is gone. That cat is gone even
+    ;; when only nshell's exit stopped it: a check at the envelope, as in
+    ;; bug4-json-stops-children-before-it-prints-the-envelope, cannot tell
+    ;; the two apart, since cat dies on the first SIGTERM and there is no
+    ;; :safe command that ignores it.
     (dolist (signal (list (list sb-unix:sigint "SIGINT")
                          (list sb-unix:sigterm "SIGTERM")
                          (list sb-unix:sighup "SIGHUP")))
@@ -216,10 +265,7 @@ arguments returns true, and return its stdout, stderr and exit status."
                  (let ((envelope (%signal-e2e-expect-envelope stdout stderr status
                                                               (second signal))))
                    (expect (json-at envelope "safety" "level") :to-equal "safe"))
-                 (%signal-e2e-wait (lambda ()
-                                     (let ((probe (%signal-e2e-open-fifo-writer fifo)))
-                                       (when probe (sb-posix:close probe))
-                                       (null probe)))
+                 (%signal-e2e-wait (lambda () (not (%signal-e2e-fifo-reader-p fifo)))
                                    "the interrupted cat to close the FIFO" 3))
             (when writer (sb-posix:close writer)))))))
 
@@ -376,4 +422,53 @@ arguments returns true, and return its stdout, stderr and exit status."
                        (expect (probe-file trap-file) :to-be-null)
                        (expect (json-pid-alive-p (first (%signal-e2e-pids background-pids)))
                                :to-be-truthy)))))
-          (%signal-e2e-clean-groups directory))))))
+          (%signal-e2e-clean-groups directory)))))
+
+  (it "bug4-batch-signal-is-not-taken-over-by-a-command-substitution-timeout"
+    ;; The substitution's 1 s deadline passes while the signal stops the
+    ;; child, which ignores SIGTERM and so lasts the whole grace period. Its
+    ;; timeout must not end the unwind and let the script go on.
+    (host-kit:with-temporary-directory (directory)
+      (let ((script (merge-pathnames "run.nsh" directory))
+            (ready (merge-pathnames "ready" directory))
+            (after (merge-pathnames "after" directory)))
+        (with-open-file (out script :direction :output)
+          (format out "(SETF NSHELL.APPLICATION::*COMMAND-SUBSTITUTION-TIMEOUT* 1)~%~
+                       echo $(sh -c 'trap \"\" TERM; : > ~A; sleep 30')~%~
+                       touch ~A~%sleep 2~%"
+                  (namestring ready) (namestring after)))
+        (multiple-value-bind (stdout stderr status)
+            (%signal-e2e-run directory (list (namestring script)) nil sb-unix:sigterm
+                             :ready-p (lambda () (probe-file ready))
+                             :signal-delay 0.6)
+          (declare (ignore stdout))
+          (expect status :to-equal 143)
+          (expect stderr :to-equal (format nil "nshell: interrupted by SIGTERM~%")))
+        (sleep 1)
+        (expect (probe-file after) :to-be-null))))
+
+  (it "bug4-batch-signal-during-compilation-writes-only-its-own-line"
+    ;; The macro's expander runs while SBCL compiles the form, so the signal
+    ;; lands inside a compilation unit, whose early exit prints a summary.
+    (host-kit:with-temporary-directory (directory)
+      (let ((script (merge-pathnames "run.nsh" directory))
+            (ready (merge-pathnames "ready" directory)))
+        (with-open-file (out script :direction :output)
+          (format out "~A~%echo after~%" (%signal-e2e-slow-compile-form ready)))
+        (multiple-value-bind (stdout stderr status)
+            (%signal-e2e-run directory (list (namestring script)) (list ready)
+                             sb-unix:sigterm :signal-delay 0.3)
+          (expect status :to-equal 143)
+          (expect stderr :to-equal (format nil "nshell: interrupted by SIGTERM~%"))
+          (expect (search "after" stdout) :to-be-null)))))
+
+  (it "bug4-json-signal-during-compilation-keeps-stderr-empty"
+    (host-kit:with-temporary-directory (directory)
+      (let ((ready (merge-pathnames "ready" directory)))
+        (multiple-value-bind (stdout stderr status)
+            (%signal-e2e-run directory
+                             (list "--json" "--command"
+                                   (%signal-e2e-slow-compile-form ready))
+                             (list ready) sb-unix:sigint :signal-delay 0.3)
+          (let ((envelope (%signal-e2e-expect-envelope stdout stderr status "SIGINT")))
+            (expect (json-at envelope "stderr" "text") :to-equal "")))))))

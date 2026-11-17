@@ -233,4 +233,12 @@ the thread returns :DELIVERED or :NOT-DELIVERED."
             (expect (sb-thread:join-thread sender :default nil :timeout 5) :to-equal :delivered)
             (expect status :to-equal 130)
             (expect (json-at envelope "error" "message")
-                    :to-equal "the run was interrupted by SIGHUP")))))))
+                    :to-equal "the run was interrupted by SIGHUP"))))))
+
+  (it "keeps the summary of a compilation the deadline cut short out of stderr"
+    ;; The macro's expander sleeps while SBCL compiles the form, so the
+    ;; deadline unwinds a compilation unit, which then prints a summary.
+    (let ((envelope (json-command "(MACROLET ((M () (CL:SLEEP 30) NIL)) (M))"
+                                  :timeout 1)))
+      (expect (json-at envelope "error" "code") :to-equal "E_TIMEOUT")
+      (expect (json-at envelope "stderr" "text") :to-equal ""))))

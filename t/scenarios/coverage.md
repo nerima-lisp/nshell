@@ -50,7 +50,7 @@ executable scenarios and manual checks.
 | C03 | direct | 1 | 0 | `t/scenarios/C03/path-search-and-absolute-path.json` |
 | C04 | direct | 1 | 0 | `t/scenarios/C04/missing-command-suggestion-and-status.json` |
 | C05 | direct | 1 | 0 | `t/scenarios/C05/last-exit-status-is-visible.json` |
-| C06 | direct | 2 | 0 | `t/scenarios/C06/pipeline-streams-all-stages.json`, `t/scenarios/C06/builtin-reads-stdin.json` |
+| C06 | direct | 1 | 0 | `t/scenarios/C06/pipeline-streams-all-stages.json` |
 | C07 | direct | 1 | 0 | `t/scenarios/C07/redirection-family.json` |
 | C08 | direct | 1 | 0 | `t/scenarios/C08/here-doc-and-here-string.json` |
 | C09 | direct | 1 | 0 | `t/scenarios/C09/background-command-returns.json` |
@@ -233,4 +233,4 @@ executable scenarios and manual checks.
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 262 | 48 | — |
+| Total | expected corpus | 261 | 48 | — |

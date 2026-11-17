@@ -142,8 +142,8 @@ does not supply that runtime coverage.
   every integration case against the portable executable.
 - Release assets include a SHA-256 checksum. GitHub artifact attestations are
   not configured; the checksum alone is not a provenance attestation.
-- Validate the process-isolated benchmark scenarios in CI and collect equivalent
-  fixtures beyond the implemented minimal noninteractive literal-print case.
+- CI runs neither the `bench/` benchmarks nor the `scripts/perf/` A/B gate,
+  and no benchmark compares nshell with other shells.
 - Collect privileged cold-cache, interactive, completion, and end-to-end
   tail-latency evidence before making any broad performance claim. See
   [Performance evidence](../guide/recipes.md#performance-evidence).

@@ -213,41 +213,16 @@ NSHELL_BENCH_MODE=process NSHELL_BENCH_PROCESS_SAMPLES=100 \
 perl scripts/verify-benchmark-jsonl.pl process.jsonl
 ```
 
-For a repeated, process-isolated competitor run, resolve every executable from
-the flake's locked `nixpkgs` input and assign a stable run ID. The harness
-removes the caller's environment, uses a temporary home, records exact argv,
-raw samples, and failures, and accepts only executable paths under `/nix/store`:
-
-```sh
-nix build .#default
-BASH_STORE=$(nix eval --raw --inputs-from . nixpkgs#bash.outPath)
-ZSH_STORE=$(nix eval --raw --inputs-from . nixpkgs#zsh.outPath)
-NSHELL_COMPARE_RUN_ID=local-01 NSHELL_COMPARE_REPETITIONS=2 NSHELL_COMPARE_SAMPLES=100 \
-  NSHELL_BENCH_NSHELL_BIN="$(nix path-info .#default)/bin/nshell" \
-  NSHELL_BENCH_BASH_BIN="$BASH_STORE/bin/bash" \
-  NSHELL_BENCH_ZSH_BIN="$ZSH_STORE/bin/zsh" \
-  perl scripts/benchmark-competitors.pl
-perl scripts/verify-benchmark-jsonl.pl competitors.jsonl
-```
-
-The nshell candidate uses `--no-config --command`; Bash and Zsh use `-c` with
-the same `echo nshell-bench-sentinel` command. `echo` is a builtin in every
-candidate. The harness checks stdout, stderr, and exit status before and after
-measurement. A run is ranking-eligible only when at least two candidates
-complete every one of at least two repetitions; the verifier independently
-checks the complete run group.
-
-The cache classification is `fresh-process-warm-fs`: each sample is a fresh
-process, but the harness does not claim to flush filesystem or executable
-caches. A true cold-cache run requires a separately documented privileged host
-protocol and is not emitted by this harness. Eligibility therefore supports
-only this minimal noninteractive fixture and is not evidence about interactive
-use, completion, or cold startup.
-
 Run `perl scripts/verify-benchmark-jsonl.pl --self-test` to exercise the JSONL
 verifier without running a benchmark. `nix flake check` does not run this
-self-test. Failed or incomplete comparison groups remain ineligible. Even eligible
-fixture results do not by themselves establish a broad "world-fastest" claim.
+self-test.
+
+To compare two nshell builds for startup, key latency, Tab completion, prompt
+redraw, and memory, use the A/B regression gate in
+[`scripts/perf/`](https://github.com/nerima-lisp/nshell/blob/main/scripts/perf/README.md).
+It measures both builds on the same machine and reports confidence intervals
+for their difference, not absolute timings; it is tested on macOS only. None
+of these results by themselves establish a broad "world-fastest" claim.
 
 ## Add a test
 

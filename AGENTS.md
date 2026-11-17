@@ -36,7 +36,7 @@ wrong, stop and ask instead of guessing.
 | `packages/` | `core/kernel` and `feature/*` (assistant, command-line, …); new machine-interface code goes in `feature/machine/`, the knowledge base in `feature/kb/` |
 | `data/` | declarative tables (builtin spec, key bindings, themes, completion catalogs) |
 | `t/` | `unit/`, `integration/`, `e2e/`, `perf/`, `scenarios/` (JSON), `weave/` |
-| `scripts/` | test runners, coverage, NFR/bench scripts (many slated for removal, see P2) |
+| `scripts/` | test runners, coverage, the `perf/` A/B performance gate, NFR-03/08/09 measurement scripts |
 | `docs/src/` | MkDocs user docs · `docs/design/` v0.8 design (not published) |
 
 Layer rule: `domain` ← `infrastructure` ← `application` ← `presentation`.

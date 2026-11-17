@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       nfr:
-        description: NFR IDs to measure (all or comma-separated values from 01 through 09)
+        description: NFR IDs to measure (all or comma-separated values from 03, 08, 09)
         required: true
         default: all
         type: string
@@ -55,15 +55,14 @@ jobs:
           esac
 
       - name: Build nshell
-        id: binary
         if: steps.nfr-selection.outputs.requires_binary == 'true'
         run: >-
           nix build --max-jobs 1 --print-build-logs
           ".#packages.${{ matrix.system }}.default"
           --out-link "$RUNNER_TEMP/nshell-nfr-binary"
 
-      - name: Measure NFR-01 through NFR-07
-        if: steps.nfr-selection.outputs.measures_01_07 == 'true'
+      - name: Measure NFR-03
+        if: steps.nfr-selection.outputs.nfr_03 == 'true'
         run: >-
           nix develop .#scenarios -c python3
           scripts/measure-nfr-ci.py
@@ -72,45 +71,6 @@ jobs:
           --system "${{ matrix.system }}"
           --revision "$GITHUB_SHA"
           --nfrs "${{ steps.nfr-selection.outputs.selected }}"
-
-      - name: Profile NFR-06 CPU
-        if: ${{ always() && !cancelled() && steps.binary.outcome == 'success' && steps.nfr-selection.outputs.nfr_06 == 'true' }}
-        env:
-          NFR06_PROFILE_BINARY: ${{ runner.temp }}/nshell-nfr-binary/bin/nshell
-          NFR06_PROFILE_FIXTURE: ${{ runner.temp }}/nshell-nfr06-fixture
-          NFR06_PROFILE_OUTPUT: ${{ runner.temp }}/nshell-nfr-results/nfr06-profile
-        run: >-
-          nix develop .#scenarios -c python3
-          scripts/profile-nfr06-ci.py
-          --mode cpu --iterations 100
-
-      - name: Measure E02 startup with 10,000 history records
-        if: ${{ always() && steps.nfr-selection.outputs.all == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          logs="$GITHUB_WORKSPACE/.mediator/nshell-work/logs"
-          results="$RUNNER_TEMP/nshell-nfr-results"
-          mkdir -p "$logs" "$results"
-          report="$logs/e02-history-startup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.system }}.json"
-
-          set +e
-          nix develop .#scenarios -c python3 scripts/measure-e02-history-startup.py \
-            --binary "$RUNNER_TEMP/nshell-nfr-binary/bin/nshell" \
-            --system "${{ matrix.system }}" \
-            --output "$report"
-          measure_status=$?
-          set -e
-
-          if [ -f "$report" ]; then
-            cp "$report" "$results/e02-history-startup.json"
-          fi
-          shopt -s nullglob
-          for artifact_dir in "$logs"/"e02-history-startup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.system }}-artifacts-"*; do
-            cp -R "$artifact_dir" "$results/"
-          done
-          shopt -u nullglob
-          exit "$measure_status"
 
       - name: Prepare NFR-09 revision history
         id: nfr09-history
@@ -170,9 +130,9 @@ jobs:
           elif [ ! -s "$summary" ]; then
             if [ "$NFR_ALL" = true ]; then
               {
-                echo "# NFR-01 to NFR-09 performance results"
+                echo "# NFR-03, NFR-08 and NFR-09 performance results"
                 echo
-                echo "No complete NFR-01 to NFR-07 summary was produced. Inspect its build result and partial measurement artifacts."
+                echo "No complete NFR-03 summary was produced. Inspect its build result and partial measurement artifacts."
               } > "$summary"
             else
               python3 - "$NFR_SELECTION" "$summary" <<'PY'
@@ -181,51 +141,16 @@ jobs:
 
           selected = tuple(sys.argv[1].split(","))
           selected_display = ", ".join(f"NFR-{nfr}" for nfr in selected)
-          unmeasured = [f"NFR-{nfr}" for nfr in (f"{number:02d}" for number in range(1, 10)) if nfr not in selected]
+          unmeasured = [f"NFR-{nfr}" for nfr in ("03", "08", "09") if nfr not in selected]
           path = Path(sys.argv[2])
           path.write_text(
               "# Selected NFR performance results\n\n"
               f"Selected NFRs: {selected_display}.\n"
-              f"Unselected NFRs were not measured: {', '.join(unmeasured) or 'none'}; E02 was not measured.\n\n"
+              f"Unselected NFRs were not measured: {', '.join(unmeasured) or 'none'}.\n\n"
               "Selected measurement summary was not produced. Inspect the build and selected measurement artifacts.\n",
               encoding="utf-8",
           )
           PY
-            fi
-          fi
-          profile_root="$RUNNER_TEMP/nshell-nfr-results/nfr06-profile"
-          profile_result=$(find "$profile_root" -path '*/gate-cpu-*/result.json' -type f -print -quit 2>/dev/null || true)
-          if [ "$NFR_ALL" = true ] || [[ ",$NFR_SELECTION," == *,06,* ]]; then
-            if [ -n "$profile_result" ]; then
-              python3 - "$profile_result" >> "$GITHUB_STEP_SUMMARY" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          result_path = Path(sys.argv[1])
-          result = json.loads(result_path.read_text(encoding="utf-8"))
-          counts = result.get("profile_sample_counts", {})
-          print("\n## NFR-06 CPU profile")
-          print(f"Status: **{result.get('status', 'unknown')}**")
-          print(f"Iterations: {result.get('iterations_validated', 0)} / {result.get('iterations_requested', 0)}")
-          print(f"Validated samples: {counts.get('raw_vector_trace_count', 'unavailable')} (graph {counts.get('graph_header_count', 'unavailable')}, thread CSV {counts.get('thread_counts_csv_total', 'unavailable')})")
-          print(f"Completion-thread samples: {counts.get('target_thread_count', 'unavailable')}")
-          print(f"Profile artifacts: `{result_path.parent}`")
-          flat_path = Path(result.get("target_flat", result_path.parent / "cpu.target.flat.txt"))
-          if flat_path.is_file():
-              flat_rows = []
-              for line in flat_path.read_text(encoding="utf-8", errors="replace").splitlines():
-                  fields = line.split()
-                  if len(fields) > 8 and fields[0].isdigit():
-                      flat_rows.append(line)
-              print("\nTop completion-thread flat-profile functions:")
-              print("\n```text")
-              print("\n".join(flat_rows[:20]))
-              print("```")
-          PY
-            else
-              echo "" >> "$GITHUB_STEP_SUMMARY"
-              echo "NFR-06 CPU profile did not produce a validated result; inspect the uploaded profile artifact." >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
           nix develop .#scenarios -c python3 - "$results" "$summary" <<'PY'
@@ -300,68 +225,6 @@ jobs:
               f"new code ≥{number(new_code.get('minimum_percent'))}%"
           )
 
-          e02 = read_report("e02-history-startup.json")
-          e02_summary = e02.get("summary") if e02 else None
-          e02_summary = e02_summary if isinstance(e02_summary, dict) else {}
-          e02_sample_rows = e02.get("samples") if e02 else None
-          e02_sample_rows = e02_sample_rows if isinstance(e02_sample_rows, list) else []
-          e02_sample_count = e02_summary.get("sample_count")
-          e02_median = e02_summary.get("target_median_ms")
-          e02_threshold_value = e02_summary.get("criterion_threshold_ms")
-          e02_measured = e02 is not None and e02.get("status") == "measured"
-
-          def verifies_e02_history(sample):
-              if not isinstance(sample, dict):
-                  return False
-              arms = sample.get("arms")
-              if not isinstance(arms, dict):
-                  return False
-              target = arms.get("target")
-              if not isinstance(target, dict):
-                  return False
-              history = target.get("history_load_verification")
-              if not isinstance(history, dict):
-                  return False
-              return (
-                  history.get("all_records_loaded_once") is True
-                  and history.get("loaded_record_count") == 10_000
-                  and history.get("expected_record_count") == 10_000
-                  and history.get("missing_record_count") == 0
-                  and history.get("duplicate_record_count") == 0
-              )
-
-          e02_verified_samples = sum(1 for sample in e02_sample_rows if verifies_e02_history(sample))
-          e02_sample_count_valid = (
-              isinstance(e02_sample_count, int)
-              and not isinstance(e02_sample_count, bool)
-              and e02_sample_count == 30
-              and e02.get("warmup_count") == 3
-              and e02_sample_count == e02.get("sample_count")
-              and e02_sample_count == len(e02_sample_rows)
-          )
-          e02_history_valid = (
-              e02_sample_count_valid
-              and e02_verified_samples == e02_sample_count
-          )
-          e02_measurement_valid = (
-              e02_measured
-              and e02_sample_count_valid
-              and isinstance(e02_median, (int, float))
-              and isinstance(e02_threshold_value, (int, float))
-          )
-          if not e02_measurement_valid:
-              e02_status = "ERROR"
-          elif e02_summary.get("threshold_passed") is True and e02_history_valid:
-              e02_status = "PASS"
-          else:
-              e02_status = "FAIL"
-          e02_value = (
-              f"{number(e02_median)} ms median; "
-              f"{e02_verified_samples}/{number(e02_sample_count)} samples verified all 10,000 records once"
-          )
-          e02_threshold = f"≤ {number(e02_threshold_value)} ms"
-          e02_samples = number(e02_sample_count)
-
           selected_nfrs = set(os.environ["NFR_SELECTION"].split(","))
           with summary.open("a", encoding="utf-8") as stream:
               if os.environ["NFR_ALL"] == "true":
@@ -371,10 +234,6 @@ jobs:
                       "|---|---|---|---|\n"
                       f"| NFR-08 | {nfr08_value} | {nfr08_limit} | **{status(nfr08)}** |\n"
                       f"| NFR-09 | {nfr09_value} | {nfr09_limit} | **{status(nfr09)}** |\n"
-                      "\n## E02 startup with 10,000 history records\n\n"
-                      "| Measurement | Threshold | Samples | Status |\n"
-                      "|---|---:|---:|---|\n"
-                      f"| {e02_value} | {e02_threshold} | {e02_samples} | **{e02_status}** |\n"
                   )
               else:
                   selected_rows = []

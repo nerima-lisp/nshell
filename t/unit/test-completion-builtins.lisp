@@ -79,16 +79,25 @@
                     ("ex" "exit" "exit the shell")
                     ("so" "source" "execute commands from file")
                     ("re" "read" "read line of input")
-                    ("fu" "function" "define shell functions with defun")
-                    ("co" "contains" "test whether a value is present")
-                    ("no" "not" "invert command status")))
+                    ("fu" "functions" "list, show, or erase functions")))
       (destructuring-bind (prefix text description) case
         (let ((candidates (nshell.domain.completion:rule-complete
                            nshell.domain.completion::*built-in-rule-knowledge-base*
                            prefix)))
           (assert-completion-texts-include candidates text)
                         (expect description :to-equal (nshell.domain.completion:candidate-description
-                        (completion-candidate-by-text text candidates)))))))
+                        (completion-candidate-by-text text candidates))))))
+    ;; v0.8 removed these builtins (P2-6); their names are no longer offered.
+    (dolist (case '(("fu" "function") ("co" "contains") ("co" "count")
+                    ("no" "not") ("an" "and") ("se" "seq") ("ma" "math")
+                    ("pr" "prevd") ("ne" "nextd") ("pi" "pipeline-graph")))
+      (destructuring-bind (prefix text) case
+        (expect (completion-candidate-by-text
+                 text
+                 (nshell.domain.completion:rule-complete
+                  nshell.domain.completion::*built-in-rule-knowledge-base*
+                  prefix))
+                :to-be-null))))
 
   (it "command-completion-includes-runtime-aliases-and-functions"
     (let ((aliases (make-hash-table :test #'equal))

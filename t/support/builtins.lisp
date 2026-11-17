@@ -50,6 +50,11 @@
 (defun call-builtin (context name args)
   (funcall (nshell.application:lookup-builtin name) context args))
 
+(defun define-test-shell-function (context name &rest body-lines)
+  "Define the shell function NAME in CONTEXT with BODY-LINES and no source
+file, as the removed fish `function' builtin did."
+  (nshell.application::%store-shell-function-definition context name body-lines nil))
+
 (defun call-string-builtin (context args)
   (call-builtin context "string" args))
 

@@ -142,10 +142,6 @@
     ;; env with any option is opaque.
     ("env" :wrapper :transparent :assignments t :opaque-on-options t
            :skip-values "uCS")
-    ;; Builtins that run their first argument by name, like a typed command.
-    ("and" :wrapper :transparent :resolution :builtin :runs :by-name)
-    ("or" :wrapper :transparent :resolution :builtin :runs :by-name)
-    ("not" :wrapper :transparent :resolution :builtin :runs :by-name)
     ("sudo" :wrapper :opaque :assignments t :skip-values "ugCDhpRrTUt")
     ("doas" :wrapper :opaque :skip-values "uC")
     ("xargs" :wrapper :opaque :skip-values "ILnPsdEa")

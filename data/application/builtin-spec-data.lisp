@@ -9,17 +9,12 @@
     ("abbr" . %builtin-abbr)
     ("agent" . %builtin-agent)
     ("ai" . %builtin-ai)
-    ("and" . %builtin-and)
     ("bg" . %builtin-bg)
     ("bind" . %builtin-bind)
-    ("break" . %builtin-break)
     ("builtin" . %builtin-builtin)
     ("cd" . %builtin-cd)
     ("command" . %builtin-command)
     ("complete" . %builtin-complete)
-    ("contains" . %builtin-contains)
-    ("continue" . %builtin-continue)
-    ("count" . %builtin-count)
     ("dirs" . %builtin-dirs)
     ("disown" . %builtin-disown)
     ("eval" . %builtin-eval)
@@ -27,27 +22,19 @@
     ("export" . %builtin-export)
     ("false" . %builtin-false)
     ("fg" . %builtin-fg)
-    ("function" . %builtin-function)
     ("functions" . %builtin-functions)
     ("help" . %builtin-help)
     ("history" . %builtin-history)
     ("jobs" . %builtin-jobs)
     ("kill" . %builtin-kill)
-    ("math" . %builtin-math)
-    ("nextd" . %builtin-nextd)
-    ("or" . %builtin-or)
-    ("pipeline-graph" . %builtin-pipeline-graph)
     ("echo" . %builtin-echo)
     ("printf" . %builtin-printf)
     ("exit" . %builtin-exit)
-    ("not" . %builtin-not)
     ("popd" . %builtin-popd)
-    ("prevd" . %builtin-prevd)
     ("prompt" . %builtin-prompt)
     ("pushd" . %builtin-pushd)
     ("pwd" . %builtin-pwd)
     ("read" . %builtin-read)
-    ("seq" . %builtin-seq)
     ("set" . %builtin-set)
     ("unset" . %builtin-unset)
     ("source" . %builtin-source)
@@ -172,13 +159,6 @@
      :kind :prefixed
      :short-prefix-length 2
      :long-prefix-length 6)))
-
-(defparameter +builtin-contains-usage-clauses+
-  '("contains [-i|--index] string [values...]"))
-
-(defparameter +contains-option-specs+
-  '(("-i" :index-p t)
-    ("--index" :index-p t)))
 
 (defparameter +builtin-history-usage-clauses+
   ;; One clause, assembled rather than written as a literal inside a quoted

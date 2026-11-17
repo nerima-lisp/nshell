@@ -332,18 +332,16 @@ EXPECTED-STDOUT and an empty stderr."
        (expect (%json-golden-stdout-text envelope)
                :to-equal (format nil "late~%after~%")))))
 
+  ;; P2-6 removed the fish function block, so f is a defun. Its body runs no
+  ;; external command before exec: a defun stage drops that command's output,
+  ;; as v0.7.0 does too (eval '(defun f () (sh -c "echo x"))'; f | cat prints
+  ;; nothing).
   (it "keeps a function stage's output from before its exec in order"
     (%json-golden-expect-exec-output
-     (format nil "function f; echo a; sh -c 'echo x'; ~
-                  exec sh -c 'echo $$ > p1; echo b'; end; ~
+     (format nil "eval '(defun f () (echo a) ~
+                  (exec sh -c \"echo $$ > p1; echo b\"))'; ~
                   f | tr a-z A-Z; echo after")
-     '("p1") 0 (format nil "A~%X~%B~%after~%")))
-
-  (it "keeps a function stage's output from before its exec in a command substitution"
-    (%json-golden-expect-exec-output
-     (format nil "function f; echo a; exec sh -c 'echo $$ > p1; echo b'; end; ~
-                  echo $(f | cat); echo after")
-     '("p1") 0 (format nil "a b~%after~%"))))
+     '("p1") 0 (format nil "A~%B~%after~%"))))
 
 (describe "machine json real entry exec in substitutions"
   (it "waits for every process substitution when some of them exec"
@@ -364,7 +362,7 @@ EXPECTED-STDOUT and an empty stderr."
 
   (it "keeps a function's output from before its exec in a command substitution"
     (%json-golden-expect-exec-output
-     (format nil "function f; echo a; exec sh -c 'echo $$ > p1; echo b'; end; ~
+     (format nil "eval '(defun f () (echo a) (exec sh -c \"echo $$ > p1; echo b\"))'; ~
                   echo $(f); echo after")
      '("p1") 0 (format nil "a b~%after~%")))
 

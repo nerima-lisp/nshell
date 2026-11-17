@@ -934,13 +934,6 @@ TEXT itself still classifies as safe (D-P1-5 3.1)."
                            (nshell.domain.parsing:parse-result-state
                             function-parse-result)))
                   (%execute-incomplete-command function-parse-result))
-                 ((and function-parse-result
-                       (eq :complete
-                           (nshell.domain.parsing:parse-result-state
-                            function-parse-result)))
-                  (%execute-complete-command
-                   (make-source-text-request expanded-text)
-                   expanded-text))
                  ((eq :incomplete
                       (nshell.domain.parsing:scan-result-status scan-result))
                   (%execute-incomplete-command

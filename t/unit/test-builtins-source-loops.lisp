@@ -25,24 +25,25 @@
   (it "function-argv-ranges-forward-multiple-arguments"
     "$argv ranges select multiple function arguments in an S-expression function."
     (with-builtins-source-ok (output code context
-                                     (list "(defun pick (&rest argv) (count $argv[1..2]) (echo last $argv[-1]) (echo reverse $argv[-1..1]))"
+                                     (list "(defun pick (&rest argv) (printf \"[%s]\" $argv[1..2]) (echo) (echo last $argv[-1]) (echo reverse $argv[-1..1]))"
                                            "(pick \"one\" \"two\" \"three\")"))
-        (format nil "2~%last three~%reverse three two one~%")))
+        (format nil "[one][two]~%last three~%reverse three two one~%")))
 
   (it "function-argv-compound-ranges-expand-as-fields"
     "Compound unquoted $argv ranges produce one field per list value."
     (with-builtins-source-ok (output code context
-                                     (list "(defun decorate (&rest argv) (count pre-$argv[1..2].txt) (echo pre-$argv[1..2].txt))"
+                                     (list "(defun decorate (&rest argv) (printf \"[%s]\" pre-$argv[1..2].txt) (echo) (echo pre-$argv[1..2].txt))"
                                            "(decorate \"alpha\" \"beta\" \"gamma\")"))
-        (format nil "2~%pre-alpha.txt pre-beta.txt~%")))
+        (format nil "[pre-alpha.txt][pre-beta.txt]~%pre-alpha.txt pre-beta.txt~%")))
 
   (it "source-variable-list-compound-ranges-expand-as-fields"
     "Compound unquoted indexed variables produce one field per list value."
     (with-builtins-source-ok (output code _context
                                      '("set files alpha beta gamma"
-                                       "count pre-$files[1..2].txt"
+                                       "printf \"[%s]\" pre-$files[1..2].txt"
+                                       "echo"
                                        "echo pre-$files[1..2].txt"))
-        (format nil "2~%pre-alpha.txt pre-beta.txt~%")))
+        (format nil "[pre-alpha.txt][pre-beta.txt]~%pre-alpha.txt pre-beta.txt~%")))
 
   (it "source-dolist-iterates-over-list-values"
     "An S-expression dolist runs once for each value in its source list."
@@ -186,76 +187,7 @@
     (with-builtins-source-ok (output code context
                                      (list "(or (progn (true)) (echo should-not-run))"
                                            "(echo after)"))
-        (format nil "after~%")))
-
-  (it "for-node-break-stops-the-current-loop"
-    "The for AST executor handles break in the current loop and resumes the outer command list."
-    (let* ((context (make-test-builtins-context))
-           (loop-node
-             (nshell.domain.parsing::make-for-node
-              "item"
-              (list (nshell.domain.parsing:make-command-arg "one")
-                    (nshell.domain.parsing:make-command-arg "two"))
-              (list (nshell.domain.parsing:make-command-node "echo" (list "before"))
-                    (nshell.domain.parsing:make-command-node "break" nil)
-                    (nshell.domain.parsing:make-command-node "echo" (list "skipped")))))
-           (after-node (nshell.domain.parsing:make-command-node "echo" (list "after"))))
-      (multiple-value-bind (output code)
-          (nshell.application::%execute-ast-list-in-context
-           context (list loop-node after-node))
-        (expect (format nil "before~%after~%") :to-equal output)
-        (expect 0 :to-equal code))))
-
-  (it "for-node-continue-skips-the-rest-of-the-body"
-    "The for AST executor starts the next iteration after continue."
-    (let* ((context (make-test-builtins-context))
-           (loop-node
-             (nshell.domain.parsing::make-for-node
-              "item"
-              (list (nshell.domain.parsing:make-command-arg "one")
-                    (nshell.domain.parsing:make-command-arg "two"))
-              (list (nshell.domain.parsing:make-command-node "echo" (list "before"))
-                    (nshell.domain.parsing:make-command-node "continue" nil)
-                    (nshell.domain.parsing:make-command-node "echo" (list "skipped")))))
-           (after-node (nshell.domain.parsing:make-command-node "echo" (list "after"))))
-      (multiple-value-bind (output code)
-          (nshell.application::%execute-ast-list-in-context
-           context (list loop-node after-node))
-        (expect (format nil "before~%before~%after~%") :to-equal output)
-        (expect 0 :to-equal code))))
-
-  (it "for-node-nested-break-count-propagates-through-loops"
-    "A counted break propagates from the inner loop through the requested outer loop."
-    (let* ((context (make-test-builtins-context))
-           (inner-node
-             (nshell.domain.parsing::make-for-node
-              "inner"
-              (list (nshell.domain.parsing:make-command-arg "one")
-                    (nshell.domain.parsing:make-command-arg "two"))
-              (list (nshell.domain.parsing:make-command-node "echo" (list "inner"))
-                    (nshell.domain.parsing:make-command-node "break" (list "2")))))
-           (outer-node
-             (nshell.domain.parsing::make-for-node
-              "outer"
-              (list (nshell.domain.parsing:make-command-arg "one")
-                    (nshell.domain.parsing:make-command-arg "two"))
-              (list inner-node
-                    (nshell.domain.parsing:make-command-node "echo" (list "outer")))))
-           (after-node (nshell.domain.parsing:make-command-node "echo" (list "after"))))
-      (multiple-value-bind (output code)
-          (nshell.application::%execute-ast-list-in-context
-           context (list outer-node after-node))
-        (expect (format nil "inner~%after~%") :to-equal output)
-        (expect 0 :to-equal code))))
-
-  (it "source-loop-control-outside-a-loop-reports-an-error"
-    "break outside a loop leaves the shell running and returns a diagnostic."
-    (with-builtins-source (output code _context
-                                  '("break"
-                                    "echo after"))
-      (expect (format nil "break: only meaningful in a loop~%after~%")
-              :to-equal output)
-      (expect 0 :to-equal code))))
+        (format nil "after~%"))))
 
   (it "source-control-helpers-handle-loop-signal-contracts"
     "Loop control consumption owns one level and propagates remaining levels."

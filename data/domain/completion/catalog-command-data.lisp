@@ -24,15 +24,6 @@
    (list :command "dirs"
          :synopsis "dirs"
          :description "print the directory stack")
-   (list :command "prevd"
-         :synopsis "prevd [N]"
-         :description "go to a previously visited directory")
-   (list :command "nextd"
-         :synopsis "nextd [N]"
-         :description "undo a prevd")
-   (list :command "math"
-         :synopsis "math EXPRESSION"
-         :description "evaluate an arithmetic expression")
    (list :command "functions"
          :synopsis "functions [-e] [NAME]"
          :description "list, show, or erase functions"
@@ -40,12 +31,6 @@
    (list :command "builtin"
          :synopsis "builtin NAME [args...]"
          :description "run a builtin, bypassing functions and aliases")
-   (list :command "and"
-         :synopsis "and command [args...]"
-         :description "run command if the previous status was success")
-   (list :command "or"
-         :synopsis "or command [args...]"
-         :description "run command if the previous status was failure")
    (list :command "exit"
          :synopsis "exit"
          :description "exit the shell")
@@ -152,10 +137,6 @@
          :synopsis "read [-p prompt] variable"
          :description "read line of input"
          :flags '("-p"))
-   (list :command "function"
-         :synopsis "(defun NAME (ARGS...) BODY...) | function -e NAME... | function -q NAME..."
-         :description "define shell functions with defun"
-         :flags '("-e" "-q"))
    (list :command "history"
          ;; Assembled: longer than 100 columns, and a string literal cannot be
          ;; split across source lines without changing its value.
@@ -177,22 +158,7 @@
          :description "return success")
    (list :command "false"
          :synopsis "false"
-         :description "return failure")
-   (list :command "contains"
-         :synopsis "contains [-i|--index] string [values...]"
-         :description "test whether a value is present"
-         :flags '("-i" "--index" "--"))
-   (list :command "count"
-         :synopsis "count [values...]"
-         :description "print the number of arguments"
-         :flags '())
-   (list :command "seq"
-         :synopsis "seq [FIRST [STEP]] LAST"
-         :description "print a sequence of integers"
-         :flags '())
-   (list :command "not"
-         :synopsis "not command [args...]"
-         :description "invert command status"))))
+         :description "return failure"))))
 
 (defparameter +external-command-catalog+
   (%command-catalog

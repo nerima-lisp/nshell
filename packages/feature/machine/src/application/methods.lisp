@@ -66,9 +66,10 @@ and --json both report these effects."
        :resolve (nshell.application:assistant-command-resolver context))
     (values (knowledge-base-effects effects) result)))
 
-(defun %explain-parse-error (text start end message started cwd)
+(defun %explain-parse-error (text start end message started cwd
+                             &optional (code "E_PARSE"))
   ;; Without an AST the classifier gives its verdict on unparsable input.
-  (error-envelope "E_PARSE"
+  (error-envelope code
                   :message message
                   :span (source-span text start end)
                   :duration-ms (%elapsed-ms started)
@@ -83,7 +84,8 @@ and --json both report these effects."
 form per top-level form with its kind, the effects of the commands it runs,
 and the verdict of the classifier Enter uses, which resolves names with
 assistant-command-resolver and so loads no function file.  Input that cannot
-be read, or that holds no form, is E_PARSE."
+be read, or that holds no form, is E_PARSE; input the reader rejects with its
+own code, such as E_UNSUPPORTED_SYNTAX, keeps that code."
   (let ((started (get-internal-real-time))
         (cwd (or cwd (nshell.application:context-current-directory context))))
     (handler-case
@@ -113,7 +115,9 @@ be read, or that holds no form, is E_PARSE."
                                 (if (consp span) (first span) 0)
                                 (if (consp span) (second span) (length text))
                                 (princ-to-string condition)
-                                started cwd))))))
+                                started cwd
+                                (nshell.domain.error-codes:condition-error-code
+                                 condition)))))))
 
 (defun %user-rule-count ()
   (length (nshell.feature.kb:classify-rule-catalog

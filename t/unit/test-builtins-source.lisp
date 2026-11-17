@@ -374,63 +374,53 @@
          (list "(progn (format t \"source-progn-output~%\") 42)"))
       (expect 0 :to-equal code)
       (expect (format nil "source-progn-output~%42~%") :to-equal output))))
-(describe "legacy-source-reader-function-tests"
-  (it "source-lines-stores-inline-function-and-executes-tail"
-    "function scanning is verified by stored definition and tail execution effects."
-    (let ((context (make-test-builtins-context)))
-      (multiple-value-bind (output code)
-          (nshell.application:source-lines
-           context
-           '("function foo; echo hi; end; echo tail"))
-        (expect 0 :to-equal code)
-        (expect (format nil "tail~%") :to-equal output)
-        (expect '("echo hi") :to-equal
-                (gethash "foo"
-                         (nshell.application:shell-context-function-table
-                          context))))))
-  (it "source-lines-stores-function-body-with-command-separators"
-    "function bodies retain command separators while source reader consumes definitions."
-    (let ((context (make-test-builtins-context)))
-      (multiple-value-bind (output code)
-          (nshell.application:source-lines
-           context
-           (list "function foo"
-                 "echo one; echo two"
-                 "end"))
-        (expect 0 :to-equal code)
-        (expect "" :to-equal output)
-        (expect (list "echo one; echo two")
-                :to-equal
-                (gethash "foo"
-                         (nshell.application:shell-context-function-table
-                          context))))))
-  (it "source-lines-stores-nested-function-body"
-    "function body depth handling is verified through the public source-lines use case."
-    (let ((context (make-test-builtins-context)))
-      (multiple-value-bind (output code)
-          (nshell.application:source-lines
-           context
-           '("function wrapped"
-             "if true"
-             "echo nested"
-             "end"
-             "end"))
-        (expect 0 :to-equal code)
-        (expect "" :to-equal output)
-        (expect '("if true" "echo nested" "end") :to-equal
-                (gethash "wrapped"
-                         (nshell.application:shell-context-function-table
-                          context))))))
-  (it "a-definition-after-another-command-on-one-line-runs-whole"
-    "`echo pre; function f; echo hi; end; f' must define and call f rather than
-running the definition's body as top-level commands."
-    (with-builtins-context (context)
-      (multiple-value-bind (output code)
-          (nshell.application:source-lines
-           context
-           (list "echo pre; function f; echo hi; end; f"))
-        (expect 0 :to-equal code)
-        (expect (format nil "pre~%hi~%") :to-equal output))))
+(defun %source-lines-rejection (lines)
+  "Run LINES with source-lines after a line that sets $pre. Return the
+UNSUPPORTED-SYNTAX-ERROR it signals, or NIL, and whether $pre was set."
+  (let ((context (make-test-builtins-context)))
+    (values
+     (handler-case
+         (progn (nshell.application:source-lines context (cons "set pre 1" lines))
+                nil)
+       (nshell.domain.parsing:unsupported-syntax-error (condition) condition))
+     (nshell.domain.environment:env-defined-p
+      (nshell.application:shell-context-environment context) "pre")
+     context)))
+
+(describe "source-reader-function-block-rejection-tests"
+  (it "rejects-every-form-of-a-fish-function-block-before-running-anything"
+    "v0.8 removed the fish function block (L5.3): source reads the whole input
+first, so the line that sets $pre never runs, and no function is defined."
+    (dolist (case (list (list '("function foo; echo hi; end; echo tail")
+                              "(defcmd foo () (echo hi))")
+                        (list '("function foo" "echo one; echo two" "end")
+                              "(defcmd foo () …)")
+                        (list '("function wrapped" "if true" "echo nested" "end" "end")
+                              "(defcmd wrapped () …)")
+                        (list '("echo pre; function f; echo hi; end; f")
+                              "(defcmd f () (echo hi))")
+                        (list (list (format nil "echo pre~%function greet~%echo hello~%end~%greet"))
+                              "(defcmd greet () (echo hello))")
+                        (list '("echo pre" "function greet" "echo hello" "end" "greet")
+                              "(defcmd greet () …)")
+                        (list '("function -e greet") "(defcmd greet () …)")))
+      (destructuring-bind (lines rewrite) case
+        (multiple-value-bind (condition pre-set-p context)
+            (%source-lines-rejection lines)
+          (expect (list lines (and condition
+                                   (nshell.domain.error-codes:condition-error-code
+                                    condition))
+                        (and condition
+                             (nshell.domain.parsing:unsupported-syntax-error-head
+                              condition))
+                        (and condition
+                             (nshell.domain.parsing:unsupported-syntax-error-rewrite
+                              condition))
+                        pre-set-p
+                        (hash-table-count
+                         (nshell.application:shell-context-function-table context)))
+                  :to-equal (list lines "E_UNSUPPORTED_SYNTAX" "function" rewrite nil 0)))))))
+(describe "source-reader-function-split-tests"
   (it "the-split-keeps-the-prefix-and-its-separators"
     (flet ((split (line)
              (multiple-value-list
@@ -456,22 +446,5 @@ so the definition scanner has to treat a newline as a command boundary."
              (multiple-value-list
               (nshell.application::source-line-function-split line))))
       (expect (list "echo pre" (format nil "function f~%end"))
-              :to-equal (split (format nil "echo pre~%function f~%end")))))
-  (it "a-single-source-line-with-newlines-keeps-the-definition-whole"
-    "The segment scanner used by inline function consumption must preserve a
-function body when source input arrives as one multiline string."
-    (with-builtins-context (context)
-      (multiple-value-bind (output code)
-          (nshell.application:source-lines
-           context
-           (list (format nil "echo pre~%function greet~%echo hello~%end~%greet")))
-        (expect 0 :to-equal code)
-        (expect (format nil "pre~%hello~%") :to-equal output))))
-  (it "a-newline-separated-definition-defines-the-function"
-    (with-builtins-context (context)
-      (multiple-value-bind (output code)
-          (nshell.application:source-lines
-           context
-           (list "echo pre" "function greet" "echo hello" "end" "greet"))
-        (expect 0 :to-equal code)
-        (expect (format nil "pre~%hello~%") :to-equal output)))))
+              :to-equal (split (format nil "echo pre~%function f~%end"))))))
+

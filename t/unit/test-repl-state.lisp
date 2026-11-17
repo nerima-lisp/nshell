@@ -262,8 +262,9 @@
       (expect "git checkout" :to-equal
               (nshell.domain.abbreviation:abbreviation-expansion
                (repl-test-abbreviation "gco")))
-      (call-repl-builtin "function" '("hi" "echo" "hello" "end"))
-      (expect '("echo hello") :to-equal (repl-test-function "hi"))
+      (setf (gethash "hi" nshell.presentation::*functions*) '("echo hello"))
+      (call-repl-builtin "functions" '("-e" "hi"))
+      (expect (nth-value 1 (repl-test-function "hi")) :to-be-falsy)
       (call-repl-builtin "exit" nil)
       (expect (repl-test-running-p) :to-be-falsy)
       (expect nshell.presentation::+repl-exit+ :to-be

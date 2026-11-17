@@ -1104,7 +1104,7 @@ EOF
  :input nil
  :v08 (:expect (:exit 2 :error "E_UNSUPPORTED_SYNTAX" :position (1 1) :contains ("(not (false))"))
        :warning nil
-       :owners ("S3")
+       :owners ()
        :basis ("language/L5-bare-line.md:46" "language/L5-bare-line.md:34" "language/L5-bare-line.md:54"
                "language/L7-diff-and-migration.md:48" "language/L6-execution-and-errors.md:50"
                "language/L6-execution-and-errors.md:25" "language/L6-execution-and-errors.md:27"

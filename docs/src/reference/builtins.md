@@ -3,14 +3,20 @@
 Run `help` inside nshell for per-command detail, and `type NAME` to check
 whether a name resolves to a builtin, a function, or an external program.
 
-`.`, `[`, `agent`, `ai`, `alias`, `abbr`, `and`, `bg`, `bind`, `break`, `builtin`, `cd`, `command`,
-`complete`, `contains`, `continue`, `count`, `dirs`, `disown`, `echo`, `eval`,
-`exec`, `exit`, `export`, `false`, `fg`, `function`, `functions`, `help`,
-`history`, `jobs`, `kill`, `math`, `nextd`, `not`, `or`, `pipeline-graph`,
-`popd`, `prevd`, `printf`, `prompt`, `pushd`, `pwd`, `read`, `seq`, `set`,
-`source`, `string`, `test`, `theme`, `true`, `type`, `unset`, `wait`, `which`.
+`.`, `[`, `agent`, `ai`, `alias`, `abbr`, `bg`, `bind`, `builtin`, `cd`, `command`,
+`complete`, `dirs`, `disown`, `echo`, `eval`, `exec`, `exit`, `export`,
+`false`, `fg`, `functions`, `help`, `history`, `jobs`, `kill`, `popd`,
+`printf`, `prompt`, `pushd`, `pwd`, `read`, `set`, `source`, `string`, `test`,
+`theme`, `true`, `type`, `unset`, `wait`, `which`.
 
 ## Notes on a few of them
+
+A bare line that starts a command with `and`, `or`, `not`, `break`,
+`continue`, or `function` is rejected with `E_UNSUPPORTED_SYNTAX` before any
+of the input runs; the message shows the equivalent S-expression, such as
+`(and (cmd1) (cmd2))` for `cmd1; and cmd2`. `count`, `contains`, `seq`,
+`math`, `prevd`, `nextd`, and `pipeline-graph` are no longer builtins: the
+names run an external program of that name if one is on `PATH`.
 
 **`abbr`** registers an abbreviation that expands inline as you type, so
 history records the expanded command. Prefer it to `alias` when you want the
@@ -23,11 +29,6 @@ entries, and `ai set KEY VALUE` changes `effort`, `model`, `max-steps`, or
 
 **`agent`** starts an interactive assistant task. It requires a terminal, and
 proposed commands require confirmation before execution.
-
-**`pipeline-graph`** renders a typed pipeline as a Graphviz DOT graph, or a
-Mermaid flowchart with `--mermaid`, without executing it. Quote the pipeline so
-the shell passes it as one argument; see
-[Recipes](../guide/recipes.md#draw-a-pipeline-without-running-it).
 
 **`bind`** lists, sets, erases, or resets key bindings: `bind` alone lists
 every binding, `bind KEY` shows one, `bind KEY ACTION` rebinds a key, `bind -e
@@ -64,8 +65,7 @@ line.
 remembers the current directory and switches to `DIR`; `popd` returns to the
 most recently remembered one; `dirs` lists the stack, current directory
 first, `~`-shortened. `pushd` with no argument swaps the current directory
-with the top of the stack. **`prevd`** / **`nextd`** walk a separate,
-append-only history of every directory visited via `cd`, `pushd`, or `popd`.
+with the top of the stack. `cd -` returns to the previous directory.
 
 **`builtin NAME`** runs a builtin directly, bypassing any function or alias
 of the same name.

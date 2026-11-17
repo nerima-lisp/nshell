@@ -59,6 +59,7 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 - セッションは 1 つのサーバープロセスに 1 つ。cwd・変数・関数は run の呼び出しをまたいで続く。
 - ツールの結果は U6 の envelope。`structuredContent` に envelope の object、`content[0]` の text に同じ JSON を入れ、`isError` は ok が false のときだけ true。
 - 未知のツール名は JSON-RPC のエラー -32602。ツールの引数が不正なときは、E_PROTOCOL の ok:false の envelope を返す。
+- プロトコルの失敗は、JSON-RPC の整数のコードで返す (U6)。
 - JSON の object でないメッセージには、id を null にして -32600 を返す。
 - E_TIMEOUT の run で、その run を実行するスレッドを止められなかったときは、シェルの状態がまだ変わりうるため、サーバーのプロセスを起動し直すまで run・explain・complete・state は E_INTERNAL を返す。history・help・policy・initialize・query・read_output と非推奨のツールは使える。
 - 出力の保存先のセッションのディレクトリは、ほかのプロセスに消されても作り直す。保存に失敗したときは標準エラー出力にだけ知らせる。
@@ -80,6 +81,8 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 ### MCP での承認
 
 - elicitation/create を送るのは、MCP の initialize 要求でネゴシエートした版が 2025-06-18 で、クライアントが elicitation の capability を宣言したときだけ。それ以外のクライアント (2024-11-05 のもの、capability を宣言しないもの) には、confirm の入力に E_NEEDS_APPROVAL を返す。`requestedSchema` は `{approve: boolean}`。
+- 承認画面の message は、先頭に `nshell asks to run this confirm input:` の行を置き、次の行に入力を二重引用符で囲んで 1 行で示し、そのあとに理由を `- text (rule)` の 1 行ずつで並べる。人が承認するものを、見たとおりの文字列にするため。
+- 入力と理由の文字は、画面で見える形にエスケープする。LF・CR・TAB・ESC は `\n`・`\r`・`\t`・`\e`、そのほかの制御文字・書式文字 (双方向の制御を含む)・行と段落の区切り・私用領域と未割り当ての文字は `\uXXXX` (U+FFFF を超えるときは `\u{XXXXX}`)、バックスラッシュと二重引用符は `\\` と `\"`。
 - 実行するのは、action が accept で approve が true のときだけ。decline・cancel・approve が false・エラー応答・入力の終わりは、E_NEEDS_APPROVAL を返す。
 - 承認が及ぶのは、承認画面に示した判定 (level と reasons) だけ。承認の応答を受け取ったあと、実行の直前にもう一度判定し、示した判定と違えば実行せず E_NEEDS_APPROVAL を返す。
 - MCP では承認 ID (`ap_…`) を P1 では発行しない。
@@ -92,10 +95,10 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 
 | ツール | 入力 | value |
 |---|---|---|
-| complete | input, cursor (既定は末尾) | `{candidates:[{text, kind, description}]}`。行エディタの順 |
-| state | なし | `{cwd, session:{id, seq}, last_status}`。seq はそれまでに数えた run の回数。envelope の state.last_status にも入れる |
-| history | query (部分一致)、limit | `{entries:[{seq, input, status}]}`。新しい順。limit は正の整数で、省くとすべて。seq を数えた run (拒否した run を含む) の記録で、永続する履歴ファイルではない |
-| help | topic | `{topic, text}`。topic がなければ概要。未知の topic は E_PROTOCOL (U6 は E_NO_MATCH を glob 用とする) |
+| complete | input、cursor (0 から input の長さまで。既定は末尾。範囲外は E_PROTOCOL) | `{candidates:[{text, kind, description}]}`。行エディタの順。kind と description は、なければ null |
+| state | なし | `{cwd, session:{id, seq}, last_status}`。seq は run の回数で、run の前は 0。last_status は直前の run の status で、run の前は null。envelope の state.last_status にも同じ値を入れる |
+| history | query (大文字小文字を区別する部分一致)、limit (正の整数。どちらも不正なら E_PROTOCOL) | `{entries:[{seq, input, status}]}`。新しい順に、query で絞ってから limit 件まで。承認されず実行しなかった run も入る。このサーバーの run の記録で、永続する履歴ファイルではない |
+| help | topic (ビルトインの名前。大文字小文字を区別する完全一致) | `{topic, text}`。topic がなければ topic は null で、text はビルトインの概要。text は help が出力する文で、末尾の改行を含む。help を持たない topic は E_PROTOCOL (U6 は E_NO_MATCH を glob 用とする) |
 
 list_sessions と read_state の応答は envelope にせず、従来の形のまま。説明は `Deprecated:` で始める。
 

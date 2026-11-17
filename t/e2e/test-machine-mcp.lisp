@@ -51,7 +51,15 @@ WORK.  Return the decoded messages it wrote, its exit code and its stderr."
                          (json-kit:stringify (format nil "cd ~A" work)))
                  "{\"jsonrpc\":\"2.0\",\"id\":\"nshell-elicitation-1\",\"result\":{\"action\":\"accept\",\"content\":{\"approve\":true}}}"
                  "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"run\",\"arguments\":{\"input\":\"pwd\"}}}"
-                 "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"query\",\"arguments\":{\"query\":\"x\"}}}"))
+                 "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"query\",\"arguments\":{\"query\":\"x\"}}}"
+                 (format nil "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"run\",\"arguments\":{\"input\":~A}}}"
+                         (json-kit:stringify (format nil "touch ~A/declined" work)))
+                 "{\"jsonrpc\":\"2.0\",\"id\":\"nshell-elicitation-2\",\"result\":{\"action\":\"decline\"}}"
+                 (format nil "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"run\",\"arguments\":{\"input\":~A}}}"
+                         (json-kit:stringify
+                          (format nil "echo ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT))"
+                                  (format nil "~A/value-form" work))))
+                 "{\"jsonrpc\":\"2.0\",\"id\":\"nshell-elicitation-3\",\"result\":{\"action\":\"decline\"}}"))
          )
     (multiple-value-bind (output exit-code stderr) (%mcp-e2e-serve program directory lines)
       (values (mapcar #'json-kit:parse output) exit-code stderr))))
@@ -112,7 +120,8 @@ answered."
           (expect (mapcar (lambda (message)
                             (or (gethash "method" message) (gethash "id" message)))
                           messages)
-                  :to-equal '(1 2 3 "elicitation/create" 4 5 6))
+                  :to-equal '(1 2 3 "elicitation/create" 4 5 6 "elicitation/create" 7
+                              "elicitation/create" 8))
           (expect (json-at (reply 1) "result" "protocolVersion") :to-equal "2025-06-18")
           (expect (json-at (reply 1) "result" "serverInfo" "name") :to-equal "nshell")
           (expect (length (json-at (reply 2) "result" "tools")) :to-equal 12)
@@ -133,7 +142,14 @@ answered."
                                      :test #'equal)
                   :to-equal (list (json-at (envelope 3) "session")))
           (expect (json-at (envelope 6) "error" "code") :to-equal "E_NOT_IMPLEMENTED")
-          (expect (json-at (reply 6) "result" "isError") :to-equal t))))))
+          (expect (json-at (reply 6) "result" "isError") :to-equal t)
+          ;; After an accepted confirm run, a declined one does not run.
+          (expect (json-at (envelope 7) "error" "code") :to-equal "E_NEEDS_APPROVAL")
+          (expect (probe-file (format nil "~A/declined" work)) :to-be-null)
+          ;; A value form that writes is confirm, so declining it keeps it from running.
+          (expect (json-at (envelope 8) "safety" "level") :to-equal "confirm")
+          (expect (json-at (envelope 8) "error" "code") :to-equal "E_NEEDS_APPROVAL")
+          (expect (probe-file (format nil "~A/value-form" work)) :to-be-null))))))
 
 (describe "machine mcp stdio process"
   (it "serves one session from the current source"

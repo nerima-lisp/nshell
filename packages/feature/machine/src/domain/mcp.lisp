@@ -84,14 +84,40 @@ a decline, a cancel, an error response or any other shape is no approval."
     (and (equal (mcp-field result "action") "accept")
          (eq t (mcp-field (mcp-field result "content") "approve")))))
 
+(defun mcp-visible-text (text)
+  "Return TEXT with every character a terminal or a bidi-aware display could
+act on written as a visible escape: \\n \\r \\t \\e for those controls, and
+\\uXXXX (\\u{XXXXX} above U+FFFF) for other C0 and C1 controls, DEL, format
+characters (bidi overrides among them), line and paragraph separators, and
+private-use and unassigned code points.  The backslash and the quote become
+\\\\ and \\\" so every escape reads one way."
+  (with-output-to-string (out)
+    (loop for char across text
+          for code = (char-code char)
+          do (case char
+               (#\Newline (write-string "\\n" out))
+               (#\Return (write-string "\\r" out))
+               (#\Tab (write-string "\\t" out))
+               (#\\ (write-string "\\\\" out))
+               (#\" (write-string "\\\"" out))
+               (t (cond ((= code 27) (write-string "\\e" out))
+                        ((member (symbol-name (sb-unicode:general-category char))
+                                 '("Cc" "Cf" "Zl" "Zp" "Cs" "Co" "Cn")
+                                 :test #'string-equal)
+                         ;; Braced above U+FFFF, so no digit can be read as part of it.
+                         (format out (if (> code #xFFFF) "\\u{~X}" "\\u~4,'0X") code))
+                        (t (write-char char out))))))))
+
 (defun mcp-approval-message (input verdict)
-  "The text an elicitation shows: INPUT and the reasons of VERDICT,
-(LEVEL . REASONS) with REASONS a list of (RULE . TEXT)."
-  (format nil "nshell asks to run this ~(~A~) input:~%~A~%~{~A~%~}"
+  "The text an elicitation shows: INPUT quoted on one line and the reasons of
+VERDICT, (LEVEL . REASONS) with REASONS a list of (RULE . TEXT), all through
+MCP-VISIBLE-TEXT, so what the user approves is exactly what is shown."
+  (format nil "nshell asks to run this ~(~A~) input:~%\"~A\"~%~{~A~%~}"
           (first verdict)
-          input
+          (mcp-visible-text input)
           (loop for (rule . text) in (rest verdict)
-                collect (format nil "- ~A (~A)" text rule))))
+                collect (format nil "- ~A (~A)" (mcp-visible-text text)
+                                (mcp-visible-text rule)))))
 
 ;;; Tool descriptors
 

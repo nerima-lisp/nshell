@@ -47,7 +47,7 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 - 上限の既定は max_output_bytes 32768 バイト。超えたら先頭 10 行と末尾 10 行を残す。片側が 16384 バイトを超えるときはバイト数で切る。行を省かずにバイト数だけ切ったときの印は「… N bytes omitted …」。
 - bytes と lines は ANSI を除去し \r で上書きされた部分を除いたあとの全文の大きさ。保存するファイルの大きさと同じ。
 - 全文を保存するのは切り詰めたときだけ。path・session・seq もそのときだけ出す。--json の単発実行では seq は 1 で、stdout は `<seq>.txt`、stderr は `<seq>.stderr.txt` に保存する。session は保存先のディレクトリ名 (`s_` と 6 文字)。
-- MCP の run は、切り詰めの有無にかかわらず envelope に session と seq を常に入れる。seq は同じサーバープロセスで始めた run の回数で、承認されず実行しなかった run も数える。引数が不正な run、承認待ちのあいだに取り消された run、E_INTERNAL を返した run は数えない。run 以外のツールの envelope には入れず、session の ID は initialize と state の value に出る。
+- MCP の run は、切り詰めの有無にかかわらず envelope に session と seq を常に入れる。seq は同じサーバープロセスで始めた run の回数で、承認されず実行しなかった run と、実行の中で E_INTERNAL になった run も数える。引数が不正な run、承認待ちのあいだに取り消された run、セッションが使えなくなったあとに E_INTERNAL で断った run は数えない。run 以外のツールの envelope には入れず、session の ID は initialize と state の value に出る。
 - 保存先を安全に作れないとき (シンボリックリンク、他人の所有、group か other に権限がある) は保存せず、path も出さない。
 - --timeout は --json と一緒のときだけ受け付ける。
 - 全文の保存は直近 50 セッション分だけ残す。--private では保存しない。
@@ -76,7 +76,7 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 - 要求の形が不正なら E_PROTOCOL。id が文字列でないか規則に合わない、seq が正の整数でない、stream が 2 つのどちらでもない、offset が負か整数でない、limit が範囲外、offset がファイルの大きさを超える、offset が文字の途中を指す、のいずれか。
 - 保存先の状態のために読めないときは E_PERMISSION。保存先のルート・セッションのディレクトリ・ファイルのどれかが、ない (存在しない id、--private で保存していない、その seq と stream のファイルがない)、シンボリックリンク、自分の所有でない、group か other に権限がある、のいずれか。セッションがディレクトリでないときと、ファイルが通常のファイルでない (FIFO・デバイス) ときも同じ。message にはどれに当たったかを書き、保存先のパスは出さない (示すのは id とファイル名だけ)。ないときも E_PERMISSION にするのは、error.code の enum に「ない」を表すコードがないため。E_NO_MATCH は glob 用なので使わない。
 - ルート・セッション・ファイルはどれもシンボリックリンクをたどらずに開き、開いた記述子で種類・所有者・権限を確かめる。セッションとファイルは上のディレクトリの記述子からの相対で開く (openat)。確かめたあとにパスを解決し直さず、読むのは確かめたファイルの記述子からだけ。
-- --serve と MCP ができるまでは、エラーも ok:false の応答の形で返す。proposal/02 のトップレベルの `{"id":…,"error":…}` の形は、それを運ぶ --serve と MCP ができてから使う。
+- MCP のツールの失敗は ok:false の envelope で返し、isError を true にする。MCP のプロトコルの失敗は、JSON-RPC の整数のコードで返す。-32700 は JSON の構文、-32600 は不正な要求、-32601 は未知のメソッド、-32602 は未知のツール、-32603 は内部エラー。--serve ができるまでは、--serve のエラーも ok:false の応答の形で返し、proposal/02 のトップレベルの `{"id":…,"error":…}` の形は --serve ができてから使う。
 
 ## 非対話で詰まらないように
 

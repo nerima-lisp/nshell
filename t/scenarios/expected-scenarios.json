@@ -1101,13 +1101,6 @@
       "path": "M02/logical-pwd-and-pwd-variable.json"
     },
     {
-      "id": "M03-directory-history-prevd-nextd",
-      "uc": [
-        "M03"
-      ],
-      "path": "M03/directory-history-prevd-nextd.json"
-    },
-    {
       "id": "M05-pushd-popd-stack-round-trip",
       "uc": [
         "M05"

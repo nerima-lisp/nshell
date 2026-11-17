@@ -555,6 +555,60 @@ first, as (SOURCE ORIGIN APPROVAL)."
         (declare (ignore status))
         (expect t :to-be stopped-p)))))
 
+(defun %approval-marker-form (marker)
+  "A Lisp form that creates the file MARKER, as reader text."
+  (format nil "(CLOSE (OPEN ~S :DIRECTION :OUTPUT :IF-EXISTS :SUPERSEDE))"
+          (namestring marker)))
+
+(describe "reader-path-execution-gate-value-forms"
+  (it "refuses a value form that calls Lisp before evaluating it"
+    (host-kit:with-temporary-directory (directory)
+      (let ((marker (merge-pathnames "marker" directory)))
+        (dolist (template '("echo ,~a" "echo ,@(LIST ~a)" "echo ok | cat ,~a"))
+          (let ((source (format nil template (%approval-marker-form marker))))
+            (multiple-value-bind (status stopped-p)
+                (%approval-reader-run (make-test-shell-context) source :bare-line
+                                      :approval :safe)
+              (expect (list source status stopped-p (probe-file marker))
+                      :to-equal (list source 3 t nil))))))))
+
+  (it "lets a confirm approval of the line cover its own value forms"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((marker (merge-pathnames "marker" directory))
+             (source (format nil "echo ,~a" (%approval-marker-form marker))))
+        (multiple-value-bind (status stopped-p)
+            (%approval-reader-run (make-test-shell-context) source :bare-line
+                                  :approval :confirm)
+          (expect (list status stopped-p) :to-equal (list 0 nil))
+          (expect (probe-file marker) :to-be-truthy)))))
+
+  (it "refuses a nested value form on the outer confirm approval before it runs"
+    (host-kit:with-temporary-directory (directory)
+      (let ((context (make-test-shell-context))
+            (body-marker (merge-pathnames "body" directory))
+            (procsub-marker (merge-pathnames "procsub" directory))
+            (substitution-marker (merge-pathnames "substitution" directory)))
+        (%approval-reader-run
+         context
+         (format nil "(defun approval-test-value-form () (= (^echo ,~a) 0))"
+                 (%approval-marker-form body-marker))
+         :sexp :origin :typed)
+        (dolist (case (list (list "(approval-test-value-form)" :sexp body-marker)
+                            (list "approval-test-value-form" :bare-line body-marker)
+                            (list (format nil "cat <(echo ,~a)"
+                                          (%approval-marker-form procsub-marker))
+                                  :bare-line procsub-marker)
+                            (list (format nil "echo $(echo ,~a)"
+                                          (%approval-marker-form substitution-marker))
+                                  :bare-line substitution-marker)))
+          (destructuring-bind (source reader-context marker) case
+            (multiple-value-bind (status stopped-p)
+                (%approval-reader-run context source reader-context
+                                      :approval :confirm)
+              (declare (ignore status))
+              (expect (list source stopped-p (probe-file marker))
+                      :to-equal (list source t nil)))))))))
+
 (defun %approval-env (context name)
   (nshell.domain.environment:env-get
    (nshell.application:shell-context-environment context) name))

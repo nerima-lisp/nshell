@@ -620,6 +620,61 @@ the gate, and the executor see them."
           (expect (and (probe-file marker) t) :to-be t)
           (expect (%safety-view-registered-count context) :to-equal 1)))))))
 
+  (it "leaves function files unread on the reader path until the gate passes"
+    (host-kit:with-temporary-directory (directory)
+     (%safety-view-call-restoring-user-functions
+      '("rfa" "rfb" "rfc" "rfd" "rfe" "rff" "rfg" "rfcall")
+      (lambda ()
+        (let ((context (%safety-view-autoload-context directory)))
+          ;; Each case gets its own function so a load shows in its marker.
+          (dolist (case '(("rfa" "rfa" :bare-line :safe)
+                          ("rfb" "echo x | rfb" :bare-line :safe)
+                          ("rfc" "cat <(rfc)" :bare-line :safe)
+                          ("rfd" "rfd" :bare-line nil)
+                          ("rff" "(rff)" :sexp :safe)))
+            (destructuring-bind (name source reader-context approval) case
+              (let ((marker (merge-pathnames name directory)))
+                (%safety-view-write-function-file directory name marker)
+                (let ((nshell.application:*execution-origin*
+                        (if approval :proposal :agent))
+                      (nshell.application:*execution-approval* approval)
+                      (nshell.application:*execution-gate-stopped-p* nil))
+                  (capture-standard-output
+                    (let ((*error-output* (make-string-output-stream)))
+                      (handler-case
+                          (dolist (result (nshell.domain.parsing:read-submission
+                                           source :reader-context reader-context))
+                            (nshell.application:evaluate-reader-result-in-context
+                             context result))
+                        ;; A process substitution of a function is a plan
+                        ;; error; it must still load nothing.
+                        (error () nil)))))
+                (expect (list source (probe-file marker)) :to-equal (list source nil)))))
+          (expect (%safety-view-registered-count context) :to-equal 0)
+          ;; A call in a function body is nested: the outer confirm approval
+          ;; does not cover it, so its function file stays unread.
+          (let ((marker (merge-pathnames "rfg" directory)))
+            (%safety-view-write-function-file directory "rfg" marker)
+            (let ((nshell.application:*execution-origin* :typed))
+              (capture-standard-output
+                (dolist (result (nshell.domain.parsing:read-submission
+                                 "(defun rfcall () (= (rfg) 0))" :reader-context :sexp))
+                  (nshell.application:evaluate-reader-result-in-context context result))))
+            (multiple-value-bind (status stopped-p)
+                (%safety-view-run-ai-line context "(rfcall)" :sexp :confirm)
+              (declare (ignore status))
+              (expect stopped-p :to-be t))
+            (expect (probe-file marker) :to-be nil))
+          ;; A confirm approval passes the gate; then the reader path loads
+          ;; the file and runs the function it defines.
+          (let ((marker (merge-pathnames "rfe" directory)))
+            (%safety-view-write-function-file directory "rfe" marker)
+            (multiple-value-bind (status stopped-p)
+                (%safety-view-run-ai-line context "rfe" :bare-line :confirm)
+              (declare (ignore status))
+              (expect stopped-p :to-be nil))
+            (expect (and (probe-file marker) t) :to-be t)))))))
+
   (it "confirms command queries that would autoload a function without loading it"
     (host-kit:with-temporary-directory (directory)
       (let ((marker (merge-pathnames "loaded" directory)))
@@ -767,6 +822,34 @@ the gate, and the executor see them."
             (expect (list source status stopped-p) :to-equal (list source 3 t))))
         (expect (probe-file marker) :to-be nil)
         (expect (%safety-view-registered-count context) :to-equal 0))))
+
+  (it "confirms reader value forms that call Lisp in bare-line arguments"
+    (host-kit:with-temporary-directory (directory)
+      (let* ((marker (merge-pathnames "value-form" directory))
+             (form (format nil "(CLOSE (OPEN ~S :DIRECTION :OUTPUT))"
+                           (namestring marker)))
+             (context (make-test-shell-context)))
+        (dolist (source (list (format nil "echo ,~a" form)
+                              (format nil "printf %s ,@(LIST ~a)" form)
+                              (format nil "ls | cat ,~a" form)
+                              ;; A test context is not running, so a
+                              ;; sequence stops after its first command.
+                              (format nil "echo ,~a ; ls" form)))
+          (with-repl-test-state
+            (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                    :to-equal (list source :confirm)))
+          (multiple-value-bind (status stopped-p)
+              (%safety-view-run-ai-line context source :auto :safe)
+            (expect (list source status stopped-p) :to-equal (list source 3 t))))
+        (let ((source (format nil "ls ; echo ,~a" form)))
+          (with-repl-test-state
+            (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                    :to-equal (list source :confirm))))
+        (dolist (source '("echo ,HOME" "echo ,\"x\""))
+          (with-repl-test-state
+            (expect (list source (nshell.presentation::%assistant-proposal-level source))
+                    :to-equal (list source :safe))))
+        (expect (probe-file marker) :to-be nil))))
 
   (it "uses runtime expansion rules for query argument values"
     (let ((context (make-test-shell-context)))

@@ -350,6 +350,33 @@ an orphan needs its new parent to reap it before kill 0 fails."
           (expect (json-effects envelope) :to-equal (list (list "deletes" victim)))
           (expect (probe-file marker) :to-be-null)))))
 
+  (it "refuses Lisp value forms in bare-line arguments before evaluating them"
+    (host-kit:with-temporary-directory (directory)
+      (let ((marker (format nil "~Amarker" (sb-ext:native-namestring directory))))
+        (dolist (template '("echo ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT))"
+                            "echo ,@(LIST (CLOSE (OPEN ~S :DIRECTION :OUTPUT)))"
+                            "echo ok | cat ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT))"))
+          (let* ((input (format nil template marker))
+                 (envelope (json-command input :environment-agent-p t)))
+            (expect (list input (json-at envelope "status")
+                          (json-at envelope "error" "code")
+                          (json-at envelope "safety" "level"))
+                    :to-equal (list input 3 "E_NEEDS_APPROVAL" "confirm"))
+            (expect (list input (probe-file marker)) :to-equal (list input nil))))
+        ;; The Enter step is made to pass everything: the execution gate
+        ;; alone must refuse the value form before the evaluator runs it.
+        (with-temporary-function
+            ((quote nshell.feature.machine::%classify-input)
+             (lambda (input) (declare (ignore input)) (values (list :safe) t)))
+          (dolist (template '("echo ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT))"
+                              "echo before; echo ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT))"))
+            (let* ((input (format nil template marker))
+                   (envelope (json-command input :environment-agent-p t)))
+              (expect (list input (json-at envelope "status")
+                            (json-at envelope "error" "code"))
+                      :to-equal (list input 3 "E_NEEDS_APPROVAL"))
+              (expect (list input (probe-file marker)) :to-equal (list input nil))))))))
+
   (it "reports the effects of the commands in substitutions"
     ;; Refused under NSHELL_AGENT=1, so victim is never touched.
     (let ((envelope (json-command "echo $(rm victim)" :environment-agent-p t)))

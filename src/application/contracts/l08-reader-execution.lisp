@@ -157,8 +157,13 @@
                    (let ((inner-commands
                            (%preflight-reader-process-substitution-entry entry)))
                      (dolist (inner-command inner-commands)
+                       ;; Under the AI gate this check runs before any gate,
+                       ;; so it loads no function file; a file-backed
+                       ;; function is a :SHELL-FUNCTION either way.
                        (multiple-value-bind (dispatch-kind binding)
-                           (%resolve-command-stage-binding context inner-command)
+                           (%resolve-command-stage-binding
+                            context inner-command
+                            :autoload (not (%execution-gate-active-p)))
                          (unless (or (eq dispatch-kind :external)
                                      (and (eq dispatch-kind :builtin)
                                           (eq :argv
@@ -1050,6 +1055,35 @@ full-screen check together. Return the refusal (MESSAGE STATUS), or NIL."
               (make-pipeline-execution-result
                status statuses (make-list stage-count :initial-element nil))))))
 
+(defun %reader-command-loads-function-file-p (context command)
+  "True when evaluating the stage of COMMAND would load a function file: the
+resolution that loads nothing finds the file but no binding.  A resolution
+that fails counts as loading, so the gate judges the stage."
+  (multiple-value-bind (kind binding)
+      (handler-case (%resolve-command-stage-binding context command :autoload nil)
+        (error () (values :shell-function nil)))
+    (and (eq kind :shell-function) (null binding))))
+
+(defun %reader-gate-unevaluated-stages (context commands parent-kind)
+  "Gate the command nodes COMMANDS before their stages are evaluated, judged
+as if running under PARENT-KIND, when evaluating one runs code before the
+gate after evaluation: a value form that calls Lisp, or a function file the
+resolution loads.  Return the refusal (MESSAGE STATUS), or NIL."
+  (when (and (%execution-gate-active-p)
+             (some (lambda (command)
+                     (or (some #'nshell.domain.parsing:command-value-form-runs-lisp-p
+                               (nshell.domain.parsing:command-node-argument-forms
+                                command))
+                         (%reader-command-loads-function-file-p context command)))
+                   commands))
+    (let ((*execution-gate-parent-kind* parent-kind))
+      (%assistant-execution-gate
+       context
+       (if (rest commands)
+           (nshell.domain.parsing:make-pipeline-node commands)
+           (first commands))
+       :path :reader))))
+
 (defun %reader-execute-foreground-in-context
     (context ast stage-evaluator)
   (let ((assignment-words
@@ -1085,9 +1119,21 @@ full-screen check together. Return the refusal (MESSAGE STATUS), or NIL."
                "Reader command or pipeline has no command stages.")))
            (let* ((plans
                     (%reader-preflight-process-substitutions context commands))
+                  (unevaluated-refusal
+                    (or (%reader-gate-unevaluated-stages
+                         context commands gate-parent-kind)
+                        ;; A process substitution is nested like $(...).
+                        (loop for (nil nil inner-commands) in plans
+                                thereis (%reader-gate-unevaluated-stages
+                                         context inner-commands :command))))
                   (evaluated-stages
-                    (%reader-evaluate-stages
-                     context commands stage-evaluator))
+                    (progn
+                      (when unevaluated-refusal
+                        (return-from %reader-execute-foreground-in-context
+                          (%reader-gate-refusal
+                           context unevaluated-refusal (length commands))))
+                      (%reader-evaluate-stages
+                       context commands stage-evaluator)))
                   (refusal
                     (%reader-gate-evaluated-stages
                      context evaluated-stages gate-parent-kind))
@@ -1238,7 +1284,12 @@ full-screen check together. Return the refusal (MESSAGE STATUS), or NIL."
     (let* ((gate-parent-kind *execution-gate-parent-kind*)
            (*execution-gate-parent-kind* :command)
            (evaluated-stages
-             (%reader-evaluate-stages context commands stage-evaluator))
+             (let ((refusal (%reader-gate-unevaluated-stages
+                             context commands gate-parent-kind)))
+               (when refusal
+                 (return-from %reader-spawn-background-node-in-context
+                   (%reader-gate-refusal context refusal 0)))
+               (%reader-evaluate-stages context commands stage-evaluator)))
            (background-commands
              (loop for stage in evaluated-stages
                    for command in commands

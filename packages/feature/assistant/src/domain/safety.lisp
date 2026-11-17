@@ -27,6 +27,11 @@ knowledge base and whether the subject is a command the line runs.")
   "False while the walk describes a subject the line does not run: a query
 target of command -v, or a command named in the operands of an unknown one.")
 
+(defvar *assistant-reader-source* nil
+  "The source text of the reader result being classified, whose offsets the
+source spans of its command value forms are, or NIL while the walk is in a
+node read from other text (an alias expansion, a reparsed command line).")
+
 (defun %assistant-subject-result (command &rest subject)
   (when *assistant-subject-visitor*
     (funcall *assistant-subject-visitor* subject *assistant-subject-runs-p*))
@@ -121,7 +126,8 @@ name (and, or, not, command, builtin)."
 (defun %assistant-classify-command-line (text resolve)
   "Classify TEXT as a bare command line: the reader of eval, sh -c, and
 process substitutions."
-  (let ((parsed (nshell.domain.parsing:parse-command-line text)))
+  (let ((parsed (nshell.domain.parsing:parse-command-line text))
+        (*assistant-reader-source* nil))
     (if (nshell.domain.parsing:parse-complete-p parsed)
         (%assistant-classify-node (nshell.domain.parsing:parse-result-ast parsed)
                                   :bare-line resolve)
@@ -231,6 +237,15 @@ Outside single quotes, an unescaped $ or backtick conservatively requires confir
                                 (nshell.domain.expansion:glob-pattern-p value))))))))
      (nshell.domain.parsing:command-arg-fragments argument))))
 
+(defun %assistant-forms-after-arguments (forms count)
+  "Return the tail of the argument FORMS after their first COUNT command
+arguments, dropping the value forms among them.  The argv words count only
+command arguments, so a word count is no index into FORMS."
+  (loop while (and forms (plusp count))
+        do (when (nshell.domain.parsing:command-arg-p (pop forms))
+             (decf count)))
+  forms)
+
 (defun %assistant-classify-argv (words &key resolution resolve assignments nested
                                            writes redirect-problems raw-words
                                            argument-nodes argument-forms source-arguments-p)
@@ -250,8 +265,9 @@ redirects and the written words of the outermost command."
                               inner
                               :resolve resolve
                               :source-arguments-p source-arguments-p
-                              :argument-forms (nthcdr (- (length words) (length inner))
-                                                     argument-forms)
+                              :argument-forms (%assistant-forms-after-arguments
+                                               argument-forms
+                                               (- (length words) (length inner)))
                               :argument-nodes (nthcdr (- (length words) (length inner))
                                                      argument-nodes)
                               :resolution (if (eq runs :by-name)
@@ -473,7 +489,14 @@ and RESOLVE are as for classify-ast."
         (let ((nested (mapcan #'%assistant-result-reasons
                               (append results
                                       (%assistant-substitution-results
-                                       words resolve inert-words)))))
+                                       words resolve inert-words)
+                                      ;; The evaluator runs the value forms of
+                                      ;; NODE itself, also when an alias
+                                      ;; expansion replaces its command.
+                                      (%assistant-value-form-results
+                                       (nshell.domain.parsing:command-node-argument-forms
+                                        node)
+                                       resolve)))))
           (cond
             ((null argv)
              (%assistant-subject-result
@@ -487,14 +510,17 @@ and RESOLVE are as for classify-ast."
              ;; The executor runs RUN-NODE, the alias expansion, as a stage it
              ;; has resolved already; NODE contributes its own assignments,
              ;; redirects, and substitutions.
-             (let ((ran (classify-command
-                         run-node
-                         :path (if (eq path :reader) :reader :stage)
-                         :source-arguments-p source-arguments-p
-                         :resolve (lambda (command-node command-path)
-                                    (if (eq command-node run-node)
-                                        (values resolution nil)
-                                        (funcall resolve command-node command-path))))))
+             (let ((ran (let ((*assistant-reader-source* nil))
+                          ;; RUN-NODE comes from the alias text, not from the
+                          ;; source its value form spans would index.
+                          (classify-command
+                           run-node
+                           :path (if (eq path :reader) :reader :stage)
+                           :source-arguments-p source-arguments-p
+                           :resolve (lambda (command-node command-path)
+                                      (if (eq command-node run-node)
+                                          (values resolution nil)
+                                          (funcall resolve command-node command-path)))))))
                (%assistant-subject-result
                 (first argv)
                 :command (%assistant-command-basename (first argv))
@@ -580,8 +606,51 @@ every subject."
          :nested (%assistant-result-reasons inner)
          form-facts))
 
+(defun %assistant-classify-sexp-form (source form form-span-map resolve)
+  "Classify FORM, an S-expression read from SOURCE at the span FORM-SPAN-MAP
+records for it, as the reader evaluates it: as the command it converts to,
+and at least confirm unless it is a forced external command of atoms."
+  (handler-case
+      (let ((ast (nshell.domain.parsing:command-form->ast
+                  source
+                  form
+                  form-span-map
+                  (lambda (head-source)
+                    (declare (ignore head-source))
+                    :command-island))))
+        (%assistant-form-result
+         (%assistant-classify-node ast :reader resolve)
+         :sexp-unforced
+         (not (and (nshell.domain.parsing:command-node-p ast)
+                   (nshell.domain.parsing:command-node-force-external-p ast)
+                   (not (%assistant-ast-has-redirect-p ast))
+                   (ignore-errors (every #'atom form))))))
+    (error ()
+      (%assistant-unclassifiable-result "unclassifiable S-expression form"))))
+
+(defun %assistant-value-form-results (argument-forms resolve)
+  "Classify the command value forms in ARGUMENT-FORMS that the evaluator runs
+as Lisp before the command: each unquoted cons, as an S-expression read from
+*assistant-reader-source*.  An atom or a quoted form runs nothing.  A form
+whose source cannot be found again is unclassifiable."
+  (loop for argument in argument-forms
+        when (nshell.domain.parsing:command-value-form-runs-lisp-p argument)
+          collect (let* ((form (nshell.domain.parsing:command-value-form-form argument))
+                         (source *assistant-reader-source*)
+                         (span (and source
+                                    (nshell.domain.parsing:command-value-form-operand-span
+                                     source argument))))
+                    (if span
+                        (let ((spans (make-hash-table :test #'eq)))
+                          (setf (gethash form spans) span)
+                          (%assistant-classify-sexp-form source form spans resolve))
+                        (%assistant-unclassifiable-result
+                         "unclassifiable command value form")))))
+
 (defun %assistant-classify-reader-result (reader-result resolve)
-  (let ((form (nshell.domain.parsing:reader-result-form reader-result)))
+  (let ((form (nshell.domain.parsing:reader-result-form reader-result))
+        (*assistant-reader-source*
+          (nshell.domain.parsing:reader-result-source reader-result)))
     (cond
       ((or (nshell.domain.parsing:command-node-p form)
            (nshell.domain.parsing:pipeline-node-p form)
@@ -590,24 +659,11 @@ every subject."
                                :form-redirect
                                (%assistant-ast-has-redirect-p form)))
       ((consp form)
-       (handler-case
-           (let ((ast (nshell.domain.parsing:command-form->ast
-                       (nshell.domain.parsing:reader-result-source reader-result)
-                       form
-                       (nshell.domain.parsing:reader-result-form-span-map
-                        reader-result)
-                       (lambda (head-source)
-                         (declare (ignore head-source))
-                         :command-island))))
-             (%assistant-form-result
-              (%assistant-classify-node ast :reader resolve)
-              :sexp-unforced
-              (not (and (nshell.domain.parsing:command-node-p ast)
-                        (nshell.domain.parsing:command-node-force-external-p ast)
-                        (not (%assistant-ast-has-redirect-p ast))
-                        (ignore-errors (every #'atom form))))))
-         (error ()
-           (%assistant-unclassifiable-result "unclassifiable S-expression form"))))
+       (%assistant-classify-sexp-form
+        (nshell.domain.parsing:reader-result-source reader-result)
+        form
+        (nshell.domain.parsing:reader-result-form-span-map reader-result)
+        resolve))
       (t
        (%assistant-unclassifiable-result "unclassifiable S-expression form")))))
 

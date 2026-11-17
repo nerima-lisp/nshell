@@ -105,7 +105,7 @@ compilation unit meanwhile."
   "Run nshell with ARGUMENTS in DIRECTORY, send it SIGNAL SIGNAL-DELAY
 seconds after every file in READY-FILES has content and, with READY-P, that
 function of no arguments returns true, and return its stdout, stderr and exit
-status. AT-ENVELOPE, a function of no arguments, is called as soon as stdout
+status. With SIGNAL NIL nothing is sent. AT-ENVELOPE, a function of no arguments, is called as soon as stdout
 holds a whole line, which may be before nshell has exited."
   (let* ((root (or *noninteractive-signal-source-root*
                    (asdf:system-source-directory :nshell)))
@@ -156,7 +156,8 @@ holds a whole line, which may be before nshell has exited."
                                          (%signal-e2e-read source-file)))
                    :to-equal (truename root))
            (sleep signal-delay)
-           (sb-posix:kill (sb-ext:process-pid program) signal)
+           (when signal
+             (sb-posix:kill (sb-ext:process-pid program) signal))
            (when second-signal
              (sleep 0.2)
              (sb-posix:kill (sb-ext:process-pid program) second-signal))
@@ -174,6 +175,11 @@ holds a whole line, which may be before nshell has exited."
         (sb-ext:process-kill program sb-unix:sigkill)
         (sb-ext:process-wait program))
       (when program (sb-ext:process-close program)))))
+
+(defun %signal-e2e-run-to-exit (directory arguments)
+  "Run nshell with ARGUMENTS in DIRECTORY to its end, sending no signal, and
+return its stdout, stderr and exit status."
+  (%signal-e2e-run directory arguments nil nil))
 
 (defun %signal-e2e-expect-envelope (stdout stderr status signal-name)
   (expect status :to-equal 130)
@@ -444,6 +450,33 @@ holds a whole line, which may be before nshell has exited."
           (declare (ignore stdout))
           (expect status :to-equal 143)
           (expect stderr :to-equal (format nil "nshell: interrupted by SIGTERM~%")))
+        (sleep 1)
+        (expect (probe-file after) :to-be-null))))
+
+  (it "bug4-json-deadline-is-not-taken-over-by-a-command-substitution-timeout"
+    ;; The --json worker path: the 0.5 s deadline parks the worker, and the
+    ;; substitution's 1 s timeout passes while the child, which ignores
+    ;; SIGTERM, lasts the grace period. The timeout must not end the
+    ;; worker's unwind and let the input go on.
+    (host-kit:with-temporary-directory (directory)
+      (let ((after (merge-pathnames "after" directory))
+            (script (merge-pathnames "run.nsh" directory)))
+        ;; Sourced, so each line runs as its own command, as in a script.
+        (with-open-file (out script :direction :output)
+          (format out "(SETF NSHELL.APPLICATION::*COMMAND-SUBSTITUTION-TIMEOUT* 1)~%~
+                       echo $(sh -c 'trap \"\" TERM; sleep 30')~%~
+                       touch ~A~%"
+                  (namestring after)))
+        (multiple-value-bind (stdout stderr status)
+            (%signal-e2e-run-to-exit
+             directory
+             (list "--json" "--timeout" "0.5" "--command"
+                   (format nil "source ~A" (namestring script))))
+          (expect status :to-equal 124)
+          (expect stderr :to-equal "")
+          (let ((envelope (json-kit:parse stdout)))
+            (expect (json-at envelope "error" "code") :to-equal "E_TIMEOUT")
+            (expect (json-at envelope "stderr" "text") :to-equal "")))
         (sleep 1)
         (expect (probe-file after) :to-be-null))))
 

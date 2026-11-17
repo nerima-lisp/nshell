@@ -168,7 +168,7 @@ executable scenarios and manual checks.
 | L07 | direct | 1 | 0 | `t/scenarios/L07/theme-can-be-selected.json` |
 | M01 | direct | 1 | 0 | `t/scenarios/M01/cd-dash.json` |
 | M02 | direct | 1 | 0 | `t/scenarios/M02/logical-pwd-and-pwd-variable.json` |
-| M03 | direct | 1 | 0 | `t/scenarios/M03/directory-history-prevd-nextd.json` |
+| M03 | removed (prevd/nextd deleted in P2-6) | 0 | 0 | — |
 | M04 | manual | 0 | 1 | `t/scenarios/M04/manual.md` |
 | M05 | direct | 1 | 0 | `t/scenarios/M05/pushd-popd-stack-round-trip.json` |
 | M06 | direct | 1 | 0 | `t/scenarios/M06/shell-continues-after-current-directory-is-removed.json` |
@@ -233,4 +233,4 @@ executable scenarios and manual checks.
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 263 | 48 | — |
+| Total | expected corpus | 262 | 48 | — |

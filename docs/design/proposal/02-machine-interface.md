@@ -62,7 +62,7 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 - プロトコルの失敗は、JSON-RPC の整数のコードで返す (U6)。
 - JSON の object でないメッセージには、id を null にして -32600 を返す。
 - E_TIMEOUT の run で、その run を実行するスレッドを止められなかったときは、シェルの状態がまだ変わりうるため、サーバーのプロセスを起動し直すまで run・explain・complete・state は E_INTERNAL を返す。history・help・policy・initialize・query・read_output と非推奨のツールは使える。
-- サーバーのプロセスが SIGINT・SIGTERM・SIGHUP を受けたら、サーバーを終える。終了コードは 128+シグナル番号。run の実行中なら、子のプロセスグループを期限切れと同じ順序で止め、その run に E_INTERRUPTED の応答を 1 つ返してから終える。それ以外のとき (run と run の間、入力の待ち、承認の答えの待ち) はすぐに終える。1 つの要求だけを取り消すには、クライアントが notifications/cancelled を送る。
+- サーバーのプロセスが SIGINT・SIGTERM・SIGHUP を受けたら、サーバーを終える。終了コードは 128+シグナル番号。run の実行中なら、子のプロセスグループを期限切れと同じ順序で止め、その run に E_INTERRUPTED の応答を 1 つ返してから終える。その run がほかの理由 (期限切れなど) ですでに止まりかけているときと、その run の実行が終わったあとは、その run の応答をそのまま返してから終える。それ以外のとき (run と run の間、入力の待ち、承認の答えの待ち) はすぐに終える。1 つの要求だけを取り消すには、クライアントが notifications/cancelled を送る。
 - 出力の保存先のセッションのディレクトリは、ほかのプロセスに消されても作り直す。保存に失敗したときは標準エラー出力にだけ知らせる。
 - run の引数は `input` と `timeout` (秒。既定は --json と同じ)。U6 の max_output_bytes と tail_lines は MCP の run ではまだ使わず、知らない引数は無視する。tools/list のツールの並びは、initialize ツールの value の `methods` と同じ順 (U5)。
 

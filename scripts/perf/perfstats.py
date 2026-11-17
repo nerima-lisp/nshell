@@ -41,6 +41,9 @@ MIN_VALID_FRACTION = 0.75
 GATED_RULES: dict[str, list[tuple[str, float, float]]] = {
     "startup": [("median", 0.05, 3.0)],
     "key": [("p95", 0.05, 1.0), ("p99", 0.15, 2.0)],
+    # proposal/08 budgets prompt display at p95; it has no threshold of its
+    # own, so it takes the key p95 rule.
+    "prompt": [("p95", 0.05, 1.0)],
     "consing": [("mean", 0.10, 0.0)],
 }
 # Reported with a CI but never gated.
@@ -48,7 +51,7 @@ INFO_STATS: dict[str, list[str]] = {
     "startup": [],
     "key": ["median"],
     "tab": ["median", "p95"],
-    "prompt": ["median", "p95"],
+    "prompt": ["median"],
     "rss": ["median"],
     "consing": [],
 }

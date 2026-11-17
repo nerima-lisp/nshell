@@ -37,6 +37,13 @@ def key_metric(base_sessions: list[list[float]], cand_sessions: list[list[float]
             "blocks": blocks, "errors": [], "guard_failures": [], "support": {"A": True, "B": True}}
 
 
+def prompt_metric(base_sessions: list[list[float]], cand_sessions: list[list[float]]) -> dict:
+    """The harness default: 2 ABBA blocks, two sessions per arm in each."""
+    blocks = [{"A": base_sessions[index:index + 2], "B": cand_sessions[index:index + 2]} for index in (0, 2)]
+    return {"name": "prompt.empty_enter", "kind": "prompt", "unit": "ms", "planned_groups_per_arm": 4,
+            "blocks": blocks, "errors": [], "guard_failures": [], "support": {"A": True, "B": True}}
+
+
 # 20 baseline samples around 100 ms with +-2 ms spread.
 BASE = [100.0 + ((index * 7) % 5) - 2 for index in range(20)]
 
@@ -170,6 +177,35 @@ class KeyRuleTests(unittest.TestCase):
         base = [[5.0 + (index % 10) * 0.1 for index in range(200)] for _ in range(2)]
         rows = perfstats.judge_metric(key_metric(base, [list(session) for session in base]), None)
         self.assertEqual({row["verdict"] for row in rows if row["gated"]}, {"pass"})
+
+
+class PromptRuleTests(unittest.TestCase):
+    # 4 sessions per arm of 30 Enter presses around 20 ms, as the harness records them.
+    BASE = [[20.0 + ((index * 7 + session) % 11) * 0.2 for index in range(30)] for session in range(4)]
+
+    def rows(self, cand: list[list[float]], noise: dict | None = None) -> dict:
+        return {row["stat"]: row for row in perfstats.judge_metric(prompt_metric(self.BASE, cand), noise)}
+
+    def test_regressed_prompt_fails_p95(self):
+        # +3 ms on a p95 near 22 ms: threshold is max(5%, 1 ms), about 1.1 ms.
+        rows = self.rows([[value + 3.0 for value in session] for session in self.BASE])
+        self.assertTrue(rows["p95"]["gated"])
+        self.assertEqual(rows["p95"]["verdict"], "fail")
+        self.assertAlmostEqual(rows["p95"]["threshold"], 0.05 * rows["p95"]["base"])
+        self.assertEqual(rows["median"]["verdict"], "info")
+
+    def test_unchanged_prompt_passes(self):
+        rows = self.rows([list(session) for session in self.BASE])
+        self.assertEqual(rows["p95"]["verdict"], "pass")
+        self.assertTrue(rows["p95"]["resolved"])
+        self.assertEqual(set(rows), {"p95", "median"})
+
+    def test_noise_run_covers_prompt_p95(self):
+        noise = perfstats.build_noise(raw(prompt_metric(self.BASE, [list(s) for s in self.BASE])), [])
+        self.assertIn("prompt.empty_enter|p95", noise["metrics"])
+        self.assertTrue(noise["complete"])
+        row = self.rows([list(session) for session in self.BASE], {"metrics": {}})["p95"]
+        self.assertEqual(row["verdict"], "inconclusive")
 
 
 class B3Tests(unittest.TestCase):

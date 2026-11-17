@@ -259,7 +259,8 @@ schema accepts it."
       (expect (gethash "version" value)
               :to-equal (asdf:component-version (asdf:find-system "nshell")))
       (expect (%machine-list (gethash "methods" value))
-              :to-equal '("explain" "initialize" "policy" "read_output"))
+              :to-equal '("initialize" "run" "explain" "complete" "state" "history"
+                          "help" "query" "read_output" "policy"))
       (expect (gethash "timeout_s" (gethash "limits" value)) :to-equal 120)
       (expect (gethash "cwd" (gethash "session" value)) :to-equal "/tmp")
       (expect (stringp (gethash "os" (gethash "session" value))) :to-be-truthy)

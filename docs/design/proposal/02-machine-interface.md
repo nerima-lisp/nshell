@@ -56,7 +56,13 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 - 承認画面 (elicitation) を使うため、MCP のプロトコルを 2025-06-18 に上げる。
 - list_sessions と read_state は 1 リリースのあいだ非推奨として残す。
 - query は知識ベースへの問い合わせ (P4) ができるまで、E_NOT_IMPLEMENTED (isError) を返す。
-- セッションは 1 つのサーバープロセスに 1 つ。
+- セッションは 1 つのサーバープロセスに 1 つ。cwd・変数・関数は run の呼び出しをまたいで続く。
+- ツールの結果は U6 の envelope。`structuredContent` に envelope の object、`content[0]` の text に同じ JSON を入れ、`isError` は ok が false のときだけ true。
+- 未知のツール名は JSON-RPC のエラー -32602。ツールの引数が不正なときは、E_PROTOCOL の ok:false の envelope を返す。
+- JSON の object でないメッセージには、id を null にして -32600 を返す。
+- E_TIMEOUT の run で、その run を実行するスレッドを止められなかったときは、シェルの状態がまだ変わりうるため、サーバーのプロセスを起動し直すまで run・explain・complete・state は E_INTERNAL を返す。history・help・policy・initialize・query・read_output と非推奨のツールは使える。
+- 出力の保存先のセッションのディレクトリは、ほかのプロセスに消されても作り直す。保存に失敗したときは標準エラー出力にだけ知らせる。
+- run の引数は `input` と `timeout` (秒。既定は --json と同じ)。U6 の max_output_bytes と tail_lines は MCP の run ではまだ使わず、知らない引数は無視する。tools/list のツールの並びは、initialize ツールの value の `methods` と同じ順 (U5)。
 
 |   |   |
 |---|---|
@@ -70,6 +76,28 @@ $ nshell --serve          # stdio 上の JSON Lines。セッション状態を�
 | policy | 安全規則の一覧 (U7) |
 | read_output | 省略された出力の続き。不透明な id と offset で読み、出力の保存先の外は拒否する。引数・単位・上限・エラーは U6「read_output で続きを読む」 |
 | query | 知識ベースへの問い合わせ (06-F) |
+
+### MCP での承認
+
+- elicitation/create を送るのは、MCP の initialize 要求でネゴシエートした版が 2025-06-18 で、クライアントが elicitation の capability を宣言したときだけ。それ以外のクライアント (2024-11-05 のもの、capability を宣言しないもの) には、confirm の入力に E_NEEDS_APPROVAL を返す。`requestedSchema` は `{approve: boolean}`。
+- 実行するのは、action が accept で approve が true のときだけ。decline・cancel・approve が false・エラー応答・入力の終わりは、E_NEEDS_APPROVAL を返す。
+- 承認が及ぶのは、承認画面に示した判定 (level と reasons) だけ。承認の応答を受け取ったあと、実行の直前にもう一度判定し、示した判定と違えば実行せず E_NEEDS_APPROVAL を返す。
+- MCP では承認 ID (`ap_…`) を P1 では発行しない。
+- 応答を待つあいだに届いた要求は保留し、その run のあとで届いた順に処理する。
+- 待っているあいだに、その tools/call への notifications/cancelled が届けば、その run は実行せず、seq も履歴も使わず、応答も返さない。保留中の要求への cancelled は、その要求を捨てる。完了したあとの cancelled は無視する。
+
+### MCP ツールの value (P1 の最小の形)
+
+詳細な形はまだ決めていない。
+
+| ツール | 入力 | value |
+|---|---|---|
+| complete | input, cursor (既定は末尾) | `{candidates:[{text, kind, description}]}`。行エディタの順 |
+| state | なし | `{cwd, session:{id, seq}, last_status}`。seq はそれまでに数えた run の回数。envelope の state.last_status にも入れる |
+| history | query (部分一致)、limit | `{entries:[{seq, input, status}]}`。新しい順。limit は正の整数で、省くとすべて。seq を数えた run (拒否した run を含む) の記録で、永続する履歴ファイルではない |
+| help | topic | `{topic, text}`。topic がなければ概要。未知の topic は E_PROTOCOL (U6 は E_NO_MATCH を glob 用とする) |
+
+list_sessions と read_state の応答は envelope にせず、従来の形のまま。説明は `Deprecated:` で始める。
 
 実行ポリシー
 

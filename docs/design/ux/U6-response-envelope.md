@@ -47,6 +47,7 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 - 上限の既定は max_output_bytes 32768 バイト。超えたら先頭 10 行と末尾 10 行を残す。片側が 16384 バイトを超えるときはバイト数で切る。行を省かずにバイト数だけ切ったときの印は「… N bytes omitted …」。
 - bytes と lines は ANSI を除去し \r で上書きされた部分を除いたあとの全文の大きさ。保存するファイルの大きさと同じ。
 - 全文を保存するのは切り詰めたときだけ。path・session・seq もそのときだけ出す。--json の単発実行では seq は 1 で、stdout は `<seq>.txt`、stderr は `<seq>.stderr.txt` に保存する。session は保存先のディレクトリ名 (`s_` と 6 文字)。
+- MCP の run は、切り詰めの有無にかかわらず envelope に session と seq を常に入れる。seq は同じサーバープロセスで始めた run の回数で、承認されず実行しなかった run も数える。引数が不正な run、承認待ちのあいだに取り消された run、E_INTERNAL を返した run は数えない。run 以外のツールの envelope には入れず、session の ID は initialize と state の value に出る。
 - 保存先を安全に作れないとき (シンボリックリンク、他人の所有、group か other に権限がある) は保存せず、path も出さない。
 - --timeout は --json と一緒のときだけ受け付ける。
 - 全文の保存は直近 50 セッション分だけ残す。--private では保存しない。

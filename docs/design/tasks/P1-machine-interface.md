@@ -55,11 +55,11 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 
 ## P1-6 MCP の拡張
 
-- [ ] --mcp に run / explain / complete / state / history / help / initialize / policy / read_output / query の 10 ツール。query は P4-5 まで E_NOT_IMPLEMENTED (isError) を返す
-- [ ] elicitation のためにプロトコルを 2025-06-18 へ上げる
-- [ ] `list_sessions` と `read_state` は 1 リリースのあいだ非推奨として残す
-- [ ] セッションは 1 サーバープロセスに 1 つ
-- [ ] safe のコマンドは承認なしで実行する。confirm 判定はクライアントの承認 (elicitation) があれば確認、なければ E_NEEDS_APPROVAL
+- [x] --mcp に run / explain / complete / state / history / help / initialize / policy / read_output / query の 10 ツール。query は P4-5 まで E_NOT_IMPLEMENTED (isError) を返す
+- [x] elicitation のためにプロトコルを 2025-06-18 へ上げる
+- [x] `list_sessions` と `read_state` は 1 リリースのあいだ非推奨として残す
+- [x] セッションは 1 サーバープロセスに 1 つ
+- [x] safe のコマンドは承認なしで実行する。confirm 判定はクライアントの承認 (elicitation) があれば確認、なければ E_NEEDS_APPROVAL
 
 ## P1-7 golden test と言語の適合テスト
 

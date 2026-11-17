@@ -86,4 +86,15 @@ of ux/U6, its builders, and its JSON serialization.")
              #:explain-input
              #:initialize-envelope
              #:policy-envelope
-             #:read-output-envelope)))
+             #:read-output-envelope
+             #:method-error-envelope
+             #:complete-envelope
+             #:state-envelope
+             #:history-envelope
+             #:help-envelope
+             #:query-envelope
+             ;; MCP
+             #:+mcp-protocol-version+
+             #:+mcp-supported-protocol-versions+
+             #:mcp-tool-descriptors
+             #:run-mcp-server)))

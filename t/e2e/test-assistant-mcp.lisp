@@ -75,7 +75,7 @@
           (expect 0 :to-equal (host-kit:process-result-exit-code result))
           (expect "" :to-equal (host-kit:process-result-stderr result))
           (expect 4 :to-equal (length responses))
-          (expect "2024-11-05" :to-equal
+          (expect "2025-06-18" :to-equal
                   (%assistant-mcp-test-field
                    (%assistant-mcp-test-field (first responses) "result")
                    "protocolVersion"))

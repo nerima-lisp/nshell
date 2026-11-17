@@ -64,6 +64,8 @@ again here, with the same reader context."
 
 (defparameter +json-conveyed-specials+
   '(*standard-input*
+    ;; *query-io* and *debug-io* are synonyms of it.
+    *terminal-io*
     *default-pathname-defaults*
     nshell.infrastructure.acl:*exported-environment*
     nshell.presentation:*noninteractive-batch-p*
@@ -124,7 +126,7 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
                 (nshell.application::run-delivering-captured-output program))
           (throw tag :exec)))))
 
-(defun %worker-bindings (run tag out err timeout agent-p)
+(defun %worker-bindings (run tag out err timeout approval)
   (let ((symbols (copy-list +json-conveyed-specials+))
         (values (mapcar #'symbol-value +json-conveyed-specials+)))
     (flet ((bind (symbol value)
@@ -142,11 +144,12 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
       (bind 'nshell.application::*execution-gate-refusal* (json-run-gate-refusal run))
       (bind 'nshell.application::*full-screen-program-guard* (%full-screen-program-guard run))
       (bind 'nshell.infrastructure.acl:*process-output-watch* (%alternate-screen-watch run))
-      (when agent-p
-        ;; As after Enter on a safe AI proposal: the gate runs what classifies
-        ;; :safe where it runs and refuses the rest, since no one can approve.
+      (when approval
+        ;; As after Enter on an AI proposal: with :SAFE the gate runs what
+        ;; classifies :safe where it runs and refuses the rest, since no one
+        ;; can approve; with :CONFIRM a person approved the input (--mcp).
         (bind 'nshell.application:*execution-origin* :proposal)
-        (bind 'nshell.application:*execution-approval* :safe)))
+        (bind 'nshell.application:*execution-approval* approval)))
     (values symbols values)))
 
 (defun %full-screen-program-guard (run)
@@ -225,12 +228,13 @@ Return true when the worker has exited."
           (reap late))
         exited-p))))
 
-(defun %run-batch-with-deadline (input timeout agent-p errexit-p script-args out err)
+(defun %run-batch-with-deadline (input timeout approval errexit-p script-args out err
+                                 reset-state-p)
   (let* ((run (%make-json-run))
          (tag (list :json-run))
          (before (nshell.infrastructure.acl:registered-processes)))
     (multiple-value-bind (symbols values)
-        (%worker-bindings run tag out err timeout agent-p)
+        (%worker-bindings run tag out err timeout approval)
       (let ((worker
               (sb-thread:make-thread
                (lambda ()
@@ -240,7 +244,8 @@ Return true when the worker has exited."
                           (setf (json-run-status run)
                                 (nshell.presentation:run-repl-batch-observed
                                  input (%observe run)
-                                 :script-args script-args :errexit-p errexit-p))))
+                                 :script-args script-args :errexit-p errexit-p
+                                 :reset-state-p reset-state-p))))
                    (sb-thread:signal-semaphore (json-run-wake run))))
                :name "nshell json command")))
         (let ((woken-p (sb-thread:wait-on-semaphore (json-run-wake run) :timeout timeout)))
@@ -418,11 +423,16 @@ did."
        (values "E_COMMAND_FAILED" status
                (or message (format nil "the command exited with status ~D" status)))))))
 
-(defun %store-full-output (stdout stderr out-text err-text)
-  "Save the cleaned full text of each cut output in a new output session, set
-its PATH, and return the session, or NIL when nothing could be saved."
-  (let ((session (ignore-errors (open-output-session)))
-        (saved nil))
+(defun %store-full-output (stdout stderr out-text err-text &key session (seq 1))
+  "Save the cleaned full text of each cut output as the files of run SEQ in
+SESSION, a new output session by default, set its PATH, and return the
+session, or NIL when nothing could be saved."
+  (let* ((new-p (null session))
+         ;; A kept session's directory may have been pruned meanwhile.
+         (session (if new-p
+                      (ignore-errors (open-output-session))
+                      (reopen-output-session session)))
+         (saved nil))
     (when session
       (flet ((save (output raw name)
                (when (envelope-output-truncated output)
@@ -431,17 +441,17 @@ its PATH, and return the session, or NIL when nothing could be saved."
                    (when path
                      (setf (envelope-output-path output) path
                            saved t))))))
-        (save stdout out-text "1.txt")
-        (save stderr err-text "1.stderr.txt"))
-      (if saved
-          (ignore-errors (prune-output-sessions :except session))
-          (ignore-errors
-           (sb-posix:rmdir (string-right-trim "/" (output-session-directory session))))))
+        (save stdout out-text (format nil "~D.txt" seq))
+        (save stderr err-text (format nil "~D.stderr.txt" seq)))
+      (cond (saved (ignore-errors (prune-output-sessions :except session)))
+            (new-p
+             (ignore-errors
+              (sb-posix:rmdir (string-right-trim "/" (output-session-directory session)))))))
     (and saved session)))
 
-(defun %refusal-envelope (verdict effects duration-ms)
+(defun %refusal-envelope (verdict effects duration-ms &key session seq)
   "The envelope of input refused at the Enter step: :BLOCK is never run, and
-:CONFIRM needs an approval no one can give under --json."
+:CONFIRM needs an approval no one gave."
   (destructuring-bind (level . reasons) verdict
     (error-envelope (if (eq level :block) "E_BLOCKED_BY_POLICY" "E_NEEDS_APPROVAL")
                     :message (format nil "~A: ~A"
@@ -454,7 +464,8 @@ its PATH, and return the session, or NIL when nothing could be saved."
                     :stderr (output-from-text "")
                     :effects effects
                     :safety (%envelope-safety-of verdict)
-                    :state (%state))))
+                    :state (%state)
+                    :session session :seq seq)))
 
 (defun %elapsed-ms (start)
   (round (* 1000 (- (get-internal-real-time) start))
@@ -466,14 +477,24 @@ its PATH, and return the session, or NIL when nothing could be saved."
 
 (defun run-json-command (input &key (timeout +json-default-timeout-seconds+)
                                     private environment-agent-p errexit-p
-                                    script-args)
+                                    script-args approved-verdict (reset-state-p t)
+                                    session output-session (seq 1))
   "Run INPUT once as `nshell --command INPUT` does and return the envelope as
-one line of JSON, the exit status, and the envelope.
+one line of JSON, the exit status, the envelope, and whether the run's worker
+outlived the deadline and may still be running.
 
 TIMEOUT is the whole-run deadline in seconds. PRIVATE keeps cut output from
 being saved. ENVIRONMENT-AGENT-P (NSHELL_AGENT=1) refuses forms that are not
-:safe instead of only reporting their safety level. ERREXIT-P stops at the
-first failing command, as -e does."
+:safe instead of only reporting their safety level; APPROVED-VERDICT is the
+verdict a person approved INPUT under, and when INPUT still classifies exactly
+so only :block is refused. ERREXIT-P stops at the first
+failing command, as -e does.
+
+The --mcp server runs every call in one session: RESET-STATE-P false keeps
+the shell state of the previous run instead of starting from a fresh batch
+state, SESSION is the session id every envelope then carries with SEQ, and
+OUTPUT-SESSION, when not NIL, is where cut output is saved as the files of
+run SEQ."
   (check-type input string)
   (unless (%valid-json-timeout-p timeout)
     (error "The --json timeout must be a positive number of seconds, not ~S."
@@ -485,21 +506,33 @@ first failing command, as -e does."
         (nshell.infrastructure.acl:*detach-child-standard-input* nil)
         (nshell.infrastructure.terminal:*terminal-color-depth* nil))
     ;; The classifier resolves names in the batch shell state the run uses.
-    (nshell.presentation::%initialize-batch-state)
+    (if reset-state-p
+        (nshell.presentation::%initialize-batch-state)
+        ;; The kept state is a batch state already; only the two settings
+        ;; bound above for this run are set as %initialize-batch-state sets them.
+        (setf nshell.infrastructure.acl:*detach-child-standard-input* t
+              nshell.infrastructure.terminal:*terminal-color-depth* :none))
     (multiple-value-bind (verdict readable-p) (%classify-input input)
       ;; Judged before the run, as the verdict is: the run may change what
       ;; the names resolve to.
       (let ((level (first verdict))
-            (effects (and readable-p (%input-effects input))))
-        (when (and environment-agent-p readable-p (member level '(:confirm :block)))
-          (let ((envelope (%refusal-envelope verdict effects (%elapsed-ms start))))
+            (effects (and readable-p (%input-effects input)))
+            ;; Approval holds only for the verdict the person saw.
+            (approved-p (and approved-verdict (equal approved-verdict verdict))))
+        (when (and environment-agent-p readable-p
+                   (member level (if approved-p '(:block) '(:confirm :block))))
+          (let ((envelope (%refusal-envelope verdict effects (%elapsed-ms start)
+                                             :session session :seq (and session seq))))
             (return-from run-json-command
               (values (envelope-to-json envelope) (envelope-status envelope)
                       envelope))))
         (let* ((out (make-string-output-stream))
                (err (make-string-output-stream))
-               (run (%run-batch-with-deadline input timeout environment-agent-p
-                                              errexit-p script-args out err))
+               (run (%run-batch-with-deadline input timeout
+                                              (and environment-agent-p
+                                                   (if approved-p :confirm :safe))
+                                              errexit-p script-args out err
+                                              reset-state-p))
                ;; A worker that survived the deadline may still write them.
                (out-text (if (json-run-worker-alive-p run)
                              ""
@@ -510,18 +543,20 @@ first failing command, as -e does."
                (status (or (json-run-status run) 1))
                (stdout (envelope-output-for-text out-text))
                (stderr (envelope-output-for-text err-text))
-               (session (and (not private)
-                             (or (envelope-output-truncated stdout)
-                                 (envelope-output-truncated stderr))
-                             (%store-full-output stdout stderr out-text err-text)))
+               (saved (and (not private)
+                           (or (envelope-output-truncated stdout)
+                               (envelope-output-truncated stderr))
+                           (or (not session) output-session)
+                           (%store-full-output stdout stderr out-text err-text
+                                               :session output-session :seq seq)))
                (parts (list :duration-ms (%elapsed-ms start)
                             :stdout stdout
                             :stderr stderr
                             :effects effects
                             :safety (%envelope-safety-of verdict)
                             :state (%state)
-                            :session (and session (output-session-id session))
-                            :seq (and session 1)))
+                            :session (or session (and saved (output-session-id saved)))
+                            :seq (cond (session seq) (saved 1))))
                (envelope
                  (multiple-value-bind (code code-status message span fixes)
                      (%failure run input status (clean-output-text err-text) timeout)
@@ -531,4 +566,4 @@ first failing command, as -e does."
                                                     :fixes fixes parts)
                        (apply #'result-envelope :status 0 parts)))))
           (values (envelope-to-json envelope) (envelope-status envelope)
-                  envelope))))))
+                  envelope (json-run-worker-alive-p run)))))))

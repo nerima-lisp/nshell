@@ -542,13 +542,24 @@
                         :duplicate-key-policy :error
                         :null-value :null :false-value :false)))
 
+(defun %json-equal (expected actual)
+  ;; Numbers compare by value, so 1, 1.0 and 1e0 are the same JSON number:
+  ;; L4-values-and-positions.md:73 and :94 map JSON numbers to numbers, not
+  ;; to a spelling. Everything else compares with EQUAL, which keeps "1" apart
+  ;; from 1 and keeps array order and the object key set significant.
+  (cond ((and (numberp expected) (numberp actual)) (= expected actual))
+        ((and (consp expected) (consp actual))
+         (and (%json-equal (car expected) (car actual))
+              (%json-equal (cdr expected) (cdr actual))))
+        (t (equal expected actual))))
+
 (defun %stdout-json-mismatches (expected-text run)
   ;; EXPECTED-TEXT is JSON text; json-kit ignores the trailing newline.
   (let ((expected (%parse-json-text expected-text))
         (text (getf run :stdout-text)))
     (handler-case
         (let ((actual (%parse-json-text text)))
-          (unless (equal expected actual)
+          (unless (%json-equal expected actual)
             (list (list :check :stdout-json :expected expected :actual actual))))
       (json-kit:json-kit-error (condition)
         (list (list :check :stdout-json :expected expected

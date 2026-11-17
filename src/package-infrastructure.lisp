@@ -58,6 +58,7 @@ tests rebind these boundary functions when they need deterministic behavior.")
             #:noninteractive-stop-reason #:noninteractive-stop-signal
             #:unwind-to-noninteractive-signal #:call-with-noninteractive-signals
             #:stop-signal-name
+            #:call-with-sealable-interruptions #:seal-interruptions
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid
             #:pty-process-pgid #:pty-process-master-fd #:pty-process-stream

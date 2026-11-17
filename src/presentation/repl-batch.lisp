@@ -136,6 +136,16 @@ group is not this shell's."
      *proc-registry*)
     jobs))
 
+(defun %make-switchable-output (stream)
+  "Return a stream that writes to STREAM and a function of one argument that
+makes it write to that stream instead, from every thread. A synonym stream
+for an uninterned symbol, so it is followed to STREAM's file descriptor
+where a child is given one."
+  (let ((symbol (make-symbol "SWITCHABLE-OUTPUT")))
+    (setf (symbol-value symbol) stream)
+    (values (make-synonym-stream symbol)
+            (lambda (target) (setf (symbol-value symbol) target)))))
+
 (defun %call-with-batch-interruption (thunk)
   "Call THUNK, a whole batch or script run, so that SIGINT, SIGTERM and SIGHUP
 end it (BUG-4), and return the exit status: THUNK's value, or 128 plus the
@@ -145,7 +155,9 @@ On the first signal the run's processes stop as at the --json deadline,
 except its background jobs: SIGHUP is passed on to those, SIGINT and SIGTERM
 leave them running, as sh and bash do without a terminal. What the
 interrupted command had captured is written out, before the unwinding
-discards it, and one line on stderr names the signal."
+discards it, and one line on stderr names the signal. Nothing else the
+unwinding writes to stderr reaches it, such as the summary SBCL prints when
+it leaves a compilation unit early."
   (let* ((stop (nshell.infrastructure.acl:make-noninteractive-stop))
          (before (nshell.infrastructure.acl:registered-processes))
          (log (list nil)))
@@ -167,37 +179,43 @@ discards it, and one line on stderr names the signal."
                (dolist (process processes)
                  (ignore-errors
                    (nshell.infrastructure.acl:process-alive-p process)))))
-      (let ((nshell.infrastructure.acl:*process-group-log* log))
-        (nshell.infrastructure.acl:call-with-noninteractive-signals
-         stop thunk
-         :before-unwind
-         (lambda (signal)
-           ;; In the interrupted command's dynamic context: its captured
-           ;; output is still reachable here and gone after the unwind.
-           ;; Nothing here may wait for a process lock this thread can hold.
-           (let ((jobs (jobs)))
-             (when (= signal sb-unix:sighup)
-               (dolist (job jobs)
-                 (ignore-errors
-                   (nshell.infrastructure.acl:kill-process (- (car job)) :sighup))))
-             (stop-run (run-processes jobs) jobs))
-           (sleep *batch-interrupt-drain-seconds*)
-           (ignore-errors (nshell.application::flush-pending-captured-output)))
-         :after-signal
-         (lambda (signal)
-           ;; Reap the stopped processes first: a group left with only
-           ;; zombies still answers kill 0 and would cost another grace
-           ;; period. What is left was spawned while the signal was
-           ;; arriving, or was started by a cleanup of the unwinding.
-           (let ((jobs (jobs)))
-             (reap (run-processes jobs))
-             (let ((late (run-processes jobs)))
-               (stop-run late jobs)
-               (reap late)))
-           (ignore-errors (finish-output *standard-output*))
-           (format *error-output* "nshell: interrupted by ~A~%"
-                   (nshell.infrastructure.acl:stop-signal-name signal))
-           (setf *last-exit-code* (+ 128 signal))))))))
+      (multiple-value-bind (error-output switch-error-output)
+          (%make-switchable-output *error-output*)
+        (let ((stderr *error-output*)
+              (*error-output* error-output)
+              (nshell.infrastructure.acl:*process-group-log* log))
+          (nshell.infrastructure.acl:call-with-noninteractive-signals
+           stop thunk
+           :before-unwind
+           (lambda (signal)
+             ;; In the interrupted command's dynamic context: its captured
+             ;; output is still reachable here and gone after the unwind.
+             ;; Nothing here may wait for a process lock this thread can hold.
+             (let ((jobs (jobs)))
+               (when (= signal sb-unix:sighup)
+                 (dolist (job jobs)
+                   (ignore-errors
+                     (nshell.infrastructure.acl:kill-process (- (car job)) :sighup))))
+               (stop-run (run-processes jobs) jobs))
+             (sleep *batch-interrupt-drain-seconds*)
+             (ignore-errors (nshell.application::flush-pending-captured-output))
+             (funcall switch-error-output (make-broadcast-stream)))
+           :after-signal
+           (lambda (signal)
+             ;; Reap the stopped processes first: a group left with only
+             ;; zombies still answers kill 0 and would cost another grace
+             ;; period. What is left was spawned while the signal was
+             ;; arriving, or was started by a cleanup of the unwinding.
+             (let ((jobs (jobs)))
+               (reap (run-processes jobs))
+               (let ((late (run-processes jobs)))
+                 (stop-run late jobs)
+                 (reap late)))
+             (ignore-errors (finish-output *standard-output*))
+             (funcall switch-error-output stderr)
+             (format *error-output* "nshell: interrupted by ~A~%"
+                     (nshell.infrastructure.acl:stop-signal-name signal))
+             (setf *last-exit-code* (+ 128 signal)))))))))
 
 (defun %run-repl-batch (line script-args errexit-p reset-state-p)
   (when reset-state-p

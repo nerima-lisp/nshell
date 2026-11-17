@@ -458,7 +458,8 @@ an orphan needs its new parent to reap it before kill 0 fails."
   (it "returns E_TIMEOUT without the worker's streams when the worker survives"
     (with-temporary-function
         ((quote nshell.feature.machine::%finish-worker)
-         (lambda (worker)
+         (lambda (worker admit)
+           (declare (ignore admit))
            (sb-thread:join-thread worker :default nil :timeout 5)
            nil))
       (let ((envelope (json-command "sh -c 'echo early; sleep 30'" :timeout 1/2)))

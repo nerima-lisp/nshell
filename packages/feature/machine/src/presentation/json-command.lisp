@@ -106,7 +106,12 @@ SBCL thread otherwise sees only global values.")
   ;; before it started.
   (worker nil)
   (tag (list :json-run))
-  (before nil))
+  (before nil)
+  ;; The car becomes true when the worker must be terminated: until then,
+  ;; once parked, it runs no interruption but the park (SEAL-INTERRUPTIONS).
+  (admit (list nil))
+  ;; Makes the worker's *ERROR-OUTPUT* write elsewhere (%MAKE-SWITCHABLE-OUTPUT).
+  (switch-error-output nil))
 
 (defun %exec-exit-function (run tag)
   "Return the *EXEC-EXIT-FUNCTION* of RUN, which gives exec under --json the
@@ -144,7 +149,10 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
              (push symbol symbols)
              (push value values)))
       (bind '*standard-output* out)
-      (bind '*error-output* err)
+      (multiple-value-bind (error-output switch)
+          (nshell.presentation::%make-switchable-output err)
+        (setf (json-run-switch-error-output run) switch)
+        (bind '*error-output* error-output))
       (bind 'nshell.application::*exec-exit-function* (%exec-exit-function run tag))
       ;; Every process group the run creates, so the deadline can stop a
       ;; group whose leader was already reaped.
@@ -193,28 +201,38 @@ RUN-DELIVERING-CAPTURED-OUTPUT)."
       (:crash (setf (json-run-condition run) value
                     (json-run-user-code-p run) (first details))))))
 
-(defun %finish-worker (worker)
+(defun %finish-worker (worker admit)
   "Join WORKER, terminating it when it does not finish in time, and return
-true when it has exited."
+true when it has exited. ADMIT lets the termination through the seal."
   (sb-thread:join-thread worker :default nil :timeout *json-unwind-seconds*)
   (when (sb-thread:thread-alive-p worker)
+    (setf (car admit) t)
     (ignore-errors (sb-thread:terminate-thread worker))
     (sb-thread:join-thread worker :default nil :timeout *json-unwind-seconds*))
   (not (sb-thread:thread-alive-p worker)))
 
-(defun %park-and-stop (worker tag before log)
+(defun %park-and-stop (worker tag before log admit switch-error-output)
   "Stop the run in WORKER after its deadline; see the comment at the top.
-Return true when the worker has exited."
+Return true when the worker has exited.
+
+From the park on the worker runs no other interruption until it has left the
+batch run (SEAL-INTERRUPTIONS, unless the car of ADMIT is set), and nothing
+the unwinding writes to its *ERROR-OUTPUT* reaches the envelope
+(SWITCH-ERROR-OUTPUT): a command substitution's timer could otherwise take the
+unwind over, and SBCL's summary of an aborted compilation unit would join
+stderr."
   (let ((parked (sb-thread:make-semaphore))
         (release (sb-thread:make-semaphore)))
     (handler-case
         (sb-thread:interrupt-thread
          worker
          (lambda ()
+           (nshell.infrastructure.acl:seal-interruptions admit)
            (sb-thread:signal-semaphore parked)
            (sb-thread:wait-on-semaphore release :timeout 10)
            ;; Output the stopped command had captured but not yet passed on.
            (nshell.application::flush-pending-captured-output)
+           (funcall switch-error-output (make-broadcast-stream))
            ;; The worker may already have left the CATCH for TAG.
            (ignore-errors (throw tag :deadline))))
       (error () nil))
@@ -225,7 +243,7 @@ Return true when the worker has exited."
      :groups (car log))
     (sleep *json-drain-seconds*)
     (sb-thread:signal-semaphore release)
-    (let ((exited-p (%finish-worker worker)))
+    (let ((exited-p (%finish-worker worker admit)))
       (flet ((run-processes ()
                (set-difference (nshell.infrastructure.acl:registered-processes)
                                before :test #'eq))
@@ -248,7 +266,9 @@ Return true when the worker has exited."
   "Stop RUN's worker and every process group of the run (%PARK-AND-STOP)."
   (setf (json-run-worker-alive-p run)
         (not (%park-and-stop (json-run-worker run) (json-run-tag run)
-                             (json-run-before run) (json-run-group-log run)))))
+                             (json-run-before run) (json-run-group-log run)
+                             (json-run-admit run)
+                             (json-run-switch-error-output run)))))
 
 (defun %run-batch-with-deadline (run input timeout approval errexit-p script-args out err
                                  reset-state-p)
@@ -264,12 +284,15 @@ Return true when the worker has exited."
                (lambda ()
                  (unwind-protect
                       (progv symbols values
-                        (catch tag
-                          (setf (json-run-status run)
-                                (nshell.presentation:run-repl-batch-observed
-                                 input (%observe run)
-                                 :script-args script-args :errexit-p errexit-p
-                                 :reset-state-p reset-state-p))))
+                        (nshell.infrastructure.acl:call-with-sealable-interruptions
+                         (lambda ()
+                           (catch tag
+                             (setf (json-run-status run)
+                                   (nshell.presentation:run-repl-batch-observed
+                                    input (%observe run)
+                                    :script-args script-args
+                                    :errexit-p errexit-p
+                                    :reset-state-p reset-state-p))))))
                    (sb-thread:signal-semaphore (json-run-wake run))))
                :name "nshell json command")))
       (let ((woken-p (sb-thread:wait-on-semaphore (json-run-wake run) :timeout timeout)))

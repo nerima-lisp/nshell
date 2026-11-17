@@ -40,7 +40,7 @@
 | 構文エラー | 実行しない (2) | — | E_PARSE |
 | Ctrl-C・SIGTERM・SIGHUP | --json は 130、エンベロープを出さないモードは 128+シグナル番号 | 同じ | E_INTERRUPTED |
 
-非対話の実行 (stdin・--command・スクリプトファイル・--json) は、起動したときに無視されていた SIGHUP (nohup の下など) を無視したままにする。SIGINT と SIGTERM は SBCL が起動時に扱いを置き換えるので、起動前に無視されていても中断になる。
+非対話の実行 (stdin・--command・スクリプトファイル・--json) は、起動したときに無視されていた SIGHUP (nohup の下など) を無視したままにする。SIGINT と SIGTERM は SBCL が起動時に扱いを置き換えるので、起動前に無視されていても中断になる。起動してからハンドラを入れるまでと、ハンドラを戻してから終了するまでの間は、この扱いにならない。この間に SIGTERM を受けると終了コードは 0、SIGINT を受けるとバックトレースを出して 1 になる。起動直後のこの間は、負荷が高いと数十ミリ秒に延びる。
 
 失敗を無視したいときは (status CMD) か (ignore-errors …)。捕まえるなら (handler-case … (command-failed (c) …))。
 

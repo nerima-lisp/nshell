@@ -228,14 +228,44 @@ Return true when REASON is the recorded one. Any thread may call it."
         ((= signal sb-unix:sigterm) "SIGTERM")
         (t (format nil "signal ~D" signal))))
 
+(defvar *interruptions-sealable-p* nil
+  "True inside CALL-WITH-SEALABLE-INTERRUPTIONS, which has bound this thread's
+interruption hook.")
+
+(defun call-with-sealable-interruptions (thunk)
+  "Call THUNK with this thread's SB-THREAD interruption hook bound, so that
+SEAL-INTERRUPTIONS changes it for this thread only and only until THUNK
+returns or is unwound."
+  (let ((sb-thread::*interrupt-handler* sb-thread::*interrupt-handler*)
+        (*interruptions-sealable-p* t))
+    (funcall thunk)))
+
+(defun seal-interruptions (&optional (admit (list nil)))
+  "Drop every interruption (SB-THREAD:INTERRUPT-THREAD, and so every timer of
+SB-EXT:WITH-TIMEOUT) that this thread would run from now until the
+CALL-WITH-SEALABLE-INTERRUPTIONS around it returns, except while the car of
+ADMIT is true. Does nothing outside such a call.
+
+It is for an unwind that must reach its catch: an interruption that runs
+while the unwind passes a frame can signal a condition a handler further out
+catches, and that handler's transfer of control replaces the unwind. The
+timer of a command substitution's deadline does exactly that."
+  (when *interruptions-sealable-p*
+    (setf sb-thread::*interrupt-handler*
+          (lambda (interruption)
+            (when (car admit) (funcall interruption))))))
+
 (defun unwind-to-noninteractive-signal (stop)
   "In STOP's thread, unwind to its CALL-WITH-NONINTERACTIVE-SIGNALS after a
 signal was recorded as the stop reason, calling its BEFORE-UNWIND first. Does
-nothing once that unwind has started or the call is returning."
+nothing once that unwind has started or the call is returning. From the start
+of BEFORE-UNWIND until the call returns, no other interruption runs in this
+thread (SEAL-INTERRUPTIONS), so nothing can take the unwind over."
   (sb-sys:without-interrupts
     (let ((signal (noninteractive-stop-signal stop)))
       (when (and signal (noninteractive-stop-armed-p stop))
         (setf (noninteractive-stop-armed-p stop) nil)
+        (seal-interruptions)
         (let ((before-unwind (noninteractive-stop-before-unwind stop)))
           (when before-unwind (funcall before-unwind signal)))
         (throw (noninteractive-stop-tag stop) signal)))))
@@ -321,23 +351,30 @@ SIGINT and SIGTERM at startup, so only SIGHUP can arrive here ignored."
              (declare (ignore info context))
              (%noninteractive-signal-received stop signal)))
       (unwind-protect
-           (let* ((results nil)
-                  (signal
-                    (catch (noninteractive-stop-tag stop)
-                      (sb-sys:without-interrupts
-                        (dolist (signal +noninteractive-stop-signals+)
-                          (unless (eq (signal-disposition signal) :ignore)
-                            (push (cons signal (lisp-signal-handler signal)) installed)
-                            (sb-sys:enable-interrupt signal #'handler)))
-                        (setf (noninteractive-stop-armed-p stop) t))
-                      (setf results (multiple-value-list (funcall thunk)))
-                      (sb-sys:without-interrupts
-                        (setf (noninteractive-stop-armed-p stop) nil))
-                      nil)))
-             (let ((signal (or signal (noninteractive-stop-signal stop))))
-               (if (and signal after-signal)
-                   (funcall after-signal signal)
-                   (values-list results))))
+           (call-with-sealable-interruptions
+            (lambda ()
+              (let* ((results nil)
+                     (signal
+                       (catch (noninteractive-stop-tag stop)
+                         (unwind-protect
+                              (progn
+                                (sb-sys:without-interrupts
+                                  (dolist (signal +noninteractive-stop-signals+)
+                                    (unless (eq (signal-disposition signal) :ignore)
+                                      (push (cons signal (lisp-signal-handler signal))
+                                            installed)
+                                      (sb-sys:enable-interrupt signal #'handler)))
+                                  (setf (noninteractive-stop-armed-p stop) t))
+                                (setf results (multiple-value-list (funcall thunk))))
+                           ;; However THUNK is left, no unwind to the tag may
+                           ;; start once the catch is gone.
+                           (sb-sys:without-interrupts
+                             (setf (noninteractive-stop-armed-p stop) nil)))
+                         nil)))
+                (let ((signal (or signal (noninteractive-stop-signal stop))))
+                  (if (and signal after-signal)
+                      (funcall after-signal signal)
+                      (values-list results))))))
         (sb-sys:without-interrupts
           (setf (noninteractive-stop-armed-p stop) nil)
           (dolist (entry installed)

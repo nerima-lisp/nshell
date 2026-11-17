@@ -12,28 +12,6 @@
         (%advance-rendered-components row column grapheme terminal-width)))
     (%make-rendered-position row column)))
 
-(defun %advance-rendered-grapheme (position grapheme terminal-width)
-  (multiple-value-bind (row column)
-      (%advance-rendered-components (rendered-position-row position)
-                                    (rendered-position-column position)
-                                    grapheme
-                                    terminal-width)
-    (%make-rendered-position row column)))
-
-(defun %rendered-grapheme-start-position (position grapheme terminal-width)
-  (if (and (= (length grapheme) 1)
-           (char= (char grapheme 0) #\Newline))
-      position
-      (let ((width (%string-visible-width grapheme)))
-        (if (and terminal-width
-                 (plusp terminal-width)
-                 (> (+ (rendered-position-column position) width)
-                    terminal-width))
-            (%make-rendered-position
-             (1+ (rendered-position-row position))
-             0)
-            position))))
-
 (defun %advance-rendered-components (row column grapheme terminal-width)
   (if (and (= (length grapheme) 1)
            (char= (char grapheme 0) #\Newline))

@@ -127,7 +127,7 @@ line's own geometry unchanged."
   (it "repl-render-prompt-does-not-query-terminal-origin"
     "Prompt rendering must not query the terminal for its cursor origin."
     (with-repl-test-state
-      (let ((queries 0)
+      (let ((queries (progn (nshell.presentation::reset-rendered-prompt-state) 0))
             (cursor-query (esc-sequence "[6n")))
         (let ((nshell.presentation::*interactive-terminal-installed-p* t))
           (with-temporary-function

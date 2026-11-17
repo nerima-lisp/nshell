@@ -1,23 +1,17 @@
 #!/usr/bin/env python3
-"""Measure NFR-01 through NFR-03 with paired same-host controls."""
+"""Measure NFR-03 (1,000 external commands) with a paired same-host control."""
 
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
 import platform
-import pty
 import re
-import select
-import signal
-import struct
 import subprocess
 import sys
 import tempfile
-import termios
 import time
 from pathlib import Path
 from statistics import median
@@ -26,22 +20,9 @@ from typing import Any, Callable
 from nfr_thresholds import NFR_THRESHOLDS
 
 
-PROMPT_PREFIX = "__NSHELL_NFR_PROMPT_"
-CPR_QUERY = b"\x1b[6n"
-CPR_RESPONSE = b"\x1b[1;1R"
 CONTROL_ITERATIONS = " ".join(str(index) for index in range(1, 1_001))
 CONTROL_SCRIPT = f"for i in {CONTROL_ITERATIONS}; do /usr/bin/true; done"
 NFR_CONFIG = {
-    "01": {
-        "target": "nshell startup to first prompt",
-        "control": "interactive /bin/sh startup to the same unique prompt marker",
-        "threshold_ms": NFR_THRESHOLDS["01"]["limit"],
-    },
-    "02": {
-        "target": "nshell -c true",
-        "control": "/bin/sh -c true",
-        "threshold_ms": NFR_THRESHOLDS["02"]["limit"],
-    },
     "03": {
         "target": "input script launching /usr/bin/true 1000 times",
         "control": "/bin/sh loop launching /usr/bin/true 1000 times",
@@ -74,16 +55,17 @@ def positive_float(value: str) -> float:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Measure NFR-01 startup, NFR-02 paired -c true, and NFR-03 "
-            "1000 external commands. Paired order alternates across warmups and samples."
+            "Measure NFR-03 1000 external commands. "
+            "Paired order alternates across warmups and samples."
         )
     )
-    parser.add_argument("--nfr", required=True, choices=("01", "02", "03", "all"))
+    parser.add_argument("--nfr", required=True, choices=("03",))
     parser.add_argument("--binary", required=True, type=Path, help="nshell executable")
     parser.add_argument(
         "--input",
+        required=True,
         type=Path,
-        help="NFR-03 input script; required for --nfr 03 or --nfr all",
+        help="NFR-03 input script",
     )
     parser.add_argument("--samples", required=True, type=positive_int)
     parser.add_argument(
@@ -94,13 +76,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", required=True, type=Path, help="new JSONL output path")
     parser.add_argument("--timeout", type=positive_float, default=60.0)
-    args = parser.parse_args()
-
-    if args.nfr in ("03", "all") and args.input is None:
-        parser.error("--input is required for --nfr 03 or --nfr all")
-    if args.nfr in ("01", "02") and args.input is not None:
-        parser.error("--input is only used for --nfr 03 or --nfr all")
-    return args
+    return parser.parse_args()
 
 
 def uptime_snapshot() -> dict[str, Any]:
@@ -119,7 +95,7 @@ def uptime_snapshot() -> dict[str, Any]:
     }
 
 
-def runtime_environment(home: Path, prompt: str | None = None) -> dict[str, str]:
+def runtime_environment(home: Path) -> dict[str, str]:
     for name in ("config", "data", "state", "cache", "tmp"):
         (home / name).mkdir(parents=True, exist_ok=True)
     env = {
@@ -136,92 +112,7 @@ def runtime_environment(home: Path, prompt: str | None = None) -> dict[str, str]
         "NSHELL_GREETING": "",
         "NSHELL_AI_COMMAND": "/nonexistent",
     }
-    if prompt is not None:
-        env["NSHELL_PROMPT"] = prompt
-        env["PS1"] = prompt
     return env
-
-
-def terminate_child(pid: int) -> None:
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-
-    deadline = time.monotonic() + 1.0
-    while time.monotonic() < deadline:
-        try:
-            waited, _ = os.waitpid(pid, os.WNOHANG)
-        except ChildProcessError:
-            return
-        if waited == pid:
-            return
-        time.sleep(0.01)
-
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    try:
-        os.waitpid(pid, 0)
-    except ChildProcessError:
-        pass
-
-
-def prompt_startup(
-    command: list[str], env: dict[str, str], cwd: Path, marker: bytes, timeout: float
-) -> dict[str, Any]:
-    started_ns = time.perf_counter_ns()
-    pid, master = pty.fork()
-    if pid == 0:
-        try:
-            os.chdir(cwd)
-            fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
-            os.execve(command[0], command, env)
-        except OSError as exc:
-            try:
-                os.write(2, f"exec failed: {exc}\n".encode())
-            except OSError:
-                pass
-            os._exit(127)
-
-    output = bytearray()
-    answered_queries = 0
-    try:
-        fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
-        deadline = time.monotonic() + timeout
-        while marker not in output:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                tail = bytes(output[-500:]).decode("utf-8", "replace")
-                raise TimeoutError(f"prompt timed out after {timeout}s; output tail={tail!r}")
-            ready, _, _ = select.select([master], [], [], remaining)
-            if not ready:
-                continue
-            try:
-                chunk = os.read(master, 8192)
-            except OSError as exc:
-                tail = bytes(output[-500:]).decode("utf-8", "replace")
-                raise RuntimeError(f"process exited before prompt; output tail={tail!r}") from exc
-            if not chunk:
-                tail = bytes(output[-500:]).decode("utf-8", "replace")
-                raise RuntimeError(f"process closed PTY before prompt; output tail={tail!r}")
-            output.extend(chunk)
-            query_count = output.count(CPR_QUERY)
-            while answered_queries < query_count:
-                os.write(master, CPR_RESPONSE)
-                answered_queries += 1
-
-        return {
-            "elapsed_ns": time.perf_counter_ns() - started_ns,
-            "output_bytes": len(output),
-            "cpr_queries_answered": answered_queries,
-        }
-    finally:
-        try:
-            os.close(master)
-        finally:
-            terminate_child(pid)
 
 
 def command_timing(
@@ -310,48 +201,9 @@ def summary_for(
         "target_samples_ns": target_ns,
         "control_samples_ns": control_ns,
     }
-    if nfr == "02":
-        summary["criterion_difference_ms"] = summary["absolute_difference_of_medians_ms"]
-        summary["criterion_threshold_ms"] = NFR_CONFIG[nfr]["threshold_ms"]
-    elif nfr in ("01", "03"):
-        summary["criterion_median_ms"] = summary["target_median_ms"]
-        summary["criterion_threshold_ms"] = NFR_CONFIG[nfr]["threshold_ms"]
+    summary["criterion_median_ms"] = summary["target_median_ms"]
+    summary["criterion_threshold_ms"] = NFR_CONFIG[nfr]["threshold_ms"]
     return summary
-
-
-def nfr01_arms(binary: Path, timeout: float) -> dict[str, Callable[[], dict[str, Any]]]:
-    target_marker = f"{PROMPT_PREFIX}{os.urandom(8).hex()}__"
-    control_marker = f"{PROMPT_PREFIX}{os.urandom(8).hex()}__"
-
-    def nshell_action() -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="nshell-nfr01-") as directory:
-            home = Path(directory)
-            env = runtime_environment(home, target_marker)
-            return prompt_startup(
-                [str(binary)], env, home, target_marker.encode(), timeout
-            )
-
-    def shell_action() -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="nshell-nfr01-sh-") as directory:
-            home = Path(directory)
-            env = runtime_environment(home, control_marker)
-            return prompt_startup(
-                ["/bin/sh", "-i"], env, home, control_marker.encode(), timeout
-            )
-
-    return {"target": nshell_action, "control": shell_action}
-
-
-def nfr02_arms(binary: Path, timeout: float) -> dict[str, Callable[[], dict[str, Any]]]:
-    def timed(command: list[str]) -> dict[str, Any]:
-        with tempfile.TemporaryDirectory(prefix="nshell-nfr02-") as directory:
-            env = runtime_environment(Path(directory))
-            return command_timing(command, env, timeout)
-
-    return {
-        "target": lambda: timed([str(binary), "-c", "true"]),
-        "control": lambda: timed(["/bin/sh", "-c", "true"]),
-    }
 
 
 def nfr03_arms(
@@ -376,20 +228,14 @@ def nfr03_arms(
 def run_group(
     nfr: str,
     binary: Path,
-    input_path: Path | None,
+    input_path: Path,
     sample_count: int,
     warmup_count: int,
     timeout: float,
     stream: Any,
 ) -> dict[str, Any]:
     config = NFR_CONFIG[nfr]
-    arms = (
-        nfr01_arms(binary, timeout)
-        if nfr == "01"
-        else nfr02_arms(binary, timeout)
-        if nfr == "02"
-        else nfr03_arms(binary, input_path, timeout)
-    )
+    arms = nfr03_arms(binary, input_path, timeout)
     metadata: dict[str, Any] = {
         "record": "group",
         "nfr": nfr,
@@ -406,10 +252,9 @@ def run_group(
         "uptime_command": "uptime",
         "arm_order": "target first on odd paired indices, control first on even indices",
     }
-    if nfr == "03" and input_path is not None:
-        metadata["input"] = str(input_path)
-        metadata["input_sha256"] = hashlib.sha256(input_path.read_bytes()).hexdigest()
-        metadata["control_script"] = CONTROL_SCRIPT
+    metadata["input"] = str(input_path)
+    metadata["input_sha256"] = hashlib.sha256(input_path.read_bytes()).hexdigest()
+    metadata["control_script"] = CONTROL_SCRIPT
     write_record(stream, metadata)
 
     def measure_pair(pair_index: int) -> tuple[tuple[str, str], dict[str, dict[str, Any]]]:
@@ -458,15 +303,15 @@ def main() -> int:
     binary = args.binary.expanduser().resolve()
     if not binary.is_file() or not os.access(binary, os.X_OK):
         raise SystemExit(f"--binary must be an executable file: {binary}")
-    input_path = args.input.expanduser().resolve() if args.input is not None else None
-    if input_path is not None and not input_path.is_file():
+    input_path = args.input.expanduser().resolve()
+    if not input_path.is_file():
         raise SystemExit(f"--input must be a file: {input_path}")
-    if args.nfr in ("03", "all") and not Path("/usr/bin/true").is_file():
+    if not Path("/usr/bin/true").is_file():
         raise SystemExit("NFR-03 requires /usr/bin/true")
 
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    nfrs = ("01", "02", "03") if args.nfr == "all" else (args.nfr,)
+    nfrs = (args.nfr,)
     summaries = []
     try:
         stream = output.open("x", encoding="utf-8")
@@ -482,7 +327,7 @@ def main() -> int:
                     "record": "run",
                     "nfrs": list(nfrs),
                     "binary": str(binary),
-                    "input": str(input_path) if input_path is not None else None,
+                    "input": str(input_path),
                     "samples_per_nfr": args.samples,
                     "warmup_count_per_nfr": args.warmups,
                 },

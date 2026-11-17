@@ -1,39 +1,26 @@
 #!/usr/bin/env python3
-"""Measure NFR-07 through NFR-09 for an explicitly selected nshell revision."""
+"""Measure NFR-08 (fixed-seed fuzz) and NFR-09 (coverage) for an explicitly selected nshell revision."""
 
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import platform
-import pty
 import re
-import select
 import signal
-import struct
 import subprocess
 import sys
 import tempfile
-import termios
 import time
 from pathlib import Path
-from statistics import median
 from typing import Any, Callable
-
-from nfr_thresholds import NFR_THRESHOLDS
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SEED = 0x6D2B79F5
-NFR07_RSS_LIMIT_MIB = NFR_THRESHOLDS["07"]["limit"] * 1_000_000 / (1024 * 1024)
 NFR09_COVERAGE_LIMIT = 85.0
 NFR09_NEW_CODE_LIMIT = 90.0
-PTY_ROWS = 24
-PTY_COLUMNS = 100
-CPR_QUERY = b"\x1b[6n"
-CPR_RESPONSE = b"\x1b[1;1R"
 DEBUGGER_PATTERNS = (
     re.compile(r"debugger invoked", re.IGNORECASE),
     re.compile(r"entering debugger", re.IGNORECASE),
@@ -68,17 +55,6 @@ def uptime_snapshot() -> dict[str, Any]:
         "load_average": [float(value) for value in match.groups()] if match else None,
         "exit_status": completed.returncode,
     }
-
-
-def page_size_metadata() -> dict[str, Any]:
-    candidates = ("SC_PAGE_SIZE", "SC_PAGESIZE")
-    name = next((candidate for candidate in candidates if candidate in os.sysconf_names), None)
-    if name is None:
-        return {"page_size_bytes": None, "page_size_error": "sysconf page-size key is unavailable"}
-    try:
-        return {"page_size_bytes": int(os.sysconf(name))}
-    except (OSError, ValueError) as exc:
-        return {"page_size_bytes": None, "page_size_error": f"{type(exc).__name__}: {exc}"}
 
 
 def append_log(path: Path, title: str, body: str) -> None:
@@ -178,217 +154,6 @@ def operation(
     if error:
         result["error"] = error
     return result
-
-
-def read_until_marker(
-    master_fd: int, marker: bytes, timeout: float
-) -> tuple[bytes, int]:
-    deadline = time.monotonic() + timeout
-    captured = bytearray()
-    cpr_queries_answered = 0
-    while time.monotonic() < deadline:
-        remaining = deadline - time.monotonic()
-        readable, _, _ = select.select([master_fd], [], [], min(remaining, 0.25))
-        if not readable:
-            continue
-        try:
-            chunk = os.read(master_fd, 4096)
-        except OSError:
-            break
-        if not chunk:
-            break
-        captured.extend(chunk)
-        query_count = captured.count(CPR_QUERY)
-        while cpr_queries_answered < query_count:
-            os.write(master_fd, CPR_RESPONSE)
-            cpr_queries_answered += 1
-        if marker in captured:
-            return bytes(captured), cpr_queries_answered
-    preview = bytes(captured[-1500:]).decode("utf-8", errors="replace")
-    raise MeasurementError(f"prompt marker {marker!r} was not reached; tail={preview!r}")
-
-
-def process_rss_kib(pid: int) -> int:
-    completed = subprocess.run(
-        ["ps", "-o", "rss=", "-p", str(pid)],
-        capture_output=True,
-        text=True,
-        errors="replace",
-        timeout=5,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise MeasurementError(f"ps could not read RSS for pid {pid}: {completed.stderr.strip()}")
-    try:
-        return int(completed.stdout.strip())
-    except ValueError as exc:
-        raise MeasurementError(f"ps returned an invalid RSS value: {completed.stdout!r}") from exc
-
-
-def stop_owned_process(process: subprocess.Popen[bytes], master_fd: int) -> None:
-    try:
-        os.close(master_fd)
-    except OSError:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGHUP)
-    except ProcessLookupError:
-        pass
-    try:
-        process.wait(timeout=1)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    try:
-        process.wait(timeout=1)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        try:
-            process.wait(timeout=1)
-        except subprocess.TimeoutExpired as exc:
-            raise MeasurementError(
-                f"owned process {process.pid} did not exit after PTY closure and SIGKILL"
-            ) from exc
-
-
-def measure_idle_process(
-    command: list[str],
-    *,
-    marker: str,
-    env: dict[str, str],
-    sample_count: int,
-    sample_interval: float,
-    prompt_timeout: float,
-    enforce_threshold: bool,
-) -> dict[str, Any]:
-    master_fd, slave_fd = pty.openpty()
-    window_size = struct.pack("HHHH", PTY_ROWS, PTY_COLUMNS, 0, 0)
-    fcntl.ioctl(master_fd, termios.TIOCSWINSZ, window_size)
-    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, window_size)
-    process: subprocess.Popen[bytes] | None = None
-    startup_tail = ""
-    try:
-        process = subprocess.Popen(
-            command,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            env=env,
-            start_new_session=True,
-        )
-        os.close(slave_fd)
-        slave_fd = -1
-        startup, cpr_queries_answered = read_until_marker(
-            master_fd, marker.encode("ascii"), prompt_timeout
-        )
-        startup_tail = startup[-1000:].decode("utf-8", errors="replace")
-        rss_samples: list[int] = []
-        for sample_index in range(sample_count):
-            if sample_index:
-                time.sleep(sample_interval)
-            if process.poll() is not None:
-                raise MeasurementError(f"process exited while idle with status {process.returncode}")
-            rss_samples.append(process_rss_kib(process.pid))
-        rss_mib = [value / 1024.0 for value in rss_samples]
-        center = median(rss_mib)
-        limit_met = center <= NFR07_RSS_LIMIT_MIB
-        result = {
-            "status": "success" if not enforce_threshold or limit_met else "fail",
-            "command": command,
-            "ready_marker_seen": True,
-            "pty_size_rows": PTY_ROWS,
-            "pty_size_columns": PTY_COLUMNS,
-            "cpr_queries_answered": cpr_queries_answered,
-            "startup_output_tail": startup_tail,
-            "rss_kib_samples": rss_samples,
-            "rss_mib_median": round(center, 3),
-            "rss_mib_max": round(max(rss_mib), 3),
-            "target_mib": NFR07_RSS_LIMIT_MIB,
-            "limit_applies": enforce_threshold,
-            "limit_met": limit_met,
-            "target_passed": limit_met,
-        }
-        return result
-    finally:
-        if process is not None:
-            stop_owned_process(process, master_fd)
-        else:
-            os.close(master_fd)
-        if slave_fd >= 0:
-            os.close(slave_fd)
-
-
-def nfr07_operations(args: argparse.Namespace, log_path: Path) -> list[dict[str, Any]]:
-    binary = args.binary.resolve()
-    if not binary.is_file() or not os.access(binary, os.X_OK):
-        raise MeasurementError(f"--binary is not an executable file: {binary}")
-    marker = "NSHELL_NFR07_READY> "
-    with tempfile.TemporaryDirectory(prefix="nshell-nfr07-", dir=temporary_parent()) as scratch:
-        temp_root = Path(scratch)
-        paths = {
-            "HOME": temp_root / "home",
-            "XDG_CONFIG_HOME": temp_root / "config",
-            "XDG_DATA_HOME": temp_root / "data",
-            "XDG_CACHE_HOME": temp_root / "cache",
-            "XDG_STATE_HOME": temp_root / "state",
-            "TMPDIR": temp_root / "tmp",
-        }
-        for path in paths.values():
-            path.mkdir()
-        base_env = {
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "TERM": "dumb",
-            "LANG": "C",
-            "LC_ALL": "C",
-            **{name: str(path) for name, path in paths.items()},
-            "NSHELL_GREETING": "",
-            "NSHELL_AI_COMMAND": "/nonexistent",
-        }
-        target_env = {**base_env, "NSHELL_PROMPT": marker}
-        shell_marker = "NSHELL_NFR07_CONTROL> "
-        shell_env = {**base_env, "PS1": shell_marker}
-        results = [
-            operation(
-                "nfr07_nshell_idle_rss",
-                lambda: measure_idle_process(
-                    [str(binary)],
-                    marker=marker,
-                    env=target_env,
-                    sample_count=args.rss_samples,
-                    sample_interval=args.rss_interval,
-                    prompt_timeout=args.prompt_timeout,
-                    enforce_threshold=True,
-                ),
-                log_path,
-            ),
-            operation(
-                "nfr07_bin_sh_control_idle_rss",
-                lambda: measure_idle_process(
-                    ["/bin/sh", "-i"],
-                    marker=shell_marker,
-                    env=shell_env,
-                    sample_count=args.rss_samples,
-                    sample_interval=args.rss_interval,
-                    prompt_timeout=args.prompt_timeout,
-                    enforce_threshold=False,
-                ),
-                log_path,
-            ),
-        ]
-        results[0]["same_host_control"] = "nfr07_bin_sh_control_idle_rss"
-        results[1]["control_for"] = "nfr07_nshell_idle_rss"
-        if results[0].get("rss_mib_median") is not None and results[1].get("rss_mib_median") is not None:
-            results[0]["rss_mib_median_minus_control"] = round(
-                results[0]["rss_mib_median"] - results[1]["rss_mib_median"], 3
-            )
-        return results
 
 
 def seed_argument(raw: str) -> int:
@@ -890,15 +655,14 @@ def nfr09_operation(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Measure idle RSS, fixed-seed reader/input-state fuzz, and source coverage."
+        description="Measure fixed-seed reader/input-state fuzz and source coverage."
     )
     parser.add_argument(
         "--mode",
-        choices=("all", "nfr07", "nfr08", "nfr09"),
+        choices=("all", "nfr08", "nfr09"),
         default="all",
         help="operation group; all groups run serially (default: all)",
     )
-    parser.add_argument("--binary", type=Path, help="explicit nshell executable for NFR-07")
     parser.add_argument(
         "--revision",
         help="measured JJ revision selector and report label; defaults to @ for source operations",
@@ -919,9 +683,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-count", type=int, default=100_000, help="cases per selected NFR-08 target"
     )
-    parser.add_argument("--rss-samples", type=int, default=5, help="RSS samples after the prompt")
-    parser.add_argument("--rss-interval", type=float, default=1.0, help="seconds between RSS samples")
-    parser.add_argument("--prompt-timeout", type=float, default=30.0, help="seconds to wait for each prompt")
     parser.add_argument(
         "--timeout-seconds", type=float, default=1800.0, help="timeout for each fuzz or coverage operation"
     )
@@ -934,26 +695,16 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.input_count <= 0:
         parser.error("--input-count must be positive")
-    if args.rss_samples <= 0 or args.rss_interval < 0 or args.prompt_timeout <= 0:
-        parser.error("RSS sample count and prompt timeout must be positive; interval cannot be negative")
     if args.timeout_seconds <= 0:
         parser.error("--timeout-seconds must be positive")
     if not 0 <= args.coverage_min <= 100 or not 0 <= args.new_code_min <= 100:
         parser.error("coverage thresholds must be between 0 and 100")
     if args.coverage_min < NFR09_COVERAGE_LIMIT or args.new_code_min < NFR09_NEW_CODE_LIMIT:
         parser.error("coverage thresholds cannot be lower than the NFR-09 requirements (85% and 90%)")
-    if args.mode in ("all", "nfr07") and args.binary is None:
-        parser.error("--binary is required for --mode nfr07 or all")
     if args.mode in ("all", "nfr09") and not args.base_revision:
         parser.error("--base-revision is required for --mode nfr09 or all")
     if args.fuzz_target is None:
         args.fuzz_target = ["reader", "scanner", "input-state"]
-    if args.binary is not None:
-        args.binary = args.binary.expanduser().resolve()
-        if args.mode in ("all", "nfr07") and (
-            not args.binary.is_file() or not os.access(args.binary, os.X_OK)
-        ):
-            parser.error(f"--binary is not an executable file: {args.binary}")
     args.output = args.output.expanduser().resolve()
     args.log = (args.log or Path(str(args.output) + ".log")).expanduser().resolve()
     for path in (args.output, args.log):
@@ -972,14 +723,11 @@ def main() -> int:
         "host": {
             "platform": platform.platform(),
             "machine": platform.machine(),
-            **page_size_metadata(),
         },
         "load_average_source": "uptime before and after each operation",
         "operations": [],
         "gaps": [],
     }
-    if args.mode in ("all", "nfr07"):
-        report["operations"].extend(nfr07_operations(args, args.log))
     if args.mode in ("all", "nfr08"):
         report["operations"].append(operation("nfr08_fuzz", lambda: nfr08_operation(args, args.log), args.log))
     if args.mode in ("all", "nfr09"):

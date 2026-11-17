@@ -1,0 +1,40 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/argument-not-allowed",
+          "text": "arguments outside the command's allowed form: A12_NO_CONFIG_OK\\n"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 17,
+      "lines": 1,
+      "text": "A12_NO_CONFIG_OK\n",
+      "truncated": false
+    }
+  },
+  "files": {
+    "config/nshell/init.lisp": "(echo A12_CONFIG_WAS_LOADED)\n"
+  },
+  "input": "printf \"A12_NO_CONFIG_OK\\n\""
+}

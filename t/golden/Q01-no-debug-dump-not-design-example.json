@@ -1,0 +1,42 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "error": {
+      "code": "E_PARSE",
+      "message": "the input could not be parsed"
+    },
+    "nshell_api": 1,
+    "ok": false,
+    "safety": {
+      "level": "block",
+      "reasons": [
+        {
+          "rule": "classify/unparsable",
+          "text": "the input could not be read"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 2,
+    "stderr": {
+      "bytes": 72,
+      "lines": 1,
+      "text": "nshell error: <input>: syntax error [0,1): Unsupported bare-line token.\n",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": ")"
+}

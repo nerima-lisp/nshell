@@ -1,0 +1,42 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/sexp-not-forced",
+          "text": "S-expression command requires explicit force and has no redirects"
+        },
+        {
+          "rule": "classify/unknown-command",
+          "text": "unknown command"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 22,
+      "lines": 2,
+      "text": "K06_COMMAND_ISLAND\n42\n",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": "(progn (echo K06_COMMAND_ISLAND) (+ 20 22))"
+}

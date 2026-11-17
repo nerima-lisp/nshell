@@ -1,0 +1,38 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/unknown-command",
+          "text": "unknown command"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 1305,
+      "lines": 37,
+      "text": "nord\n  argument                normal\n  autosuggestion          4c566a\n  builtin                 81a1c1 --bold\n  command                 81a1c1 --bold\n  comment                 616e88 --italics\n  completion-command      81a1c1\n  completion-description  616e88\n  completion-directory    81a1c1 --bold\n  completion-file         normal\n  completion-more         616e88\n  completion-option       88c0d0\n  completion-selected     normal --reverse\n  completion-variable     a3be8c\n  error                   bf616a --bold\n  function                81a1c1 --bold\n  keyword                 b48ead --bold\n  normal                  normal\n  operator                d08770\n  option                  88c0d0\n  param                   normal\n  path                    normal --underline\n  prompt-assistant        616e88\n  prompt-continuation     616e88\n  prompt-duration         ebcb8b\n  prompt-error            bf616a --bold\n  prompt-git              b48ead\n  prompt-git-dirty        ebcb8b\n  prompt-host             a3be8c\n  prompt-ok               a3be8c --bold\n  prompt-path             81a1c1 --bold\n  prompt-time             616e88\n  quote                   ebcb8b\n  redirection             d08770\n  search-match            ebcb8b --bold\n  selection               normal --reverse\n  variable                a3be8c\n",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": "theme use nord; theme show"
+}

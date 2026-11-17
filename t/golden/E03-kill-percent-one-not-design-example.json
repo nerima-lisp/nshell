@@ -1,0 +1,38 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/unknown-command",
+          "text": "unknown command"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 11,
+      "lines": 1,
+      "text": "E03_KILLED\n",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": "sleep 5 & kill %1; wait %1; test $? -ne 0 && jobs && echo E03_KILLED"
+}

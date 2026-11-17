@@ -1,0 +1,38 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/unknown-command",
+          "text": "unknown command"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 10,
+      "lines": 1,
+      "text": "fresh.txt\n",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": "touch -t 202001010101.00 .; complete -C 'cat fresh'; touch fresh.txt; touch -t 202001010101.00 .; complete -C 'cat fresh'"
+}

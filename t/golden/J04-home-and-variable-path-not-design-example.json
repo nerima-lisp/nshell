@@ -1,0 +1,48 @@
+{
+  "env": {
+    "NOTE": "home/target/variable-note.txt"
+  },
+  "expected": {
+    "duration_ms": 0,
+    "effects": [
+      {
+        "kind": "reads",
+        "path": "~/target/home-note.txt"
+      }
+    ],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/sexp-not-forced",
+          "text": "S-expression command requires explicit force and has no redirects"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 38,
+      "lines": 2,
+      "text": "J04_VARIABLE_PATH_OK\nJ04_HOME_PATH_OK\n",
+      "truncated": false
+    }
+  },
+  "files": {
+    "home/target/home-note.txt": "J04_HOME_PATH_OK\n",
+    "home/target/variable-note.txt": "J04_VARIABLE_PATH_OK\n"
+  },
+  "input": "(cat $NOTE) (cat ~/target/home-note.txt)"
+}

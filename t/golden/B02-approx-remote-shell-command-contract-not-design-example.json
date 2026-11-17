@@ -1,0 +1,46 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "error": {
+      "code": "E_COMMAND_FAILED",
+      "message": "the command exited with status 23"
+    },
+    "nshell_api": 1,
+    "ok": false,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/argument-not-allowed",
+          "text": "arguments outside the command's allowed form: B02_REMOTE_COMMAND\\n"
+        },
+        {
+          "rule": "classify/unknown-command",
+          "text": "unknown command"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 23,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 19,
+      "lines": 1,
+      "text": "B02_REMOTE_COMMAND\n",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": "printf \"B02_REMOTE_COMMAND\\n\"; exit 23"
+}

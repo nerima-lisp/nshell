@@ -1,0 +1,55 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [
+      {
+        "kind": "writes",
+        "path": "e05-child.txt"
+      },
+      {
+        "kind": "reads",
+        "path": "e05-child.txt"
+      }
+    ],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/opaque-wrapper",
+          "text": "the command this wrapper runs cannot be checked"
+        },
+        {
+          "rule": "classify/output-redirect",
+          "text": "output redirection or process substitution requires confirmation"
+        },
+        {
+          "rule": "classify/unknown-command",
+          "text": "unknown command"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 14,
+      "lines": 1,
+      "text": "E05_CHILD_DONE",
+      "truncated": false
+    }
+  },
+  "files": {},
+  "input": "sh -c 'printf E05_CHILD_DONE > e05-child.txt; exit 7' & wait %1; test $? -eq 7 && cat e05-child.txt && jobs"
+}

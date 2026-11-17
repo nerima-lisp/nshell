@@ -1,0 +1,44 @@
+{
+  "env": {},
+  "expected": {
+    "duration_ms": 0,
+    "effects": [],
+    "nshell_api": 1,
+    "ok": true,
+    "safety": {
+      "level": "confirm",
+      "reasons": [
+        {
+          "rule": "classify/argument-not-allowed",
+          "text": "arguments outside the command's allowed form: %s\\n"
+        }
+      ]
+    },
+    "state": {
+      "cwd": "$WORK",
+      "env_changed": [],
+      "jobs": []
+    },
+    "status": 0,
+    "stderr": {
+      "bytes": 0,
+      "lines": 0,
+      "text": "",
+      "truncated": false
+    },
+    "stdout": {
+      "bytes": 108,
+      "lines": 10,
+      "text": "file1.txt\nfile2.txt\nplain.txt\nfile1.txt\nfile2.txt\nfile1.txt\nfile2.txt\nplain.txt\nsub/deep.txt\nno-match-*.zzz\n",
+      "truncated": false
+    }
+  },
+  "files": {
+    ".hidden.txt": "hidden\n",
+    "file1.txt": "one\n",
+    "file2.txt": "two\n",
+    "plain.txt": "plain\n",
+    "sub/deep.txt": "deep\n"
+  },
+  "input": "printf '%s\\n' *.txt file?.txt **/*.txt no-match-*.zzz"
+}

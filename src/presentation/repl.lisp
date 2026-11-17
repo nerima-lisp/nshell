@@ -200,25 +200,11 @@ IDLE-PREDICATE, when given, is polled only while no key is pending."
   (let ((status (nshell.infrastructure.acl:consume-shell-termination-status)))
     (when status
       (when (= status (+ 128 sb-unix:sighup))
-        (maphash
-         (lambda (job-id entry)
-           (let* ((processes (cond
-                               ((null entry) nil)
-                               ((listp entry) entry)
-                               (t (list entry))))
-                  (job (nshell.domain.job-control:monitor-find-job
-                        nshell.application:*job-monitor*
-                        job-id))
-                  (pgid (and job
-                             (nshell.domain.execution:job-control-pgid job))))
-             (when (and pgid
-                        (not (and (integerp nshell.application:*shell-pgid*)
-                                  (= pgid nshell.application:*shell-pgid*)))
-                        (some (function nshell.infrastructure.acl:process-alive-p)
-                              processes))
-               (ignore-errors
-                 (nshell.infrastructure.acl:kill-process (- pgid) :sighup)))))
-         *proc-registry*))
+        (loop for (pgid . processes) in (%background-job-groups)
+              when (some (function nshell.infrastructure.acl:process-alive-p)
+                         processes)
+                do (ignore-errors
+                     (nshell.infrastructure.acl:kill-process (- pgid) :sighup))))
       (setf *last-exit-code* status
             *running* nil)
       +repl-exit+)))

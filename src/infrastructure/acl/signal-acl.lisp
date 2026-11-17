@@ -192,3 +192,153 @@
   (sb-sys:enable-interrupt sb-unix:sigttou :ignore)
   (sb-sys:enable-interrupt sb-unix:sigttin :ignore)
   t)
+
+;;; Noninteractive runs (batch, script files and --json): SIGINT, SIGTERM and
+;;; SIGHUP end the whole run. Only the first stop reason counts, whether it is
+;;; one of these signals or a reason the run records itself (the --json
+;;; deadline, a full-screen program); a later signal is recorded nowhere and
+;;; does nothing, so it cannot unwind the cleanup of the first one.
+
+(defparameter +noninteractive-stop-signals+
+  (list sb-unix:sighup sb-unix:sigint sb-unix:sigterm))
+
+(defstruct (noninteractive-stop (:constructor make-noninteractive-stop ()))
+  ;; The first stop reason: a signal number, or a keyword the run claimed.
+  (reason nil)
+  ;; The thread inside CALL-WITH-NONINTERACTIVE-SIGNALS and its catch tag.
+  (thread nil)
+  (tag nil)
+  ;; True while the catch for TAG is live and no unwind to it has started.
+  (armed-p nil)
+  (before-unwind nil))
+
+(defun claim-noninteractive-stop (stop reason)
+  "Record REASON as why STOP's run ends unless a reason is recorded already.
+Return true when REASON is the recorded one. Any thread may call it."
+  (null (sb-ext:compare-and-swap (noninteractive-stop-reason stop) nil reason)))
+
+(defun noninteractive-stop-signal (stop)
+  "The signal number that ended STOP's run, or NIL."
+  (let ((reason (noninteractive-stop-reason stop)))
+    (and (integerp reason) reason)))
+
+(defun stop-signal-name (signal)
+  (cond ((= signal sb-unix:sighup) "SIGHUP")
+        ((= signal sb-unix:sigint) "SIGINT")
+        ((= signal sb-unix:sigterm) "SIGTERM")
+        (t (format nil "signal ~D" signal))))
+
+(defun unwind-to-noninteractive-signal (stop)
+  "In STOP's thread, unwind to its CALL-WITH-NONINTERACTIVE-SIGNALS after a
+signal was recorded as the stop reason, calling its BEFORE-UNWIND first. Does
+nothing once that unwind has started or the call is returning."
+  (sb-sys:without-interrupts
+    (let ((signal (noninteractive-stop-signal stop)))
+      (when (and signal (noninteractive-stop-armed-p stop))
+        (setf (noninteractive-stop-armed-p stop) nil)
+        (let ((before-unwind (noninteractive-stop-before-unwind stop)))
+          (when before-unwind (funcall before-unwind signal)))
+        (throw (noninteractive-stop-tag stop) signal)))))
+
+(defun %noninteractive-signal-received (stop signal)
+  ;; Runs in whichever thread took the signal. The unwind happens in STOP's
+  ;; thread, where the catch is; only the signal that becomes the stop reason
+  ;; sends it, so it is sent at most once.
+  (when (claim-noninteractive-stop stop signal)
+    (handler-case
+        (sb-thread:interrupt-thread
+         (noninteractive-stop-thread stop)
+         (lambda () (unwind-to-noninteractive-signal stop)))
+      (error () nil))))
+
+(sb-alien:define-alien-routine ("install_handler" %runtime-install-handler) sb-alien:void
+  (signal sb-alien:int)
+  (handler sb-alien:unsigned))
+
+(defun signal-disposition (signal)
+  "Return :IGNORE when SIGNAL is ignored (SIG_IGN), :DEFAULT for SIG_DFL, and
+:HANDLER otherwise, as sigaction(2) reports it.
+
+sa_handler is the first member of struct sigaction on Darwin and on Linux, so
+only that word of the buffer is read; the buffer is larger than the structure
+on both."
+  (sb-alien:with-alien ((action (array (sb-alien:unsigned 8) 512)))
+    (let ((sap (sb-alien:alien-sap action)))
+      (dotimes (index 512) (setf (sb-sys:sap-ref-8 sap index) 0))
+      (unless (zerop (sb-alien:alien-funcall
+                      (sb-alien:extern-alien
+                       "sigaction"
+                       (function sb-alien:int sb-alien:int
+                                 sb-sys:system-area-pointer sb-sys:system-area-pointer))
+                      signal (sb-sys:int-sap 0) sap))
+        (error "sigaction(~D) failed" signal))
+      (case (sb-sys:sap-ref-word sap 0)
+        (0 :default)
+        (1 :ignore)
+        (t :handler)))))
+
+(defun lisp-signal-handler (signal)
+  "Return the Lisp function the SBCL runtime calls for SIGNAL, or NIL.
+
+SB-SYS:ENABLE-INTERRUPT does not return the handler it replaces (see
+src/code/target-signal.lisp in SBCL); the runtime keeps it in
+lisp_sig_handlers, where 0 stands for both SIG_DFL and SIG_IGN."
+  (let ((handler (sb-sys:sap-ref-lispobj
+                  (sb-sys:foreign-symbol-sap "lisp_sig_handlers" t)
+                  (* signal sb-vm:n-word-bytes))))
+    (and (functionp handler) handler)))
+
+(defun reinstall-lisp-signal-handler (signal handler)
+  "Make HANDLER, a value LISP-SIGNAL-HANDLER returned, SIGNAL's handler again,
+or restore SIG_DFL when it is NIL. HANDLER is already the closure the runtime
+calls, so it goes to the runtime directly: SB-SYS:ENABLE-INTERRUPT would wrap
+it in another closure."
+  (if handler
+      (sb-sys:with-pinned-objects (handler)
+        (%runtime-install-handler signal (sb-kernel:get-lisp-obj-address handler)))
+      (sb-sys:enable-interrupt signal :default)))
+
+(defun call-with-noninteractive-signals (stop thunk &key before-unwind after-signal)
+  "Call THUNK with SIGINT, SIGTERM and SIGHUP ending the run STOP describes,
+and restore the handlers it replaced on the way out.
+
+The first of these signals that STOP records as its stop reason (see
+CLAIM-NONINTERACTIVE-STOP) interrupts the calling thread, which calls
+BEFORE-UNWIND with the signal number in the dynamic context it was
+interrupted in, unwinds THUNK, and returns what AFTER-SIGNAL returns for the
+signal number. AFTER-SIGNAL also runs when a signal is recorded after THUNK
+has returned but before this call does. The handlers stay installed while
+AFTER-SIGNAL runs, so another signal cannot end its cleanup.
+
+A signal ignored on entry stays ignored, as POSIX requires of a
+noninteractive shell (nohup). SBCL itself replaces the dispositions of
+SIGINT and SIGTERM at startup, so only SIGHUP can arrive here ignored."
+  (setf (noninteractive-stop-thread stop) sb-thread:*current-thread*
+        (noninteractive-stop-tag stop) (list :noninteractive-stop)
+        (noninteractive-stop-before-unwind stop) before-unwind)
+  (let ((installed '()))
+    (flet ((handler (signal info context)
+             (declare (ignore info context))
+             (%noninteractive-signal-received stop signal)))
+      (unwind-protect
+           (let* ((results nil)
+                  (signal
+                    (catch (noninteractive-stop-tag stop)
+                      (sb-sys:without-interrupts
+                        (dolist (signal +noninteractive-stop-signals+)
+                          (unless (eq (signal-disposition signal) :ignore)
+                            (push (cons signal (lisp-signal-handler signal)) installed)
+                            (sb-sys:enable-interrupt signal #'handler)))
+                        (setf (noninteractive-stop-armed-p stop) t))
+                      (setf results (multiple-value-list (funcall thunk)))
+                      (sb-sys:without-interrupts
+                        (setf (noninteractive-stop-armed-p stop) nil))
+                      nil)))
+             (let ((signal (or signal (noninteractive-stop-signal stop))))
+               (if (and signal after-signal)
+                   (funcall after-signal signal)
+                   (values-list results))))
+        (sb-sys:without-interrupts
+          (setf (noninteractive-stop-armed-p stop) nil)
+          (dolist (entry installed)
+            (reinstall-lisp-signal-handler (car entry) (cdr entry))))))))

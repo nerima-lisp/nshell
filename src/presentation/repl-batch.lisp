@@ -119,9 +119,96 @@ nshell's own output has no color. The interactive shell never reads it.")
        (%record-crash-log crash *error-output*)
        (setf *last-exit-code* 1)))))
 
-(defun run-repl-batch (&key line script-args (errexit-p nil))
-  "Batch mode for stdin or the nshell-specific --command option.
-SCRIPT-ARGS are exposed as $argv for --command."
+(defparameter *batch-interrupt-drain-seconds* 0.1
+  "How long the output copiers of the processes a signal stopped get before
+the captured output is written out.")
+
+(defun %background-job-groups ()
+  "Return (PGID . PROCESSES) for every job in *PROC-REGISTRY* whose process
+group is not this shell's."
+  (let ((jobs '()))
+    (maphash
+     (lambda (job-id entry)
+       (let* ((processes (cond
+                           ((null entry) nil)
+                           ((listp entry) entry)
+                           (t (list entry))))
+              (job (nshell.domain.job-control:monitor-find-job
+                    nshell.application:*job-monitor*
+                    job-id))
+              (pgid (and job
+                         (nshell.domain.execution:job-control-pgid job))))
+         (when (and pgid
+                    (not (and (integerp nshell.application:*shell-pgid*)
+                              (= pgid nshell.application:*shell-pgid*))))
+           (push (cons pgid processes) jobs))))
+     *proc-registry*)
+    jobs))
+
+(defun %call-with-batch-interruption (thunk)
+  "Call THUNK, a whole batch or script run, so that SIGINT, SIGTERM and SIGHUP
+end it (BUG-4), and return the exit status: THUNK's value, or 128 plus the
+signal number.
+
+On the first signal the run's processes stop as at the --json deadline,
+except its background jobs: SIGHUP is passed on to those, SIGINT and SIGTERM
+leave them running, as sh and bash do without a terminal. What the
+interrupted command had captured is written out, before the unwinding
+discards it, and one line on stderr names the signal."
+  (let* ((stop (nshell.infrastructure.acl:make-noninteractive-stop))
+         (before (nshell.infrastructure.acl:registered-processes))
+         (log (list nil)))
+    (labels ((jobs ()
+               ;; Read in an interrupt of the thread that updates the table;
+               ;; when that fails the jobs are stopped with the rest.
+               (ignore-errors (%background-job-groups)))
+             (run-processes (jobs)
+               (remove-if (lambda (process)
+                            (or (member process before :test #'eq)
+                                (some (lambda (job)
+                                        (member process (cdr job) :test #'eq))
+                                      jobs)))
+                          (nshell.infrastructure.acl:registered-processes)))
+             (stop-run (processes jobs)
+               (nshell.infrastructure.acl:stop-process-groups
+                processes :groups (set-difference (car log) (mapcar #'car jobs))))
+             (reap (processes)
+               (dolist (process processes)
+                 (ignore-errors
+                   (nshell.infrastructure.acl:process-alive-p process)))))
+      (let ((nshell.infrastructure.acl:*process-group-log* log))
+        (nshell.infrastructure.acl:call-with-noninteractive-signals
+         stop thunk
+         :before-unwind
+         (lambda (signal)
+           ;; In the interrupted command's dynamic context: its captured
+           ;; output is still reachable here and gone after the unwind.
+           ;; Nothing here may wait for a process lock this thread can hold.
+           (let ((jobs (jobs)))
+             (when (= signal sb-unix:sighup)
+               (dolist (job jobs)
+                 (ignore-errors
+                   (nshell.infrastructure.acl:kill-process (- (car job)) :sighup))))
+             (stop-run (run-processes jobs) jobs))
+           (sleep *batch-interrupt-drain-seconds*)
+           (ignore-errors (nshell.application::flush-pending-captured-output)))
+         :after-signal
+         (lambda (signal)
+           ;; Reap the stopped processes first: a group left with only
+           ;; zombies still answers kill 0 and would cost another grace
+           ;; period. What is left was spawned while the signal was
+           ;; arriving, or was started by a cleanup of the unwinding.
+           (let ((jobs (jobs)))
+             (reap (run-processes jobs))
+             (let ((late (run-processes jobs)))
+               (stop-run late jobs)
+               (reap late)))
+           (ignore-errors (finish-output *standard-output*))
+           (format *error-output* "nshell: interrupted by ~A~%"
+                   (nshell.infrastructure.acl:stop-signal-name signal))
+           (setf *last-exit-code* (+ 128 signal))))))))
+
+(defun %run-repl-batch (line script-args errexit-p)
   (%initialize-batch-state)
   (let ((nshell.domain.expansion:*positional-args* script-args)
         (nshell.application:*errexit-p* errexit-p))
@@ -131,14 +218,21 @@ SCRIPT-ARGS are exposed as $argv for --command."
          (nshell.application:collect-source-lines *standard-input*))))
   *last-exit-code*)
 
+(defun run-repl-batch (&key line script-args (errexit-p nil))
+  "Batch mode for stdin or the nshell-specific --command option.
+SCRIPT-ARGS are exposed as $argv for --command."
+  (%call-with-batch-interruption
+   (lambda () (%run-repl-batch line script-args errexit-p))))
+
 (defun run-repl-batch-observed (line observer &key script-args errexit-p)
   "Run LINE as RUN-REPL-BATCH does and return its exit status. OBSERVER is
 called with :MISSING-COMMAND, the last command name that was not found and its
 source span (NIL when unknown),
 :COMMAND-FAILED and the condition that ended the run, or :CRASH, the condition
-and whether the user's own Lisp code signalled it."
+and whether the user's own Lisp code signalled it. Signals are left to the
+caller (RUN-JSON-COMMAND)."
   (let ((*batch-outcome-observer* observer))
-    (run-repl-batch :line line :script-args script-args :errexit-p errexit-p)))
+    (%run-repl-batch line script-args errexit-p)))
 (defun run-repl-shell-command (command arguments
                               &key (load-config-p t) config-path)
   "Load the interactive startup configuration and delegate COMMAND to /bin/sh."
@@ -185,7 +279,12 @@ diagnostics of the script, not crashes, so no crash log is written for them."
 (defun run-repl-script (path &optional script-args)
   "Execute the script file at PATH (multiline blocks supported, via the same
 block-aware reader as the source builtin). SCRIPT-ARGS are exposed to the
-script as $argv. Returns the exit status of the last command."
+script as $argv. Returns the exit status of the last command, or 128 plus
+the number of the signal that ended the script."
+  (%call-with-batch-interruption
+   (lambda () (%run-repl-script path script-args))))
+
+(defun %run-repl-script (path script-args)
   (%initialize-batch-state)
   (handler-case
       (call-with-crash-capture

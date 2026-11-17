@@ -18,3 +18,11 @@
     (:head "continue"
      :advice "no S-expression corresponds to it; restructure the loop body with (when …) or (unless …)")
     (:head "function" :rewrite "(defcmd f () …)")))
+
+;;; The options of fish's function that take a value, given by the next word
+;;; or attached (-ddesc, --description=desc). The function's name in the
+;;; rewrite is its first argument that is neither an option nor such a value.
+(defparameter +fish-function-value-options+
+  '("-d" "--description" "-a" "--argument-names" "-w" "--wraps"
+    "-e" "--on-event" "-v" "--on-variable" "-j" "--on-job-exit"
+    "-p" "--on-process-exit" "-s" "--on-signal" "-V" "--inherit-variable"))

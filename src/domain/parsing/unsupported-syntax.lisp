@@ -134,58 +134,120 @@ it holds a rejected head other than a leading not."
        (let ((operand (%after-head-rewrite source node)))
          (and operand (format nil "(not ~a)" operand)))))))
 
-(defun %connective-operand (source node)
-  "The S-expression for the command an and or or command runs: its
-arguments, with a leading not applied as in `cmd1; and not cmd2'."
-  (%after-head-rewrite source node))
-
 (defun %connective-p (node)
   (or (%rejected-head-p node "and") (%rejected-head-p node "or")))
 
-(defun %connective-rewrite (source commands separators index)
-  "Fold the and/or chain around COMMANDS[INDEX], the commands joined by ; or
-a newline, into one S-expression, or NIL when a part cannot be written."
-  (let ((start index))
-    (loop while (and (plusp start)
-                     (%connective-p (nth start commands))
-                     (eq (nth (1- start) separators) :semi))
-          do (decf start))
-    (let ((expression (%operand-rewrite source (nth start commands))))
-      (loop for position from (1+ start) below (length commands)
-            for node = (nth position commands)
-            while (and expression
-                       (eq (nth (1- position) separators) :semi)
-                       (%connective-p node))
-            do (let ((operand (%connective-operand source node)))
-                 (setf expression
-                       (and operand
-                            (format nil "(~a ~a ~a)"
-                                    (command-node-command node)
-                                    expression operand)))))
+(defun %and-or-lists (separators count)
+  "The and-or lists (L5.1) of a sequence of COUNT commands joined by
+SEPARATORS, each as (START END TERMINATOR): the commands START to END joined
+by && and ||, and the :SEMI, :AMP or NIL that follows them."
+  (loop with start = 0
+        for index from 0 below count
+        for separator = (nth index separators)
+        unless (member separator '(:and :or))
+          collect (list start (1+ index) separator)
+          and do (setf start (1+ index))))
+
+(defun %and-or-rewrite (source commands separators list previous)
+  "The S-expression for LIST, an and-or list of COMMANDS, with && as (and …)
+and || as (or …) folded from the left (L3.5, L5.1). When LIST starts with an
+and or or command, PREVIOUS is the S-expression for the lists before it.
+NIL when a part cannot be written. A list that starts with and may continue
+only with &&, and one that starts with or only with ||: fish applies and/or
+to the whole list (a; or b && c is a; or (b && c)), while v0.7.0 ran and/or
+as a command inside it ((a; or b) && c), so other lists have no single
+meaning."
+  (destructuring-bind (start end terminator) list
+    (declare (ignore terminator))
+    (let* ((head (nth start commands))
+           (connective (and (%connective-p head) (command-node-command head)))
+           (expression
+             (if connective
+                 (let ((operand (%after-head-rewrite source head)))
+                   (and previous operand
+                        (format nil "(~a ~a ~a)" connective previous operand)))
+                 (%operand-rewrite source head))))
+      (loop for position from (1+ start) below end
+            for operator = (if (eq (nth (1- position) separators) :and) "and" "or")
+            while expression
+            do (setf expression
+                     (and (or (null connective) (string= operator connective))
+                          (let ((operand (%operand-rewrite source (nth position commands))))
+                            (and operand
+                                 (format nil "(~a ~a ~a)" operator expression operand))))))
       expression)))
+
+(defun %connective-rewrite (source commands separators index)
+  "The S-expression for the and-or list holding COMMANDS[INDEX] and the lists
+around it that and or or joins to it after a ; or a newline, or NIL when a
+part cannot be written with the same meaning, as for a list run in the
+background."
+  (let* ((lists (%and-or-lists separators (length commands)))
+         (first (position-if (lambda (list) (< index (second list))) lists))
+         (last first))
+    (flet ((joined-p (before)
+             (and (eq (third (nth before lists)) :semi)
+                  (%connective-p (nth (first (nth (1+ before) lists)) commands)))))
+      (loop while (and (plusp first) (joined-p (1- first)))
+            do (decf first))
+      (loop while (and (< (1+ last) (length lists)) (joined-p last))
+            do (incf last))
+      (unless (eq (third (nth last lists)) :amp)
+        (let ((expression (%and-or-rewrite source commands separators
+                                           (nth first lists) nil)))
+          (loop for list in (subseq lists (1+ first) (1+ last))
+                while expression
+                do (setf expression (%and-or-rewrite source commands separators
+                                                     list expression)))
+          expression)))))
+
+(defun %short-value-option-p (character)
+  (member (format nil "-~c" character) +fish-function-value-options+
+          :test #'string=))
+
+(defun %function-name (node)
+  "The name the fish function command NODE defines: its first argument that
+is neither an option nor an option's value, or NIL when it has none."
+  (loop with words = (mapcar #'command-arg-value (command-node-args node))
+        while words
+        do (let ((word (pop words)))
+             (cond
+               ((string= word "--")
+                (return (first words)))
+               ((and (> (length word) 2) (string= word "--" :end1 2))
+                (when (and (not (find #\= word))
+                           (member word +fish-function-value-options+
+                                   :test #'string=))
+                  (pop words)))
+               ((and (> (length word) 1) (char= (char word 0) #\-))
+                ;; -Sd desc and -ddesc: the value is the rest of the word after
+                ;; the first short option that takes one, else the next word.
+                (let ((value-option (position-if #'%short-value-option-p word
+                                                 :start 1)))
+                  (when (eql value-option (1- (length word)))
+                    (pop words))))
+               (t
+                (return word))))))
 
 (defun %function-rewrite (source commands index)
   "(defcmd NAME () BODY…) for the function command at COMMANDS[INDEX], with
-the commands up to the next end as the body."
-  (let* ((node (nth index commands))
-         (name (or (find-if (lambda (value)
-                              (and (plusp (length value))
-                                   (char/= (char value 0) #\-)))
-                            (mapcar #'command-arg-value (command-node-args node)))
-                   "f"))
-         (end (position-if (lambda (command)
-                             (and (command-node-p command)
-                                  (null (command-node-command-quote-style command))
-                                  (string= (command-node-command command) "end")))
-                           commands :start (1+ index)))
-         (body (and end
-                    (loop for position from (1+ index) below end
-                          collect (%operand-rewrite source (nth position commands))))))
-    (format nil "(defcmd ~a () ~a)"
-            name
-            (if (and body (every #'identity body))
-                (format nil "~{~a~^ ~}" body)
-                "…"))))
+the commands up to the next end as the body, or NIL when it names no
+function."
+  (let ((name (%function-name (nth index commands))))
+    (when (plusp (length name))
+      (let* ((end (position-if (lambda (command)
+                                 (and (command-node-p command)
+                                      (null (command-node-command-quote-style command))
+                                      (string= (command-node-command command) "end")))
+                               commands :start (1+ index)))
+             (body (and end
+                        (loop for position from (1+ index) below end
+                              collect (%operand-rewrite source (nth position commands))))))
+        (format nil "(defcmd ~a () ~a)"
+                name
+                (if (and body (every #'identity body))
+                    (format nil "~{~a~^ ~}" body)
+                    "…"))))))
 
 (defun %statement-rewrite (source commands separators index row)
   (let ((head (getf row :head)))

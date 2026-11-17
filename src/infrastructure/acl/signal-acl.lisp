@@ -328,6 +328,9 @@ it in another closure."
         (%runtime-install-handler signal (sb-kernel:get-lisp-obj-address handler)))
       (sb-sys:enable-interrupt signal :default)))
 
+(defvar *enclosing-noninteractive-stop* nil
+  "The stop of the CALL-WITH-NONINTERACTIVE-SIGNALS this thread is inside.")
+
 (defun call-with-noninteractive-signals (stop thunk &key before-unwind after-signal)
   "Call THUNK with SIGINT, SIGTERM and SIGHUP ending the run STOP describes,
 and restore the handlers it replaced on the way out.
@@ -342,11 +345,19 @@ AFTER-SIGNAL runs, so another signal cannot end its cleanup.
 
 A signal ignored on entry stays ignored, as POSIX requires of a
 noninteractive shell (nohup). SBCL itself replaces the dispositions of
-SIGINT and SIGTERM at startup, so only SIGHUP can arrive here ignored."
+SIGINT and SIGTERM at startup, so only SIGHUP can arrive here ignored.
+
+Inside another such call, this one takes the signals while it runs and, when
+one ends it, records that signal as the outer stop's reason too, without
+interrupting anything: the outer caller finds it with
+NONINTERACTIVE-STOP-SIGNAL once this call has returned. So the --mcp server
+learns that a run ended by a signal must also end the server."
   (setf (noninteractive-stop-thread stop) sb-thread:*current-thread*
         (noninteractive-stop-tag stop) (list :noninteractive-stop)
         (noninteractive-stop-before-unwind stop) before-unwind)
-  (let ((installed '()))
+  (let ((installed '())
+        (enclosing *enclosing-noninteractive-stop*)
+        (*enclosing-noninteractive-stop* stop))
     (flet ((handler (signal info context)
              (declare (ignore info context))
              (%noninteractive-signal-received stop signal)))
@@ -372,6 +383,8 @@ SIGINT and SIGTERM at startup, so only SIGHUP can arrive here ignored."
                              (setf (noninteractive-stop-armed-p stop) nil)))
                          nil)))
                 (let ((signal (or signal (noninteractive-stop-signal stop))))
+                  (when (and signal enclosing)
+                    (claim-noninteractive-stop enclosing signal))
                   (if (and signal after-signal)
                       (funcall after-signal signal)
                       (values-list results))))))

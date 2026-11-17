@@ -14,6 +14,12 @@
 ;;; or for a kept request drops it without a reply (MCP cancellation).  A run
 ;;; whose worker could not be stopped at its deadline may still change the
 ;;; shell state, so the session refuses every later call that uses that state.
+;;;
+;;; SIGINT, SIGTERM and SIGHUP end the server with 128 plus the signal
+;;; number: a client that wants to stop one request sends
+;;; notifications/cancelled. During a run, run-json-command takes the signal,
+;;; stops the run's processes and returns E_INTERRUPTED; the server sends that
+;;; reply and then ends. At any other point the server ends at once.
 
 (defstruct (mcp-server (:constructor %make-mcp-server (input output)))
   input
@@ -68,11 +74,15 @@ first."
         (%mcp-read-message server))))
 
 (defun %mcp-write (server message)
-  "Write MESSAGE, a json-kit value or a JSON line, as one protocol line."
+  "Write MESSAGE, a json-kit value or a JSON line, as one protocol line. A
+signal waits until the line is written, so the client never gets part of
+one."
   (when message
-    (let ((output (mcp-server-output server)))
-      (write-line (if (stringp message) message (json-kit:stringify message)) output)
-      (finish-output output))))
+    (let ((output (mcp-server-output server))
+          (line (if (stringp message) message (json-kit:stringify message))))
+      (sb-sys:without-interrupts
+        (write-line line output)
+        (finish-output output)))))
 
 (defun %mcp-parse-error-response (message)
   (mcp-error-response json-kit:+json-null+ -32700 message))
@@ -314,7 +324,8 @@ output is then not saved, and read_output finds nothing under it."
             (loop repeat 6 collect (char alphabet (random (length alphabet) state))))))
 
 (defun run-mcp-server (&key (input *standard-input*) (output *standard-output*))
-  "Serve the MCP tools on INPUT and OUTPUT until INPUT ends; return 0."
+  "Serve the MCP tools on INPUT and OUTPUT until INPUT ends and return 0, or
+until SIGINT, SIGTERM or SIGHUP and return 128 plus its number."
   (let ((server (%make-mcp-server input output))
         ;; Bound, not assigned, as run-json-command binds them: a caller in the
         ;; same image keeps its own.
@@ -334,20 +345,28 @@ output is then not saved, and read_output finds nothing under it."
                                                (output-session-id session)
                                                (%fallback-session-id)))
       (unwind-protect
-           (loop
-             (multiple-value-bind (message error present-p) (%mcp-next-message server)
-               (unless present-p (return))
-               (%mcp-write server
-                           (if error
-                               (%mcp-parse-error-response error)
-                               (handler-case (%mcp-handle server message)
-                                 (error (condition)
-                                   (let ((id-entry (mcp-field-entry message "id")))
-                                     (and id-entry
-                                          (mcp-error-response (cdr id-entry) -32603
-                                                              (princ-to-string condition))))))))))
+           (let ((stop (nshell.infrastructure.acl:make-noninteractive-stop)))
+             (nshell.infrastructure.acl:call-with-noninteractive-signals
+              stop
+              (lambda ()
+                (loop
+                  (multiple-value-bind (message error present-p) (%mcp-next-message server)
+                    (unless present-p (return 0))
+                    (%mcp-write server
+                                (if error
+                                    (%mcp-parse-error-response error)
+                                    (handler-case (%mcp-handle server message)
+                                      (error (condition)
+                                        (let ((id-entry (mcp-field-entry message "id")))
+                                          (and id-entry
+                                               (mcp-error-response (cdr id-entry) -32603
+                                                                   (princ-to-string condition))))))))
+                    ;; A run that a signal ended recorded it here
+                    ;; (CALL-WITH-NONINTERACTIVE-SIGNALS); its reply is out.
+                    (when (nshell.infrastructure.acl:noninteractive-stop-signal stop)
+                      (return)))))
+              :after-signal (lambda (signal) (+ 128 signal))))
         ;; A session that saved nothing leaves no directory behind.
         (when session
           (ignore-errors
-           (sb-posix:rmdir (string-right-trim "/" (output-session-directory session)))))))
-    0))
+           (sb-posix:rmdir (string-right-trim "/" (output-session-directory session)))))))))

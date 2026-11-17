@@ -22,8 +22,8 @@ executable scenarios and manual checks.
 
 | UC | Coverage | Executable scenarios | Manual checks | Scenario files |
 | --- | --- | ---: | ---: | --- |
-| A01 | approximation | 1 | 0 | `t/scenarios/A01/approx-terminal-launch.json` |
-| A02 | approximation | 1 | 0 | `t/scenarios/A02/approx-tmux-pane-start.json` |
+| A01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| A02 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | A03 | direct, manual | 1 | 1 | `t/scenarios/A03/login-shell-command.json`, `t/scenarios/A03/manual.md` |
 | A04 | direct, manual | 1 | 1 | `t/scenarios/A04/login-path-handoff.json`, `t/scenarios/A04/manual.md` |
 | A05 | direct, manual | 1 | 1 | `t/scenarios/A04/login-path-handoff.json`, `t/scenarios/A05/manual.md` |
@@ -35,17 +35,17 @@ executable scenarios and manual checks.
 | A11 | direct, manual | 1 | 1 | `t/scenarios/A11/nested-nshell-session.json`, `t/scenarios/A11/manual.md` |
 | A12 | direct | 1 | 0 | `t/scenarios/A12/no-config-skips-startup.json` |
 | A13 | direct | 1 | 0 | `t/scenarios/A13/config-error-keeps-prompt.json` |
-| B01 | direct, manual | 1 | 1 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B01/manual.md` |
-| B02 | approximation | 2 | 0 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B02/approx-remote-shell-command-contract.json` |
-| B03 | approximation | 2 | 0 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B03/approx-remote-copy-output-is-clean.json` |
-| B04 | approximation, manual | 1 | 1 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B04/manual.md` |
-| B05 | approximation, manual | 1 | 1 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B05/manual.md` |
-| B06 | approximation | 2 | 0 | `t/scenarios/B01/shell-caller-handoff.json`, `t/scenarios/B06/approx-shell-c-command-contract.json` |
+| B01 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/B01/manual.md` |
+| B02 | approximation | 1 | 0 | `t/scenarios/B02/approx-remote-shell-command-contract.json` |
+| B03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| B04 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/B04/manual.md` |
+| B05 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/B05/manual.md` |
+| B06 | approximation | 1 | 0 | `t/scenarios/B06/approx-shell-c-command-contract.json` |
 | B07 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B07/manual.md` |
 | B08 | approximation, manual | 1 | 1 | `t/scenarios/B07/interactive-callers.json`, `t/scenarios/B08/manual.md` |
 | B09 | direct | 5 | 0 | `t/scenarios/B09/batch-command-uses-nshell-builtins.json`, `t/scenarios/B09/command-stdio-and-status.json`, `t/scenarios/B09/empty-shell-command.json`, `t/scenarios/B09/pty-command-uses-nshell-builtins.json`, `t/scenarios/B09/shell-command-argv.json` |
 | B10 | direct, manual | 1 | 1 | `t/scenarios/B10/login-command-environment.json`, `t/scenarios/B10/manual.md` |
-| C01 | direct | 4 | 0 | `t/scenarios/C01/batch-command.json`, `t/scenarios/C01/batch-script.json`, `t/scenarios/C01/batch-stdin.json`, `t/scenarios/C01/pty-paste.json` |
+| C01 | direct | 3 | 0 | `t/scenarios/C01/batch-command.json`, `t/scenarios/C01/batch-stdin.json`, `t/scenarios/C01/pty-paste.json` |
 | C02 | direct | 1 | 0 | `t/scenarios/C02/quoted-unicode-arguments.json` |
 | C03 | direct | 1 | 0 | `t/scenarios/C03/path-search-and-absolute-path.json` |
 | C04 | direct | 1 | 0 | `t/scenarios/C04/missing-command-suggestion-and-status.json` |
@@ -63,16 +63,16 @@ executable scenarios and manual checks.
 | C16 | approximation | 1 | 0 | `t/scenarios/C16/approx-process-substitution-input.json` |
 | C17 | approximation | 1 | 0 | `t/scenarios/C17/approx-large-binary-and-invalid-utf8-output.json` |
 | C18 | approximation | 1 | 0 | `t/scenarios/C18/approx-sigpipe-is-quiet.json` |
-| D01 | approximation | 1 | 0 | `t/scenarios/D01/approx-editor-tty.json` |
-| D02 | approximation | 1 | 0 | `t/scenarios/D02/approx-pager-tty.json` |
-| D03 | approximation | 1 | 0 | `t/scenarios/D03/approx-monitor-tty.json` |
-| D04 | approximation | 1 | 0 | `t/scenarios/D04/approx-remote-tty.json` |
-| D05 | approximation | 1 | 0 | `t/scenarios/D05/approx-fzf-tty.json` |
+| D01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| D02 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| D03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| D04 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| D05 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | D06 | approximation | 1 | 0 | `t/scenarios/D06/approx-editor-child-tty.json` |
-| D07 | approximation | 1 | 0 | `t/scenarios/D07/approx-password-tty.json` |
-| D08 | approximation | 1 | 0 | `t/scenarios/D08/approx-repl-tty.json` |
+| D07 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| D08 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | D09 | direct, manual | 1 | 1 | `t/scenarios/D09/tmux-attach-session.json`, `t/scenarios/D09/manual.md` |
-| D10 | approximation | 1 | 0 | `t/scenarios/D10/approx-container-tty.json` |
+| D10 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | D11 | approximation | 1 | 0 | `t/scenarios/D11/approx-cooked-mode-after-crash.json` |
 | D12 | direct | 1 | 0 | `t/scenarios/D12/ctrl-c-stops-foreground-child.json` |
 | E01 | direct | 1 | 0 | `t/scenarios/E01/ctrl-z-stops-redirected-foreground-job.json` |
@@ -84,7 +84,7 @@ executable scenarios and manual checks.
 | E07 | direct | 1 | 0 | `t/scenarios/E07/pipeline-is-one-stopped-job.json` |
 | E08 | direct | 1 | 0 | `t/scenarios/E08/ctrl-c-interrupts-whole-pipeline.json` |
 | E09 | direct | 1 | 0 | `t/scenarios/E09/script-job-state-updates.json` |
-| F01 | approximation, direct | 2 | 0 | `t/scenarios/F01/approx-cooked-mode-after-crash.json`, `t/scenarios/F01/foreground-child-restores-terminal-output.json` |
+| F01 | direct | 1 | 0 | `t/scenarios/F01/foreground-child-restores-terminal-output.json` |
 | F02 | manual | 0 | 1 | `t/scenarios/F02/manual.md` |
 | F03 | direct, manual | 1 | 1 | `t/scenarios/F03/WP-R01-sigterm-exit-status.json`, `t/scenarios/F03/manual.md` |
 | F04 | direct, manual | 1 | 1 | `t/scenarios/F04/ctrl-quit-stops-cat-and-shell-recovers.json`, `t/scenarios/F04/manual.md` |
@@ -92,7 +92,7 @@ executable scenarios and manual checks.
 | F06 | approximation | 1 | 0 | `t/scenarios/F06/approx-osc-7-cwd.json` |
 | F07 | approximation | 1 | 0 | `t/scenarios/F07/approx-osc-133-prompt.json` |
 | F08 | approximation | 1 | 0 | `t/scenarios/F08/approx-large-bracketed-paste.json` |
-| F09 | approximation, manual | 1 | 1 | `t/scenarios/F09/approx-mouse-report-default-off.json`, `t/scenarios/F09/manual.md` |
+| F09 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/F09/manual.md` |
 | F10 | direct | 1 | 0 | `t/scenarios/F10/unicode-grapheme-cursor-edit.json` |
 | F11 | direct, manual | 4 | 1 | `t/scenarios/F11/16-color-sgr.json`, `t/scenarios/F11/256-color-sgr.json`, `t/scenarios/F11/no-color-sgr.json`, `t/scenarios/F11/truecolor-sgr.json`, `t/scenarios/F11/manual.md` |
 | F12 | approximation, manual | 1 | 1 | `t/scenarios/F12/approx-term-dumb-command-line.json`, `t/scenarios/F12/manual.md` |
@@ -179,7 +179,7 @@ executable scenarios and manual checks.
 | N05 | approximation | 1 | 0 | `t/scenarios/N05/approx-lexical-let-scope.json` |
 | N06 | manual | 0 | 1 | `t/scenarios/N06/manual.md` |
 | N07 | direct | 1 | 0 | `t/scenarios/N07/status-and-pipeline-status.json` |
-| O01 | direct | 1 | 0 | `t/scenarios/O01/O01-bare-line-sugar.json` |
+| O01 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | O02 | direct | 1 | 0 | `t/scenarios/O02/O02-command-island-evaluation.json` |
 | O03 | direct | 1 | 0 | `t/scenarios/O03/O03-let-and-set.json` |
 | O04 | direct | 1 | 0 | `t/scenarios/O04/O04-control-forms.json` |
@@ -195,13 +195,13 @@ executable scenarios and manual checks.
 | O14 | direct | 1 | 0 | `t/scenarios/O14/O14-function-directory-autoload.json` |
 | O15 | direct | 1 | 0 | `t/scenarios/O15/O15-asdf-library-load.json` |
 | O16 | direct | 1 | 0 | `t/scenarios/O16/O16-preserve-case.json` |
-| O17 | direct | 1 | 0 | `t/scenarios/O17/O17-force-external-command.json` |
+| O17 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | O18 | direct | 1 | 0 | `t/scenarios/O18/O18-alias-eval-and-string-execution.json` |
 | P01 | approximation | 1 | 0 | `t/scenarios/P01/approx-P01-xdg-init-file.json` |
 | P02 | approximation | 1 | 0 | `t/scenarios/P02/approx-P02-conf-d-order.json` |
 | P03 | approximation | 1 | 0 | `t/scenarios/P03/approx-P03-function-directory.json` |
 | P04 | approximation | 1 | 0 | `t/scenarios/P04/approx-P04-abbreviation-expansion.json` |
-| P05 | direct | 1 | 0 | `t/scenarios/P05/P05-alias-expansion.json` |
+| P05 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | P06 | direct | 1 | 0 | `t/scenarios/P06/P06-key-binding.json` |
 | P07 | direct | 1 | 0 | `t/scenarios/P07/P07-theme-selection.json` |
 | P08 | approximation | 1 | 0 | `t/scenarios/P08/approx-P08-prompt-format.json` |
@@ -231,6 +231,6 @@ executable scenarios and manual checks.
 | T05 | direct, approximation | 2 | 0 | `t/scenarios/T05/legacy-history-import-is-idempotent.json`, `t/scenarios/T05/approx-T05-legacy-history-load.json` |
 | T06 | direct, manual | 1 | 1 | `t/scenarios/T06/copied-release-bundle-pty-smoke.json`, `t/scenarios/T06/manual.md` |
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
-| U02 | approximation | 1 | 0 | `t/scenarios/U02/approx-U02-osc-133-markers.json` |
+| U02 | removed in P2-6 (checked by the F07 scenario) | 0 | 0 | — |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 261 | 48 | — |
+| Total | expected corpus | 238 | 47 | — |

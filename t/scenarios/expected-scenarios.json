@@ -2,20 +2,6 @@
   "version": 1,
   "scenarios": [
     {
-      "id": "A01-terminal-launch",
-      "uc": [
-        "A01"
-      ],
-      "path": "A01/approx-terminal-launch.json"
-    },
-    {
-      "id": "A02-tmux-pane-start",
-      "uc": [
-        "A02"
-      ],
-      "path": "A02/approx-tmux-pane-start.json"
-    },
-    {
       "id": "A03-login-shell-command",
       "uc": [
         "A03"
@@ -94,30 +80,11 @@
       "path": "A13/config-error-keeps-prompt.json"
     },
     {
-      "id": "B01-B06-shell-caller-handoff",
-      "uc": [
-        "B01",
-        "B02",
-        "B03",
-        "B04",
-        "B05",
-        "B06"
-      ],
-      "path": "B01/shell-caller-handoff.json"
-    },
-    {
       "id": "B02-approx-remote-shell-command-contract",
       "uc": [
         "B02"
       ],
       "path": "B02/approx-remote-shell-command-contract.json"
-    },
-    {
-      "id": "B03-approx-remote-copy-output-is-clean",
-      "uc": [
-        "B03"
-      ],
-      "path": "B03/approx-remote-copy-output-is-clean.json"
     },
     {
       "id": "B06-approx-shell-c-command-contract",
@@ -184,13 +151,6 @@
       "path": "C01/batch-command.json"
     },
     {
-      "id": "C01-batch-script",
-      "uc": [
-        "C01"
-      ],
-      "path": "C01/batch-script.json"
-    },
-    {
       "id": "C01-batch-stdin",
       "uc": [
         "C01"
@@ -238,13 +198,6 @@
         "C06"
       ],
       "path": "C06/pipeline-streams-all-stages.json"
-    },
-    {
-      "id": "C06-pipeline-streams-mixed-stages",
-      "uc": [
-        "C06"
-      ],
-      "path": "C06/pipeline-streams-mixed-stages.json"
     },
     {
       "id": "C07-redirection-family",
@@ -331,67 +284,11 @@
       "path": "C18/approx-sigpipe-is-quiet.json"
     },
     {
-      "id": "D01-approx-editor-tty",
-      "uc": [
-        "D01"
-      ],
-      "path": "D01/approx-editor-tty.json"
-    },
-    {
-      "id": "D02-approx-pager-tty",
-      "uc": [
-        "D02"
-      ],
-      "path": "D02/approx-pager-tty.json"
-    },
-    {
-      "id": "D03-approx-monitor-tty",
-      "uc": [
-        "D03"
-      ],
-      "path": "D03/approx-monitor-tty.json"
-    },
-    {
-      "id": "D04-approx-remote-tty",
-      "uc": [
-        "D04"
-      ],
-      "path": "D04/approx-remote-tty.json"
-    },
-    {
-      "id": "D05-approx-fzf-tty",
-      "uc": [
-        "D05"
-      ],
-      "path": "D05/approx-fzf-tty.json"
-    },
-    {
       "id": "D06-approx-editor-child-tty",
       "uc": [
         "D06"
       ],
       "path": "D06/approx-editor-child-tty.json"
-    },
-    {
-      "id": "D07-approx-password-tty",
-      "uc": [
-        "D07"
-      ],
-      "path": "D07/approx-password-tty.json"
-    },
-    {
-      "id": "D08-approx-repl-tty",
-      "uc": [
-        "D08"
-      ],
-      "path": "D08/approx-repl-tty.json"
-    },
-    {
-      "id": "D10-approx-container-tty",
-      "uc": [
-        "D10"
-      ],
-      "path": "D10/approx-container-tty.json"
     },
     {
       "id": "D11-approx-cooked-mode-after-crash",
@@ -485,13 +382,6 @@
       "path": "E09/script-job-state-updates.json"
     },
     {
-      "id": "F01-approx-cooked-mode-after-crash",
-      "uc": [
-        "F01"
-      ],
-      "path": "F01/approx-cooked-mode-after-crash.json"
-    },
-    {
       "id": "F02-wp-r08-resize-redraw",
       "uc": [
         "F02"
@@ -539,13 +429,6 @@
         "F08"
       ],
       "path": "F08/approx-large-bracketed-paste.json"
-    },
-    {
-      "id": "F09-approx-mouse-report-default-off",
-      "uc": [
-        "F09"
-      ],
-      "path": "F09/approx-mouse-report-default-off.json"
     },
     {
       "id": "F10-unicode-grapheme-cursor-edit",
@@ -1150,13 +1033,6 @@
       "path": "N07/status-and-pipeline-status.json"
     },
     {
-      "id": "O01-bare-line-sugar",
-      "uc": [
-        "O01"
-      ],
-      "path": "O01/O01-bare-line-sugar.json"
-    },
-    {
       "id": "O02-command-island-evaluation",
       "uc": [
         "O02"
@@ -1269,13 +1145,6 @@
       "path": "O16/O16-preserve-case.json"
     },
     {
-      "id": "O17-force-external-command",
-      "uc": [
-        "O17"
-      ],
-      "path": "O17/O17-force-external-command.json"
-    },
-    {
       "id": "O18-alias-eval-and-string-execution",
       "uc": [
         "O18"
@@ -1309,13 +1178,6 @@
         "P04"
       ],
       "path": "P04/approx-P04-abbreviation-expansion.json"
-    },
-    {
-      "id": "P05-alias-expansion",
-      "uc": [
-        "P05"
-      ],
-      "path": "P05/P05-alias-expansion.json"
     },
     {
       "id": "P06-key-binding",
@@ -1428,13 +1290,6 @@
         "T05"
       ],
       "path": "T05/legacy-history-import-is-idempotent.json"
-    },
-    {
-      "id": "U02-osc-133-markers",
-      "uc": [
-        "U02"
-      ],
-      "path": "U02/approx-U02-osc-133-markers.json"
     },
     {
       "id": "U03-tmux-screen-terminal",

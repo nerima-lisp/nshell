@@ -584,6 +584,21 @@ EXPECTED-STDOUT and an empty stderr."
                 (format nil "~A=~A" name value)))
         #'string< :key #'%json-golden-case-environment-name))
 
+(defun %json-golden-missing-environment (name what)
+  "Handle environment variable NAME not naming WHAT as the PTY tests handle a
+missing PTY: an error when CI is set, a skip otherwise. checks.default sets
+NSHELL_BIN and NSHELL_SPEC_BIN_DIR."
+  (let ((reason (format nil "golden: ~A must name ~A" name what)))
+    (if (uiop:getenv "CI")
+        (error "~A (required in CI)" reason)
+        (skip (format nil "~A (skipped outside CI)" reason)))))
+
+(defun %json-golden-binary ()
+  (let ((binary (uiop:getenv "NSHELL_BIN")))
+    (unless (and binary (plusp (length binary)))
+      (%json-golden-missing-environment "NSHELL_BIN" "the built nshell executable"))
+    binary))
+
 (defun %json-golden-case-environment (work object)
   (labels ((temporary-directory (name)
              (let* ((directory (merge-pathnames (format nil "~A/" name) work))
@@ -605,7 +620,8 @@ EXPECTED-STDOUT and an empty stderr."
                   :path-boundaries '(#\/ #\:))
                  (let ((fixed-bin (uiop:getenv "NSHELL_SPEC_BIN_DIR")))
                    (unless (and fixed-bin (uiop:directory-exists-p fixed-bin))
-                     (error "golden PATH must use the t/spec fixed bin directory"))
+                     (%json-golden-missing-environment
+                      "NSHELL_SPEC_BIN_DIR" "the t/spec fixed bin directory"))
                    (format nil "~A/bin:~A" work-path fixed-bin))))
            (path-entry (format nil "PATH=~A" path-value))
            (defaults (list (format nil "HOME=~A" (temporary-directory "home"))
@@ -702,8 +718,6 @@ EXPECTED-STDOUT and an empty stderr."
          (work-path nil)
          (environment nil)
          (status nil))
-    (unless (and binary (plusp (length binary)))
-      (error "golden: NSHELL_BIN must name the built nshell executable"))
     (expect keys :to-equal (list "env" "expected" "files" "input"))
     (expect (stringp input) :to-be-truthy)
     (expect (hash-table-p env) :to-be-truthy)
@@ -733,28 +747,39 @@ EXPECTED-STDOUT and an empty stderr."
                 (%json-golden-comparison-value
                  expected :work work-path :environment environment)))))
 
+(defun %json-golden-case-test-name (case-path)
+  (format nil "case ~A" (pathname-name case-path)))
+
 (defun %json-golden-register-cases ()
-  (let ((binary (uiop:getenv "NSHELL_BIN"))
-        (update-p (string= (or (uiop:getenv "NSHELL_GOLDEN_UPDATE") "") "1")))
+  (let ((update-p (string= (or (uiop:getenv "NSHELL_GOLDEN_UPDATE") "") "1")))
     (dolist (case-path (%json-golden-case-files))
       (eval (list 'it
-                  (format nil "case ~A" (pathname-name case-path))
+                  (%json-golden-case-test-name case-path)
                   (list '%json-golden-run-case
-                        (namestring case-path) binary update-p))))))
+                        (namestring case-path) '(%json-golden-binary) update-p))))))
+
+(defun %json-golden-planned-test-paths ()
+  "Return the path, a list of suite and test names, of every planned test."
+  (let ((plan (let ((*read-eval* nil))
+                (read-from-string
+                 (with-output-to-string (stream)
+                   (cl-weave:list-tests :reporter :sexp :stream stream))))))
+    (mapcar (lambda (entry) (getf entry :path))
+            (getf (rest plan) :tests))))
 
 (describe "golden runner"
   (%json-golden-register-cases)
 
   (it "registers every case id as a separate test"
-    (let ((planned-tests
-            (with-output-to-string (stream)
-              (cl-weave:list-tests :reporter :sexp
-                                   :stream stream
-                                   :name-filter "case"))))
+    (let ((case-test-names
+            (loop for path in (%json-golden-planned-test-paths)
+                  when (equal (car (last path 2)) "golden runner")
+                    collect (car (last path)))))
       (expect (%json-golden-case-files) :to-be-truthy)
       (dolist (case-path (%json-golden-case-files))
-        (expect (search (pathname-name case-path) planned-tests)
-                :to-be-truthy))))
+        (expect (count (%json-golden-case-test-name case-path) case-test-names
+                       :test #'equal)
+                :to-equal 1))))
 
   (it "normalizes short tool paths and preserves unrelated absolute paths"
     (expect (%json-golden-case-normalize
@@ -811,10 +836,9 @@ EXPECTED-STDOUT and an empty stderr."
       (expect (%json-golden-update-mode-p nil "1") :to-be-truthy)))
 
   (it "fails after writing updated expectations"
-    (let ((binary (uiop:getenv "NSHELL_BIN"))
+    (let ((binary (%json-golden-binary))
           (failure nil)
           (written-p nil))
-      (expect (and binary (plusp (length binary))) :to-be-truthy)
       (host-kit:with-temporary-directory (work)
         (let* ((case-path (merge-pathnames "case.json" work))
                (case (json-kit:parse "{\"env\":{},\"expected\":{},\"files\":{},\"input\":\"echo hi\"}")))

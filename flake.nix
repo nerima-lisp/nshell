@@ -974,7 +974,8 @@
           checks.default = ctx.generated.checks.default.overrideAttrs (
             previous:
             {
-              # git: the machine --json golden tests run it in a temporary repository.
+              # git: the machine --json golden tests no longer need it; they put a
+              # fixture bin/git script on PATH instead of making a repository.
               nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [
                 ctx.pkgs.coreutils
                 ctx.pkgs.git
@@ -1135,7 +1136,8 @@
                 (
                   previous:
                   {
-                    # The machine --json golden tests run git in a temporary repository.
+                    # The machine --json golden tests no longer need git; they put a
+                    # fixture bin/git script on PATH instead of making a repository.
                     nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.git ];
                   }
                   // ptyBootstrapEnvironmentFor ctx

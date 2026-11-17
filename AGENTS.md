@@ -137,6 +137,7 @@ When running as root inside a container, these environment-only tests may fail:
 
 After `nix build`, run a script with `./result/bin/nshell FILE.nsh` or a command
 with `./result/bin/nshell --command '(+ 1 2)'`; the command prints `3`.
+The `t/golden` cases run that binary: add `NSHELL_BIN="$PWD/result/bin/nshell"` and `NSHELL_SPEC_BIN_DIR=<dir>` to the `nix develop -c env` command, where `<dir>` is an absolute directory of tools that a case without `env.PATH` gets on its PATH after `$WORK/bin` (`checks.default` uses coreutils, bash, findutils and a `last` stub); without them these tests skip, and with `CI` set they fail.
 
 The flake checks run in a Nix build sandbox, where PTY integration tests are skipped.
 To run them on the host, set `NSHELL_TEST_PTY=1` and `CI=1` in the `nix develop -c env` command, as in this example:

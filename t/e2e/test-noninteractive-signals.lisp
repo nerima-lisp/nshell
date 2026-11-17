@@ -543,26 +543,29 @@ return its stdout, stderr and exit status."
           (%signal-e2e-clean-groups directory)))))
 
   (it "bug4-batch-signal-is-not-taken-over-by-a-command-substitution-timeout"
-    ;; The substitution's 1 s deadline passes while the signal stops the
-    ;; child, which ignores SIGTERM and so lasts the whole grace period. Its
-    ;; timeout must not end the unwind and let the script go on.
+    ;; The signal comes 0.6 s into the substitution, whose 1 s timer then
+    ;; fires while the signal stops the child, which ignores SIGTERM and so
+    ;; lasts the whole 0.5 s grace period. Were that timer to take the unwind
+    ;; over, the substitution would yield nothing and the script would go on:
+    ;; the echo would print its marker and the next line would create AFTER.
+    ;; Both are done by nshell itself: an external command started after the
+    ;; signal fails without a word, as stderr no longer leads anywhere.
     (host-kit:with-temporary-directory (directory)
       (let ((script (merge-pathnames "run.nsh" directory))
             (ready (merge-pathnames "ready" directory))
             (after (merge-pathnames "after" directory)))
         (with-open-file (out script :direction :output)
           (format out "(SETF NSHELL.APPLICATION::*COMMAND-SUBSTITUTION-TIMEOUT* 1)~%~
-                       echo $(sh -c 'trap \"\" TERM; : > ~A; sleep 30')~%~
-                       touch ~A~%sleep 2~%"
+                       echo taken-over-$(sh -c 'trap \"\" TERM; : > ~A; sleep 30')~%~
+                       (CL:CLOSE (CL:OPEN ~S :DIRECTION :OUTPUT :IF-DOES-NOT-EXIST :CREATE))~%"
                   (namestring ready) (namestring after)))
         (multiple-value-bind (stdout stderr status)
             (%signal-e2e-run directory (list (namestring script)) nil sb-unix:sigterm
                              :ready-p (lambda () (probe-file ready))
                              :signal-delay 0.6)
-          (declare (ignore stdout))
           (expect status :to-equal 143)
-          (expect stderr :to-equal (format nil "nshell: interrupted by SIGTERM~%")))
-        (sleep 1)
+          (expect stderr :to-equal (format nil "nshell: interrupted by SIGTERM~%"))
+          (expect (search "taken-over" stdout) :to-be-null))
         (expect (probe-file after) :to-be-null))))
 
   (it "bug4-json-deadline-is-not-taken-over-by-a-command-substitution-timeout"

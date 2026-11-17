@@ -39,6 +39,21 @@ client's acceptance of the ELICITATION-th approval request."
   (list (%mcp-run-call id input)
         (%mcp-elicitation-answer (format nil "nshell-elicitation-~D" elicitation) "accept")))
 
+(defun %mcp-marker (directory name)
+  "Return the path of marker NAME in DIRECTORY and the confirm input that
+creates it."
+  (let ((path (format nil "~A~A" (sb-ext:native-namestring directory) name)))
+    (values path (format nil "touch ~A" path))))
+
+(defmacro with-mcp-markers ((directory &rest bindings) &body body)
+  "Bind each (PATH INPUT NAME) of BINDINGS to a marker in DIRECTORY, a fresh
+temporary directory, and the input that creates it."
+  `(host-kit:with-temporary-directory (,directory)
+     (let* ,(loop for (path input name) in bindings
+                  collect `(,path (%mcp-marker ,directory ,name))
+                  collect `(,input (nth-value 1 (%mcp-marker ,directory ,name))))
+       ,@body)))
+
 (defun %mcp-exchange (&rest lines)
   "Run the server on LINES and return every message it wrote, decoded, in
 order."
@@ -305,6 +320,58 @@ envelope, and isError is set exactly when the envelope is not ok."
           (expect (json-at blocked "error" "code") :to-equal "E_BLOCKED_BY_POLICY")
           (expect (json-at blocked "seq") :to-equal 2)))))
 
+  (it "asks before a line whose value form writes, and refuses one that deletes the root"
+    (with-json-cache-home (root)
+      (declare (ignorable root))
+      (with-mcp-markers (directory (marker unused "value-form"))
+        (declare (ignore unused))
+        (let* ((input (format nil "echo ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT))" marker))
+               (messages (%mcp-exchange
+                          (%mcp-initialize :elicitation t)
+                          (%mcp-run-call 2 input)
+                          (%mcp-elicitation-answer "nshell-elicitation-1" "decline")
+                          (%mcp-run-call 3 "echo ,(^rm -rf /)")))
+               (declined (%mcp-envelope messages 2))
+               (blocked (%mcp-envelope messages 3)))
+          (expect (length (%mcp-elicitations messages)) :to-equal 1)
+          (expect (json-at declined "safety" "level") :to-equal "confirm")
+          (expect (json-at declined "error" "code") :to-equal "E_NEEDS_APPROVAL")
+          (expect (probe-file marker) :to-be-null)
+          (expect (json-at blocked "error" "code") :to-equal "E_BLOCKED_BY_POLICY")))))
+
+  (it "runs the value forms of a confirm line the client's user accepts"
+    (with-json-cache-home (root)
+      (declare (ignorable root))
+      (with-mcp-markers (directory (marker unused "value-form"))
+        (declare (ignore unused))
+        (let ((messages (%mcp-exchange
+                         (%mcp-initialize :elicitation t)
+                         (%mcp-run-call 2 (format nil "echo ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT))"
+                                                  marker))
+                         (%mcp-elicitation-answer "nshell-elicitation-1" "accept"))))
+          (expect (length (%mcp-elicitations messages)) :to-equal 1)
+          (expect (json-at (%mcp-envelope messages 2) "ok") :to-equal t)
+          (expect (probe-file marker) :to-be-truthy)))))
+
+  (it "refuses a value form nested in a substitution of an accepted line"
+    (with-json-cache-home (root)
+      (declare (ignorable root))
+      (with-mcp-markers (directory (outer outer-input "outer")
+                                   (nested unused "nested"))
+        (declare (ignore unused))
+        (let* ((input (format nil "~A; echo $(echo ,(CLOSE (OPEN ~S :DIRECTION :OUTPUT)))"
+                              outer-input nested))
+               (messages (%mcp-exchange
+                          (%mcp-initialize :elicitation t)
+                          (%mcp-run-call 2 input)
+                          (%mcp-elicitation-answer "nshell-elicitation-1" "accept")))
+               (envelope (%mcp-envelope messages 2)))
+          (expect (length (%mcp-elicitations messages)) :to-equal 1)
+          ;; The approval covers the line's own commands only.
+          (expect (probe-file outer) :to-be-truthy)
+          (expect (probe-file nested) :to-be-null)
+          (expect (json-at envelope "error" "code") :to-equal "E_NEEDS_APPROVAL")))))
+
   (it "runs confirm input the client's user accepts"
     (host-kit:with-temporary-directory (directory)
       (with-json-cache-home (root)
@@ -336,24 +403,49 @@ envelope, and isError is set exactly when the envelope is not ok."
   (it "answers E_NEEDS_APPROVAL when nobody approves"
     (with-json-cache-home (root)
       (declare (ignorable root))
-      ;; No safe command spec covers true: an unknown command is confirm.
-      (let ((messages (%mcp-exchange
-                       (%mcp-initialize :elicitation t)
-                       (%mcp-run-call 2 "true")
-                       (%mcp-elicitation-answer "nshell-elicitation-1" "decline")
-                       (%mcp-run-call 3 "true")
-                       (%mcp-elicitation-answer "nshell-elicitation-2" "accept" nil)
-                       (%mcp-run-call 4 "true")
-                       (%mcp-elicitation-answer "nshell-elicitation-3" "cancel")
-                       (%mcp-run-call 5 "true")
-                       "{\"jsonrpc\":\"2.0\",\"id\":\"nshell-elicitation-4\",\"error\":{\"code\":-1,\"message\":\"no\"}}")))
-        (expect (length (%mcp-elicitations messages)) :to-equal 4)
-        (dolist (id '(2 3 4 5))
-          (expect (list id (json-at (%mcp-envelope messages id) "error" "code"))
-                  :to-equal (list id "E_NEEDS_APPROVAL"))))
-      (let ((messages (%mcp-exchange (%mcp-initialize) (%mcp-run-call 2 "true"))))
-        (expect (%mcp-elicitations messages) :to-be-null)
-        (expect (json-at (%mcp-envelope messages 2) "error" "code") :to-equal "E_NEEDS_APPROVAL"))))
+      ;; touch writes a file: confirm.  A marker shows whether a run ran.
+      (with-mcp-markers (directory (declined decline-input "declined")
+                                   (unapproved unapproved-input "unapproved")
+                                   (cancelled cancel-input "cancelled")
+                                   (failed failed-input "failed")
+                                   (unasked unasked-input "unasked"))
+        (let ((messages (%mcp-exchange
+                         (%mcp-initialize :elicitation t)
+                         (%mcp-run-call 2 decline-input)
+                         (%mcp-elicitation-answer "nshell-elicitation-1" "decline")
+                         (%mcp-run-call 3 unapproved-input)
+                         (%mcp-elicitation-answer "nshell-elicitation-2" "accept" nil)
+                         (%mcp-run-call 4 cancel-input)
+                         (%mcp-elicitation-answer "nshell-elicitation-3" "cancel")
+                         (%mcp-run-call 5 failed-input)
+                         "{\"jsonrpc\":\"2.0\",\"id\":\"nshell-elicitation-4\",\"error\":{\"code\":-1,\"message\":\"no\"}}")))
+          (expect (length (%mcp-elicitations messages)) :to-equal 4)
+          (dolist (id '(2 3 4 5))
+            (expect (list id (json-at (%mcp-envelope messages id) "error" "code"))
+                    :to-equal (list id "E_NEEDS_APPROVAL"))))
+        (let ((messages (%mcp-exchange (%mcp-initialize) (%mcp-run-call 2 unasked-input))))
+          (expect (%mcp-elicitations messages) :to-be-null)
+          (expect (json-at (%mcp-envelope messages 2) "error" "code") :to-equal "E_NEEDS_APPROVAL"))
+        (expect (remove-if-not #'probe-file (list declined unapproved cancelled failed unasked))
+                :to-be-null))))
+
+  (it "runs an accepted confirm run and not a declined one in the same session"
+    (with-json-cache-home (root)
+      (declare (ignorable root))
+      (with-mcp-markers (directory (accepted accept-input "accepted")
+                                   (declined decline-input "declined"))
+        (let ((messages (%mcp-exchange
+                         (%mcp-initialize :elicitation t)
+                         (%mcp-run-call 2 accept-input)
+                         (%mcp-elicitation-answer "nshell-elicitation-1" "accept")
+                         (%mcp-run-call 3 decline-input)
+                         (%mcp-elicitation-answer "nshell-elicitation-2" "decline"))))
+          (expect (length (%mcp-elicitations messages)) :to-equal 2)
+          (expect (json-at (%mcp-envelope messages 2) "ok") :to-equal t)
+          (expect (json-at (%mcp-envelope messages 3) "error" "code")
+                  :to-equal "E_NEEDS_APPROVAL")
+          (expect (probe-file accepted) :to-be-truthy)
+          (expect (probe-file declined) :to-be-null)))))
 
   (it "handles requests that arrive during an elicitation after the run"
     (with-json-cache-home (root)
@@ -375,12 +467,14 @@ envelope, and isError is set exactly when the envelope is not ok."
   (it "treats the end of input during an elicitation as no approval"
     (with-json-cache-home (root)
       (declare (ignorable root))
-      (let ((messages (%mcp-exchange (%mcp-initialize :elicitation t)
-                                     (%mcp-run-call 2 "true")
-                                     (%mcp-call 3 "state"))))
-        (expect (length (%mcp-elicitations messages)) :to-equal 1)
-        (expect (json-at (%mcp-envelope messages 2) "error" "code") :to-equal "E_NEEDS_APPROVAL")
-        (expect (json-at (%mcp-envelope messages 3) "ok") :to-equal t)))))
+      (with-mcp-markers (directory (marker input "unanswered"))
+        (let ((messages (%mcp-exchange (%mcp-initialize :elicitation t)
+                                       (%mcp-run-call 2 input)
+                                       (%mcp-call 3 "state"))))
+          (expect (length (%mcp-elicitations messages)) :to-equal 1)
+          (expect (json-at (%mcp-envelope messages 2) "error" "code") :to-equal "E_NEEDS_APPROVAL")
+          (expect (json-at (%mcp-envelope messages 3) "ok") :to-equal t)
+          (expect (probe-file marker) :to-be-null))))))
 
 (describe "machine mcp robustness"
   (it "answers a message that is not a JSON object with Invalid Request"
@@ -396,26 +490,30 @@ envelope, and isError is set exactly when the envelope is not ok."
   (it "asks for approval only on a protocol revision with elicitation"
     (with-json-cache-home (root)
       (declare (ignorable root))
-      (let ((messages (%mcp-exchange (%mcp-initialize :elicitation t :version "2024-11-05")
-                                     (%mcp-run-call 2 "true"))))
-        (expect (%mcp-elicitations messages) :to-be-null)
-        (expect (json-at (%mcp-envelope messages 2) "error" "code")
-                :to-equal "E_NEEDS_APPROVAL"))))
+      (with-mcp-markers (directory (marker input "old-revision"))
+        (let ((messages (%mcp-exchange (%mcp-initialize :elicitation t :version "2024-11-05")
+                                       (%mcp-run-call 2 input))))
+          (expect (%mcp-elicitations messages) :to-be-null)
+          (expect (json-at (%mcp-envelope messages 2) "error" "code")
+                  :to-equal "E_NEEDS_APPROVAL")
+          (expect (probe-file marker) :to-be-null)))))
 
   (it "drops a run the client cancels while its approval is pending"
     (with-json-cache-home (root)
       (declare (ignorable root))
-      (let ((messages (%mcp-exchange
+      (with-mcp-markers (directory (marker input "cancelled"))
+       (let ((messages (%mcp-exchange
                        (%mcp-initialize :elicitation t)
-                       (%mcp-run-call 2 "true")
+                       (%mcp-run-call 2 input)
                        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":2,\"reason\":\"user\"}}"
                        (%mcp-run-call 3 "echo after")
                        (%mcp-call 4 "history"))))
+        (expect (probe-file marker) :to-be-null)
         (expect (%mcp-reply messages 2) :to-be-null)
         (expect (json-at (%mcp-envelope messages 3) "seq") :to-equal 1)
         (expect (map 'list (lambda (entry) (gethash "input" entry))
                      (json-at (%mcp-envelope messages 4) "value" "entries"))
-                :to-equal '("echo after"))))
+                :to-equal '("echo after")))))
     (with-json-cache-home (root)
       (declare (ignorable root))
       ;; A request kept during the wait and cancelled before its turn gets no reply.
@@ -440,13 +538,14 @@ envelope, and isError is set exactly when the envelope is not ok."
                                           (cons "classify/unknown-command" "unknown command")
                                           (cons "classify/delete-dir" "deletes a directory")))
                        t)))
-          (let ((messages (%mcp-exchange (%mcp-initialize :elicitation t)
-                                         (%mcp-run-call 2 "echo hi")
-                                         (%mcp-elicitation-answer "nshell-elicitation-1"
-                                                                  "accept"))))
-            (expect (json-at (%mcp-envelope messages 2) "error" "code")
-                    :to-equal "E_NEEDS_APPROVAL")
-            (expect (json-at (%mcp-envelope messages 2) "stdout" "text") :to-equal ""))))))
+          (with-mcp-markers (directory (marker input "changed"))
+            (let ((messages (%mcp-exchange (%mcp-initialize :elicitation t)
+                                           (%mcp-run-call 2 input)
+                                           (%mcp-elicitation-answer "nshell-elicitation-1"
+                                                                    "accept"))))
+              (expect (json-at (%mcp-envelope messages 2) "error" "code")
+                      :to-equal "E_NEEDS_APPROVAL")
+              (expect (probe-file marker) :to-be-null)))))))
 
   (it "refuses to go on in a session whose run could not be stopped"
     (with-json-cache-home (root)
@@ -495,3 +594,27 @@ envelope, and isError is set exactly when the envelope is not ok."
             (expect (json-at pruned "ok") :to-equal t)
             (expect path :to-equal (format nil "~A~A/2.txt" root (json-at envelope "session")))
             (expect (probe-file path) :to-be-truthy)))))))
+
+(describe "machine mcp approval message"
+  (it "shows the input quoted with its control and format characters escaped"
+    (with-json-cache-home (root)
+      (declare (ignorable root))
+      (let* ((input (format nil "echo ~C[2J~Cok~%~Cx\\y~C~C" (code-char 27) (code-char 13)
+                            (code-char #x202E) (code-char 127) (code-char #x9B)))
+             (message (json-at (first (%mcp-elicitations
+                                       (%mcp-exchange (%mcp-initialize :elicitation t)
+                                                      (%mcp-run-call 2 input))))
+                               "params" "message"))
+             (lines (with-input-from-string (stream message)
+                      (loop for line = (read-line stream nil nil)
+                            while line collect line))))
+        ;; The input is the second line, quoted, so it cannot pass for the
+        ;; message's own lines or redraw the client's screen.
+        (expect (second lines) :to-equal "\"echo \\e[2J\\rok\\n\\u202Ex\\\\y\\u007F\\u009B\"")
+        (expect (remove-if-not (lambda (char)
+                                 (and (char/= char #\Newline)
+                                      (member (symbol-name (sb-unicode:general-category char))
+                                              '("Cc" "Cf" "Zl" "Zp")
+                                              :test #'string-equal)))
+                               message)
+                :to-equal "")))))

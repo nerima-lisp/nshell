@@ -118,22 +118,6 @@ name (and, or, not, command, builtin)."
                                (first words) (rest words))
                               :stage resolve)))
 
-(defun assistant-command-after-wrappers (command args)
-  "Return the effective command and arguments after known wrappers.  This
-serves the rerun display, not a safety decision, so a wrapper row of
-either resolution is unwrapped."
-  (loop
-    (multiple-value-bind (kind inner)
-        (let ((builtin (multiple-value-list
-                        (nshell.feature.kb:command-wrapper command args :builtin))))
-          (if (first builtin)
-              (values-list builtin)
-              (nshell.feature.kb:command-wrapper command args :external)))
-      (if (and kind inner)
-          (setf command (first inner)
-                args (rest inner))
-          (return (values (%assistant-command-basename command) args))))))
-
 (defun %assistant-classify-command-line (text resolve)
   "Classify TEXT as a bare command line: the reader of eval, sh -c, and
 process substitutions."

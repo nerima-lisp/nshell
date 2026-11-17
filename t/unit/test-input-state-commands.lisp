@@ -420,7 +420,7 @@
               (input-state :buffer "one" :cursor-pos 3)
               (input-state :buffer "one " :cursor-pos 4)))))
 
-(it-each (("ctrl-x" :ctrl-x)
+  (it-each (("ctrl-x" :ctrl-x)
             ("alt-ctrl-right" :alt-ctrl-right)
             ("alt-ctrl-left" :alt-ctrl-left)
             ("shift-alt-ctrl-right" :shift-alt-ctrl-right)

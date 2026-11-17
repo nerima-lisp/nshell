@@ -198,15 +198,6 @@
           expressions)))
     (car (stable-sort matches #'< :key #'%sexp-expression-span-length))))
 
-(defun %sexp-parent-list (expressions expression)
-  (let ((matches
-         (remove-if-not
-          (lambda (candidate)
-            (and (eq :list (%sexp-structural-expression-kind candidate))
-                 (%sexp-expression-contains-span-p candidate expression)))
-          expressions)))
-    (car (stable-sort matches #'< :key #'%sexp-expression-span-length))))
-
 (defun %sexp-command-island-position-p (expressions position)
   (some
    (lambda (expression)

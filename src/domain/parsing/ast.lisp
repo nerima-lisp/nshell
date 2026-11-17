@@ -219,6 +219,14 @@ with the one-character ^ marker in front, which the range includes."
                             :form form
                             :source-span (%validated-source-span source-span)))
 
+(defun command-value-form-runs-lisp-p (argument)
+  "True when ARGUMENT is a command value form whose evaluation calls Lisp
+code: an unquoted cons.  An atom only reads a value and a quoted form is
+used as written."
+  (and (command-value-form-p argument)
+       (not (eq (command-value-form-kind argument) :quoted))
+       (consp (command-value-form-form argument))))
+
 (defun %copy-command-argument-forms (forms)
   (unless (and (listp forms)
                (every (lambda (form)

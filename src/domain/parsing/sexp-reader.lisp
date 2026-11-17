@@ -1475,6 +1475,42 @@ unchanged when it cannot be mapped."
         (error condition))
       (error (cause)
         (%sexp-reader-signal cause nil nil span)))))
+(defun command-value-form-operand-span (source value-form)
+  "Return the [start,end) span in SOURCE of the datum VALUE-FORM evaluates:
+SOURCE is read again at the value form's source span, and the span is that
+of the operand of its , ,@ or $ prefix, or of the datum itself when it has
+none.  Return NIL when SOURCE does not hold exactly one datum there."
+  (let* ((span (command-value-form-source-span value-form))
+         (start (first span))
+         (end (second span)))
+    (when (and (stringp source) span (<= 0 start end (length source)))
+      ;; A bare-line value token written in double quotes holds its
+      ;; prefixed datum between the quotes, as %sexp-reader-bare-value-form
+      ;; reads it.
+      (when (and (<= 2 (- end start))
+                 (= (char-code (char source start)) 34)
+                 (= (char-code (char source (1- end))) 34))
+        (incf start)
+        (decf end))
+      (let ((*sexp-reader-state* (%make-sexp-reader-state :source source)))
+        (handler-case
+            (progn
+              (setf (%sexp-reader-state-position *sexp-reader-state*) start)
+              (multiple-value-bind (datum datum-start datum-end skipped-p)
+                  (%sexp-reader-read-datum)
+                (when (and (not skipped-p) (= datum-start start) (= datum-end end))
+                  (let ((origin (and (consp datum)
+                                     (%sexp-reader-command-origin (first datum)))))
+                    (if (and (getf origin :reader-prefix-p)
+                             (member (getf origin :reader-prefix-kind)
+                                     '(:unquote :unquote-splicing)))
+                        (copy-list
+                         (%sexp-reader-list-element-span
+                          (second (gethash datum
+                                           (%sexp-reader-state-list-elements
+                                            *sexp-reader-state*)))))
+                        (list start end))))))
+          (error () nil))))))
 (defun %sexp-reader-read-character-dispatch (start)
   (%sexp-reader-advance 2)
   (let ((character (%sexp-reader-peek)))

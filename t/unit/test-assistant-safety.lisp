@@ -174,6 +174,46 @@ which commands are builtins."
              (form (nshell.domain.parsing:reader-result-form result)))
         (expect (nshell.domain.parsing:sequence-node-p form) :to-be-truthy)
         (expect :confirm :to-be (reader-result-classification result)))))
+  (it "classifies the Lisp value forms of bare-line commands by their contents"
+    (labels ((classification (source)
+               (let ((results (nshell.domain.parsing:read-submission
+                               source :reader-context :auto)))
+                 (nshell.feature.assistant:assistant-safety-result-classification
+                  (%test-classify-ast (if (rest results) results (first results)))))))
+      (dolist (case '(("echo ,(CLOSE (OPEN \"m\" :DIRECTION :OUTPUT))" :confirm)
+                      ("echo ,@(LIST (CLOSE (OPEN \"m\" :DIRECTION :OUTPUT)))" :confirm)
+                      ("cat ,(f)" :confirm)
+                      ("ls ,@(f)" :confirm)
+                      ("printf %s ,(f)" :confirm)
+                      ("echo \",(f)\"" :confirm)
+                      ("ls | cat ,(f)" :confirm)
+                      ("echo ,@(f) | cat" :confirm)
+                      ("ls ; echo ,(f)" :confirm)
+                      ("echo ,(f) && ls" :confirm)
+                      ("echo ,(^rm -rf /)" :block)
+                      ("echo ,@(^rm -rf /)" :block)
+                      ("(^echo ,(^rm -rf /))" :block)
+                      ("echo ,HOME" :safe)
+                      ("echo ,\"x\"" :safe)
+                      ("echo ,42" :safe)
+                      ("echo ,:key" :safe)
+                      ("echo $HOME" :safe)))
+        (destructuring-bind (source expected) case
+          (expect (list source (classification source))
+                  :to-equal (list source expected))))))
+  (it "keeps every other form that runs code at confirm or above"
+    ;; The Enter verdict: input the reader refuses (#.) is block.
+    (labels ((classification (source)
+               (with-repl-test-state
+                 (nshell.presentation::%assistant-proposal-level source))))
+      (dolist (source (list "echo $(touch m)" "cat <(touch m)" "echo x | tee >(touch m)"
+                            "echo `touch m`"
+                            (format nil "cat <<EOF~%$(touch m)~%EOF")
+                            "(progn (f))" "(let ((x 1)) (f x))" "(eval '(f))"
+                            "(echo #.(f))"))
+        (expect (list source
+                      (and (member (classification source) '(:confirm :block)) t))
+                :to-equal (list source t)))))
   (it "routes S-expression proposals and agent steps through reader results"
     (let ((original-reader
             (symbol-function

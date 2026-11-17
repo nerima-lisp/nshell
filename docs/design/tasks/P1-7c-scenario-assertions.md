@@ -8,31 +8,37 @@
 
 `t/scenarios/A01/approx-terminal-launch.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "A01_TERMINAL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY の対話 nshell に外部コマンド (sh -c printf) を打ち、その出力 tty-read-ready> 等が端末に出ることを確かめる。cat terminal.txt の出力と同じ類 |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同じテストが最後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
-| `steps[2].contains` | "A01_TERMINAL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身が出した印を待つ同期。同じテストが外部コマンドの出力を待って最後まで進め、成功を確かめる |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "A01_TERMINAL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 実 PTY の対話 REPL に外部コマンドの行を打ち、その出力が端末出力に届くことを確かめる (terminal.txt の外部 cat の出力と同じ種類の値) |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 同じテストが最後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
+| `steps[2].contains` | "A01_TERMINAL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが外部コマンドの出力を待ってから exit に進む |
 
 ### A02-tmux-pane-start
 
 `t/scenarios/A02/approx-tmux-pane-start.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "A02_PANE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY の対話 nshell に外部コマンド (sh -c printf) を打ち、その出力 tty-read-ready> 等が端末に出ることを確かめる。cat pane.txt の出力と同じ類 |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同じテストが最後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
-| `steps[2].contains` | "A02_PANE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身が出した印を待つ同期。同じテストが外部コマンドの出力を待って最後まで進め、成功を確かめる |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "A02_PANE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 実 PTY の対話 REPL に外部コマンドの行を打ち、その出力が端末出力に届くことを確かめる (pane.txt の外部 cat の出力と同じ種類の値) |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 同じテストが最後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
+| `steps[2].contains` | "A02_PANE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが外部コマンドの出力を待ってから exit に進む |
 
 ### A03-login-shell-command
 
-`t/scenarios/A03/login-shell-command.json` [削除]
+`t/scenarios/A03/login-shell-command.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "A03_LOGIN_OK\n" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | -c の printf を /bin/sh に委譲し stdout が完全一致することを確かめる。-l が -c の前でフラグとして読まれ -c の値が残ることは main-cli-action (`t/main-test.lisp:42` の -i -l -c) が確かめ、:login は `src/main.lisp:33` の定義以外で読まれない |
-| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | 同じテストで -c 委譲の stderr が "" であることを確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | 同じテストで -c 委譲の終了コード (37 と 0) がそのまま返ることを確かめる |
+シナリオの入口: argv `-l -c printf 'A03_LOGIN_OK\n'` で nshell main を起動 (-c は /bin/sh に委譲)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "A03_LOGIN_OK\n" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | -c の printf を /bin/sh に委譲し stdout の完全一致を確かめる。ただし argv に -l がなく、-l の後に -c を置いた argv を main に通すテストはない (-l の解析は `t/main-test.lisp:42` の unit だけ) |
+| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | 同じテストで -c 委譲の stderr "" を確かめる (-l なし) |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | 同じテストで -c 委譲の終了コード (37 と 0) を確かめる (-l なし) |
 
 ### A06-login-environment
 
@@ -46,13 +52,15 @@
 
 ### A07-quiet-login-command
 
-`t/scenarios/A07/quiet-login-command.json` [削除]
+`t/scenarios/A07/quiet-login-command.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | -c "" で stdout が "" になることを確かめる。-l の解析は main-cli-action (`t/main-test.lisp:42`) が確かめる |
-| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | -c "" で stderr が "" になることを確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | -c "" で終了コード 0 を確かめる |
+シナリオの入口: argv `-l -c true` で nshell main を起動 (-c は /bin/sh に委譲)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | -c "" の stdout "" を確かめる。ただし argv に -l がなく、-l -c true を main に通すテストはない (-l の解析は `t/main-test.lisp:42` の unit だけ) |
+| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | -c "" の stderr "" を確かめる (-l なし) |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | -c "" の終了コード 0 を確かめる (-l なし) |
 
 ### WP-R10-whitespace-keeps-repl-alive
 
@@ -66,12 +74,14 @@
 
 ### A08-ctrl-d-exits
 
-`t/scenarios/A08/ctrl-d-exits.json` [削除]
+`t/scenarios/A08/ctrl-d-exits.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "there are active jobs" | `t/unit/test-repl.lisp:350` it "ctrl-d-warns-once-before-stopping-with-active-jobs" | 監視中のジョブがある状態で quit イベントを処理し、1 回目に "exit: there are active jobs. Exit again to leave." を出すことを確かめる。Ctrl-D が :quit になることは `t/e2e/test-smoke-editing.lisp:132`、対話で打った背景ジョブが Running として登録されることは e2e-main-interactive-pty-job-control-lifecycle (`t/e2e/test-smoke.lisp:611`) が確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:473` it "e2e-main-interactive-pty-initial-ctrl-d-exits-zero" | 実 PTY で Ctrl-D を送り終了コード 0 を確かめる。警告の後の 2 回目の quit で +repl-exit+ を返し *running* が nil になることは `t/unit/test-repl.lisp:350` が確かめる |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "there are active jobs" | `t/unit/test-repl.lisp:350` it "ctrl-d-warns-once-before-stopping-with-active-jobs" | %process-quit-output-event を直接 2 回呼ぶ (ジョブ監視は手で作り、REPL ループ・キー入力・PTY を通らない) | いいえ | 1 回目の quit イベントで "exit: there are active jobs. Exit again to leave." を出すことを確かめる。背景ジョブを打ってから Ctrl-D を押す経路は通らない |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:473` it "e2e-main-interactive-pty-initial-ctrl-d-exits-zero" | 実 PTY で nshell main を対話起動し Ctrl-D (code-char 4) を 1 回書く (%assert-interactive-pty-exit) | はい | ジョブのない状態で Ctrl-D 1 回の 0 終了を確かめる。背景ジョブがある状態で Ctrl-D を 2 回押した後の 0 終了は確かめていない |
 
 ### A08-exit-warns-about-job
 
@@ -158,11 +168,13 @@
 
 `t/scenarios/B01/shell-caller-handoff.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "R04_CALLER_EDITOR\nR04_CALLER_SSH\nR04_CALLER_TRANSFER\nR04_CALLER_GIT\nR04_CALLER_MAKE\nR04_CALLER_AUTOMATION\n" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | -c のシェルスクリプト (printf と exit 37) を /bin/sh に委譲し、stdout が sh の出力と完全一致することを確かめる。for ループは /bin/sh 側の処理 |
-| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | -c 委譲の stderr が "" であることを確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | -c 委譲で 0 終了 (-c "" の場合) を確かめる |
+シナリオの入口: argv `-c TEXT` で nshell main を起動 (-c は /bin/sh に委譲)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "R04_CALLER_EDITOR\nR04_CALLER_SSH\nR04_CALLER_TRANSFER\nR04_CALLER_GIT\nR04_CALLER_MAKE\nR04_CALLER_AUTOMATION\n" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | argv -c の printf スクリプトを main から /bin/sh に委譲し、stdout が sh の出力と完全一致することを確かめる。for ループは /bin/sh がそのまま実行する |
+| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | 同じテストで -c 委譲の stderr "" を確かめる |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:55` it "e2e-main-shell-command-delegates-with-argv-and-login-config" | argv `-c TEXT` (-l なし。別ケースで -ilc) で main をサブプロセス起動 (%run-nshell-main) | はい | 同じテストの -c "" で終了コード 0 を確かめる |
 
 ### B02-approx-remote-shell-command-contract
 
@@ -223,11 +235,13 @@
 
 `t/scenarios/B03/approx-remote-copy-output-is-clean.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "B03_MACHINE_OUTPUT\n" | `t/e2e/test-smoke.lisp:427` it "e2e-main-adjacent-quoted-fragments-concatenate" | --command で printf "%s\n" を実行し、stdout が "ab\n" と完全一致することを確かめる |
-| `expected.stderr.equals` | "" | `t/e2e/test-smoke.lisp:427` it "e2e-main-adjacent-quoted-fragments-concatenate" | 同じテストで stderr が "" であることを確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:427` it "e2e-main-adjacent-quoted-fragments-concatenate" | 同じテストで終了コード 0 を確かめる |
+シナリオの入口: nshell --command TEXT (バッチ、command 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "B03_MACHINE_OUTPUT\n" | `t/e2e/test-smoke.lisp:427` it "e2e-main-adjacent-quoted-fragments-concatenate" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | --command で printf の書式の \n を解釈させ、stdout が "ab\n" と完全一致することを確かめる |
+| `expected.stderr.equals` | "" | `t/e2e/test-smoke.lisp:427` it "e2e-main-adjacent-quoted-fragments-concatenate" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | 同じテストで stderr "" を確かめる |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:427` it "e2e-main-adjacent-quoted-fragments-concatenate" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | 同じテストで終了コード 0 を確かめる |
 
 ### B06-approx-shell-c-command-contract
 
@@ -241,23 +255,27 @@
 
 ### B07-B08-interactive-callers
 
-`t/scenarios/B07/interactive-callers.json` [削除]
+`t/scenarios/B07/interactive-callers.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "R04_INTERACTIVE_CALLER_OK" | `t/scenarios/T06/copied-release-bundle-pty-smoke.json:44` expected.stream.contains[0] | 残す T06 が対話 nshell で環境変数を展開して出力し、stream に出ることを確かめる。-i が :interactive になることは main-cli-action (`t/main-test.lisp:42`)、:interactive-p t でも tty と同じ run-repl に入ることは main-invocation-dispatch (`t/main-test.lisp:67`) が確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で exit を書き終了コード 0 を確かめる |
-| `steps[2].contains` | "R04_INTERACTIVE_CALLER_OK" | `t/scenarios/T06/copied-release-bundle-pty-smoke.json:44` expected.stream.contains[0] | シナリオ自身が出した印を待つ同期。T06 の steps[2] が同じ形で待つ |
+シナリオの入口: 実 PTY の対話 REPL を引数 -i 付きで起動 (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "R04_INTERACTIVE_CALLER_OK" | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で nshell main を対話起動 (--no-config --no-history、-i なし) | いいえ | 実 PTY の対話 REPL に打った printf の出力が端末に届くことは %e2e-pty-await-ready (`t/e2e/test-smoke.lisp:243`) が確かめるが、-i を付けた起動と環境変数の展開は通らない。前の回の判定で引用した T06 は .lisp のテストではない |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で nshell main を対話起動 (--no-config --no-history、-i なし) | いいえ | exit を書き終了コード 0 を確かめる。-i 付きの起動ではない |
+| `steps[2].contains` | "R04_INTERACTIVE_CALLER_OK" | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で nshell main を対話起動 (--no-config --no-history、-i なし) | いいえ | シナリオ自身の印を待つ同期。-i なしの起動で printf の出力を待つ |
 
 ### B09-batch-command-uses-nshell-builtins
 
-`t/scenarios/B09/batch-command-uses-nshell-builtins.json` [削除]
+`t/scenarios/B09/batch-command-uses-nshell-builtins.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "R04_NSHELL_BUILTIN_GUARD\n" | `t/unit/test-builtins-core-string.lisp:4` it "string-builtin-covers-core-fish-style-subcommands" | string upper の出力が "HELLO\n" と一致することを確かめる。--command のビルトインの出力が stdout にそのまま出ることは e2e-main-status-variable-follows-last-command (`t/e2e/test-smoke.lisp:402`、ビルトイン printf で stdout が "1\n" と一致) が確かめる |
-| `expected.stderr.equals` | "" | `t/e2e/test-smoke.lisp:402` it "e2e-main-status-variable-follows-last-command" | --command のビルトイン実行で stderr が "" であることを確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:402` it "e2e-main-status-variable-follows-last-command" | --command のビルトイン実行で終了コード 0 を確かめる |
+シナリオの入口: nshell --command TEXT (バッチ、command 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "R04_NSHELL_BUILTIN_GUARD\n" | `t/unit/test-builtins-core-string.lisp:4` it "string-builtin-covers-core-fish-style-subcommands" | string ビルトインの関数を直接呼ぶ (main も --command も通らない) | いいえ | string upper の結果が "HELLO\n" と一致することを確かめる。--command で string upper を実行するテストはない |
+| `expected.stderr.equals` | "" | `t/e2e/test-smoke.lisp:402` it "e2e-main-status-variable-follows-last-command" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | --command のビルトイン (false, printf) の実行で stderr "" を確かめる。string upper ではない |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:402` it "e2e-main-status-variable-follows-last-command" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | --command のビルトイン実行で終了コード 0 を確かめる。string upper ではない |
 
 ### B09-command-stdio-and-status
 
@@ -309,27 +327,31 @@
 
 ### C01-batch-command
 
-`t/scenarios/C01/batch-command.json` [削除]
+`t/scenarios/C01/batch-command.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "SCENARIO_BATCH_COMMAND_OK" | `t/e2e/test-smoke-script.lisp:98` it "e2e-main-command-exposes-trailing-argv" | --command の "echo ...; echo ..." でビルトイン echo の出力が stdout に出ることを確かめる |
-| `expected.stdout.excludes[0]` | "SCENARIO_BATCH_OK" | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | bare-line の "echo redirected > ファイル" を実行し、出力が "" と一致する (リダイレクト先の文字列が stdout に出ない) ことを確かめる |
-| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:98` it "e2e-main-command-exposes-trailing-argv" | %assert-nshell-main-result が --command の stderr が "" であることを確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:98` it "e2e-main-command-exposes-trailing-argv" | --command の終了コード 0 を確かめる |
-| `expected.side_effects.files[0].path` | "result.txt" | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | リダイレクト先のファイルを読む。ファイルの指定は file の contains と一組 |
-| `expected.side_effects.files[0].exists` | true | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | read-test-file-line でファイルを読めること (存在) を確かめる |
-| `expected.side_effects.files[0].contains[0]` | "SCENARIO_BATCH_OK" | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | ファイルの中身が "redirected" であることを確かめる |
+シナリオの入口: nshell --command TEXT (バッチ、command 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "SCENARIO_BATCH_COMMAND_OK" | `t/e2e/test-smoke-script.lisp:98` it "e2e-main-command-exposes-trailing-argv" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | --command の "echo ...; echo ..." でビルトイン echo の出力が stdout に出ることを確かめる |
+| `expected.stdout.excludes[0]` | "SCENARIO_BATCH_OK" | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | source ビルトインの経路 (call-source-file) を直接呼ぶ (main も --command も通らない) | いいえ | source で読んだ "echo redirected > ファイル" の出力が "" であることを確かめる。--command ではない |
+| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:98` it "e2e-main-command-exposes-trailing-argv" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | %assert-nshell-main-result が --command の stderr "" を確かめる |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:98` it "e2e-main-command-exposes-trailing-argv" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | --command の終了コード 0 を確かめる |
+| `expected.side_effects.files[0].path` | "result.txt" | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | source ビルトインの経路 (call-source-file) を直接呼ぶ (main も --command も通らない) | いいえ | リダイレクト先のファイルを読む。--command ではない |
+| `expected.side_effects.files[0].exists` | true | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | source ビルトインの経路 (call-source-file) を直接呼ぶ (main も --command も通らない) | いいえ | read-test-file-line でファイルを読めること (存在) を確かめる。--command ではない |
+| `expected.side_effects.files[0].contains[0]` | "SCENARIO_BATCH_OK" | `t/unit/test-builtins-source-pipeline.lisp:33` it "source-pipeline-redirects-builtin-output" | source ビルトインの経路 (call-source-file) を直接呼ぶ (main も --command も通らない) | いいえ | ファイルの中身が "redirected" であることを確かめる。--command ではない |
 
 ### C01-batch-script
 
 `t/scenarios/C01/batch-script.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "SCENARIO_SCRIPT_OK" | `t/e2e/test-smoke-script.lisp:30` it "e2e-main-script-preserves-flag-like-argv" | スクリプトファイルの bare の "echo arg=$argv[1]" を実行し、stdout にその出力が出ることを確かめる |
-| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:30` it "e2e-main-script-preserves-flag-like-argv" | %assert-nshell-main-result がスクリプト実行の stderr が "" であることを確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:30` it "e2e-main-script-preserves-flag-like-argv" | スクリプト実行の終了コード 0 を確かめる |
+シナリオの入口: nshell FILE.nsh のスクリプトモード (バッチ、script 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "SCENARIO_SCRIPT_OK" | `t/e2e/test-smoke-script.lisp:30` it "e2e-main-script-preserves-flag-like-argv" | スクリプトファイルを argv に渡して main サブプロセスで実行 (%assert-nshell-main-result) | はい | スクリプトファイルの bare の "echo arg=$argv[1]" を実行し、stdout にその出力が出ることを確かめる |
+| `expected.stderr.equals` | "" | `t/e2e/test-smoke-script.lisp:30` it "e2e-main-script-preserves-flag-like-argv" | スクリプトファイルを argv に渡して main サブプロセスで実行 (%assert-nshell-main-result) | はい | %assert-nshell-main-result がスクリプト実行の stderr "" を確かめる |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:30` it "e2e-main-script-preserves-flag-like-argv" | スクリプトファイルを argv に渡して main サブプロセスで実行 (%assert-nshell-main-result) | はい | スクリプト実行の終了コード 0 を確かめる |
 
 ### C01-batch-stdin
 
@@ -343,14 +365,16 @@
 
 ### C01-pty-paste
 
-`t/scenarios/C01/pty-paste.json` [削除]
+`t/scenarios/C01/pty-paste.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "SCENARIO_PTY_PASTE_OK" | `t/scenarios/F08/approx-large-bracketed-paste.json:26` expected.stream.ordered_contains[0] | 残す F08 が実 PTY で bracketed paste した文字列をコマンドとして実行し、その出力 (8192) が stream に出ることを確かめる。貼り付けのバイト列が入力バッファになることは `t/e2e/test-smoke-input.lisp:130` が確かめる |
-| `expected.screen.contains[0]` | "SCENARIO_PTY_PASTE_OK" | `t/scenarios/F01/foreground-child-restores-terminal-output.json:29` expected.screen.contains[0] | 残す F01 が対話で実行したコマンドの出力が終了後の画面に残ることを確かめる (expected.screen.contains[0]) |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で exit を書き終了コード 0 を確かめる |
-| `steps[2].contains` | "SCENARIO_PTY_PASTE_OK" | `t/scenarios/F08/approx-large-bracketed-paste.json:26` expected.stream.ordered_contains[0] | シナリオ自身の印を待つ同期。F08 は貼り付けたコマンドの出力を待って最後まで進め、0 終了を確かめる |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "SCENARIO_PTY_PASTE_OK" | `t/e2e/test-smoke-input.lisp:130` it "e2e-bracketed-paste-normalizes-newlines-and-undos-once" | キー列を文字列から作り reducer (apply-key-events-to-input-state) に直接かける (PTY も REPL ループも実行も通らない) | いいえ | bracketed paste のバイト列が入力バッファになることだけを確かめる。貼り付けた行を実行して端末に出力が出ることは通らない。前の回の判定で引用した F08 は .lisp のテストではない |
+| `expected.screen.contains[0]` | "SCENARIO_PTY_PASTE_OK" | なし | なし (.lisp のテストに端末の画面を再現するものはない) | いいえ | 出力が終了後の画面に残ることは端末エミュレータで画面を組み立てないと確かめられない。前の回の判定で引用した F01 は .lisp のテストではない |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で nshell main を対話起動 (--no-config --no-history、-i なし) | はい | 実 PTY で exit を書き終了コード 0 を確かめる |
+| `steps[2].contains` | "SCENARIO_PTY_PASTE_OK" | `t/e2e/test-smoke-input.lisp:130` it "e2e-bracketed-paste-normalizes-newlines-and-undos-once" | キー列を文字列から作り reducer (apply-key-events-to-input-state) に直接かける (PTY も REPL ループも実行も通らない) | いいえ | シナリオ自身の印を待つ同期。reducer のテストは実行の出力を待たない |
 
 ### C02-quoted-unicode-arguments
 
@@ -411,23 +435,27 @@
 
 ### C04-missing-command-suggestion-and-status
 
-`t/scenarios/C04/missing-command-suggestion-and-status.json` [削除]
+`t/scenarios/C04/missing-command-suggestion-and-status.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "" | `t/unit/test-command-failure.lisp:271` it "batch diagnostics suggest known commands on stderr and preserve status 127 without spawning" | --command と同じ %run-batch-source-lines に "gti" を渡し、stdout が "" と一致することを確かめる |
-| `expected.stderr.contains[0]` | "command not found" | `t/unit/test-command-failure.lisp:271` it "batch diagnostics suggest known commands on stderr and preserve status 127 without spawning" | stderr に "nshell: gti: command not found" が 1 度だけ出ることを確かめる |
-| `expected.stderr.contains[1]` | "echo" | `t/unit/test-highlight.lisp:480` it "command-corrections-propose-builtins-one-edit-away" | 1 文字違いの "ehco" に対し候補にビルトイン "echo" を含むことを確かめる。候補を "nshell: did you mean: ..." として stderr に出すことは `t/unit/test-command-failure.lisp:271` が確かめる |
-| `expected.exit_code` | 127 | `t/unit/test-command-failure.lisp:271` it "batch diagnostics suggest known commands on stderr and preserve status 127 without spawning" | 終了コードと *last-exit-code* が 127 であることを確かめる |
+シナリオの入口: nshell --command TEXT (バッチ、command 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "" | `t/unit/test-command-failure.lisp:271` it "batch diagnostics suggest known commands on stderr and preserve status 127 without spawning" | %run-batch-source-lines を直接呼ぶ (main も --command の引数解析も通らない。spawn は差し替え) | いいえ | "gti" を渡し stdout "" を確かめる |
+| `expected.stderr.contains[0]` | "command not found" | `t/unit/test-command-failure.lisp:271` it "batch diagnostics suggest known commands on stderr and preserve status 127 without spawning" | %run-batch-source-lines を直接呼ぶ (main も --command の引数解析も通らない。spawn は差し替え) | いいえ | stderr に "nshell: gti: command not found" が 1 度だけ出ることを確かめる |
+| `expected.stderr.contains[1]` | "echo" | `t/unit/test-highlight.lisp:480` it "command-corrections-propose-builtins-one-edit-away" | %repl-command-corrections 相当の候補関数を直接呼ぶ | いいえ | "ehco" の候補にビルトイン "echo" を含むことを確かめる。"echp" ではなく、stderr への出力も通らない |
+| `expected.exit_code` | 127 | `t/unit/test-command-failure.lisp:271` it "batch diagnostics suggest known commands on stderr and preserve status 127 without spawning" | %run-batch-source-lines を直接呼ぶ (main も --command の引数解析も通らない。spawn は差し替え) | いいえ | 終了コードと *last-exit-code* が 127 であることを確かめる |
 
 ### C05-last-exit-status-is-visible
 
-`t/scenarios/C05/last-exit-status-is-visible.json` [削除]
+`t/scenarios/C05/last-exit-status-is-visible.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "C05_STATUS:1" | `t/e2e/test-smoke-script.lisp:366` it "e2e-main-eval-updates-last-exit-status" | --command で "eval 'false'; echo eval-status=$?" を実行し、bare-line の $? が直前の 1 になることを確かめる。"false; ..." の直後の状態が 1 になることは e2e-main-status-variable-follows-last-command (`t/e2e/test-smoke.lisp:402`) が $status で確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:366` it "e2e-main-eval-updates-last-exit-status" | 同じテストで終了コード 0 を確かめる |
+シナリオの入口: nshell --command TEXT (バッチ、command 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "C05_STATUS:1" | `t/e2e/test-smoke-script.lisp:366` it "e2e-main-eval-updates-last-exit-status" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | --command の "eval 'false'; echo eval-status=$?" で $? が 1 になることを確かめる。eval を挟まない "false; ... $?" と、引用した "$?" を printf に渡す形は通らない (`t/e2e/test-smoke.lisp:402` は $status) |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:366` it "e2e-main-eval-updates-last-exit-status" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | はい | 同じテストで終了コード 0 を確かめる |
 
 ### C06-builtin-reads-stdin
 
@@ -494,11 +522,13 @@
 
 `t/scenarios/C06/pipeline-streams-mixed-stages.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "C06_MIXED_STREAM\n" | `t/spec/probes.lisp:217` it "language-probe pipe-sexp v0.7.0 baseline" | スクリプトモードで (\| (echo hi) (tr a-z A-Z)) を実行し、stdout が "HI\n" と一致することを確かめる (`docs/design/conformance/language-probes-v0.7.0.json:349`)。ビルトインから外部に流す S 式パイプラインで同じ類 |
-| `expected.stderr.equals` | "" | `t/spec/probes.lisp:217` it "language-probe pipe-sexp v0.7.0 baseline" | 同じ probe で stderr が "" であることを確かめる |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe pipe-sexp v0.7.0 baseline" | 同じ probe で終了コード 0 を確かめる |
+シナリオの入口: nshell FILE.nsh のスクリプトモード (バッチ、script 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "C06_MIXED_STREAM\n" | `t/spec/probes.lisp:217` it "language-probe pipe-sexp v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | スクリプトモードで (\| (echo hi) (tr a-z A-Z)) を実行し、stdout が "HI\n" と一致することを確かめる (`docs/design/conformance/language-probes-v0.7.0.json` の pipe-sexp)。ビルトインから外部へ流す S 式パイプラインで、シナリオと同じ種類 |
+| `expected.stderr.equals` | "" | `t/spec/probes.lisp:217` it "language-probe pipe-sexp v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | 同じ probe で stderr "" を確かめる |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe pipe-sexp v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | 同じ probe で終了コード 0 を確かめる |
 
 ### C07-redirection-family
 
@@ -525,42 +555,50 @@
 
 ### C08-here-doc-and-here-string
 
-`t/scenarios/C08/here-doc-and-here-string.json` [削除]
+`t/scenarios/C08/here-doc-and-here-string.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "C08_HEREDOC" | `t/e2e/test-smoke-script.lisp:328` it "e2e-main-here-document-quoted-delimiter-keeps-body-literal" | --command で引用した区切り ("EOF") のヒアドキュメントを外部 cat に渡し、本文がそのまま stdout に出ることを確かめる。v0.8 は bare-line のヒアドキュメントを E_UNSUPPORTED_SYNTAX で拒否し (`t/spec/l7-rows.lisp:896` の bare-heredoc、担当 S3)、このシナリオの期待値は v0.8 で逆になる |
-| `expected.stdout.contains[1]` | "C08_HERESTRING" | `t/spec/probes.lisp:217` it "language-probe bare-herestring v0.7.0 baseline" | スクリプトモードで bare の cat <<< here を実行し、stdout が "here\n" と一致することを確かめる (`docs/design/conformance/language-probes-v0.7.0.json:549`) |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe bare-herestring v0.7.0 baseline" | 同じ probe で終了コード 0 を確かめる |
+シナリオの入口: nshell FILE.nsh のスクリプトモード (バッチ、script 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "C08_HEREDOC" | `t/e2e/test-smoke-script.lisp:328` it "e2e-main-here-document-quoted-delimiter-keeps-body-literal" | nshell --command TEXT を main サブプロセスで実行 (%run-nshell-main) | いいえ | --command で引用した区切りのヒアドキュメントを外部 cat に渡し、本文がそのまま stdout に出ることを確かめる。スクリプトモードではない。スクリプトモードの bare-heredoc probe は L7 の行 (`t/spec/l7-rows.lisp:896`) で v0.8 の E_UNSUPPORTED_SYNTAX を期待する it-fails で、v0.7.0 baseline のテストはない |
+| `expected.stdout.contains[1]` | "C08_HERESTRING" | `t/spec/probes.lisp:217` it "language-probe bare-herestring v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | スクリプトモードで bare の cat <<< here を実行し、stdout が "here\n" と一致することを確かめる |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe bare-herestring v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | 同じ probe で終了コード 0 を確かめる。ヒアドキュメントを含むスクリプト全体の終了コードではない |
 
 ### C09-background-command-returns
 
-`t/scenarios/C09/background-command-returns.json` [削除]
+`t/scenarios/C09/background-command-returns.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "C09_BACKGROUND_DONE" | `t/spec/probes.lisp:217` it "language-probe bare-background v0.7.0 baseline" | スクリプトモードで sleep 0 &、wait、echo bg-ok を実行し、stdout が "bg-ok\n" と一致することを確かめる (`docs/design/conformance/language-probes-v0.7.0.json:559`)。1 行の "sleep 0.1 &; wait" が背景 1 つと区切り 1 つに読まれることは `t/unit/test-sexp-scanner.lisp:15` が同じ文字列で確かめる |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe bare-background v0.7.0 baseline" | 同じ probe で終了コード 0 を確かめる |
+シナリオの入口: nshell FILE.nsh のスクリプトモード (バッチ、script 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "C09_BACKGROUND_DONE" | `t/spec/probes.lisp:217` it "language-probe bare-background v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | スクリプトモードで改行区切りの sleep 0 &、wait、echo bg-ok を実行し stdout "bg-ok\n" を確かめる。1 行の "sleep 0.1 &; wait; ..." はスクリプトモードで通らず、その読み方は scanner の unit (`t/unit/test-sexp-scanner.lisp:15`、scan-input を直接呼ぶ) だけが確かめる |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe bare-background v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | 同じ probe で終了コード 0 を確かめる (改行区切りの入力) |
 
 ### C10-short-circuit-followed-by-sequence
 
-`t/scenarios/C10/short-circuit-followed-by-sequence.json` [削除]
+`t/scenarios/C10/short-circuit-followed-by-sequence.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "next" | `t/unit/test-sexp-evaluator.lisp:1114` it "applies-command-failure-policy-at-sequence-item-boundaries" | "false && echo skipped; echo continued" を評価し、実行されたのが false と echo continued だけであることを確かめる (短絡の後の ; で次が動く) |
-| `expected.exit_code` | 0 | `t/unit/test-sexp-evaluator.lisp:1114` it "applies-command-failure-policy-at-sequence-item-boundaries" | 同じ評価の状態が 0 であることを確かめる |
+シナリオの入口: nshell FILE.nsh のスクリプトモード (バッチ、script 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "next" | `t/unit/test-sexp-evaluator.lisp:1114` it "applies-command-failure-policy-at-sequence-item-boundaries" | evaluate-reader-result-in-context を直接呼び、ビルトインを差し替える (main もスクリプトモードも通らない) | いいえ | "false && echo skipped; echo continued" を評価し、実行されたのが false と echo continued だけであることを確かめる。出力は差し替えたビルトインで出ない |
+| `expected.exit_code` | 0 | `t/unit/test-sexp-evaluator.lisp:1114` it "applies-command-failure-policy-at-sequence-item-boundaries" | evaluate-reader-result-in-context を直接呼び、ビルトインを差し替える (main もスクリプトモードも通らない) | いいえ | 同じ評価の状態が 0 であることを確かめる。プロセスの終了コードではない |
 
 ### C11-temporary-command-environment
 
-`t/scenarios/C11/temporary-command-environment.json` [削除]
+`t/scenarios/C11/temporary-command-environment.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "C11_VALUE=inside" | `t/spec/probes.lisp:217` it "language-probe bare-assign v0.7.0 baseline" | スクリプトモードで FOO=bar sh -c "echo foo=$FOO" を実行し、一時代入が子に届いて stdout が "foo=bar\n" になることを確かめる (`docs/design/conformance/language-probes-v0.7.0.json:509`) |
-| `expected.stdout.contains[1]` | "C11_AFTER:" | `t/unit/test-execute-pipeline.lisp:1610` it "prefix-assignment-exports-only-for-that-command" | FOO=bar echo x の実行後に FOO がセッションで未定義であることを確かめる。未定義の変数は空に展開され、"C11_AFTER:" だけが出る |
-| `expected.stdout.excludes[0]` | "C11_AFTER:inside" | `t/unit/test-execute-pipeline.lisp:1610` it "prefix-assignment-exports-only-for-that-command" | 実行後に env-defined-p が偽であることを確かめる。$C11_VALUE は空になり "C11_AFTER:inside" は出ない |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe bare-assign v0.7.0 baseline" | 同じ probe で終了コード 0 を確かめる |
+シナリオの入口: nshell --command TEXT (バッチ、command 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "C11_VALUE=inside" | `t/spec/probes.lisp:217` it "language-probe bare-assign v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | いいえ | スクリプトモードで FOO=bar sh -c "echo foo=$FOO" を実行し、一時代入が子に届くことを確かめる。--command ではない |
+| `expected.stdout.contains[1]` | "C11_AFTER:" | `t/unit/test-execute-pipeline.lisp:1610` it "prefix-assignment-exports-only-for-that-command" | execute-command-node-in-context を直接呼び、実行を差し替える (main も --command も通らない) | いいえ | FOO=bar echo x の後に FOO がセッションで未定義であることを確かめる。stdout は確かめない |
+| `expected.stdout.excludes[0]` | "C11_AFTER:inside" | `t/unit/test-execute-pipeline.lisp:1610` it "prefix-assignment-exports-only-for-that-command" | execute-command-node-in-context を直接呼び、実行を差し替える (main も --command も通らない) | いいえ | 実行後に env-defined-p が偽であることを確かめる。stdout は確かめない |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe bare-assign v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | いいえ | 同じ probe で終了コード 0 を確かめる。--command ではない |
 
 ### C12-approx-privileged-command-dispatch
 
@@ -694,10 +732,12 @@
 
 `t/scenarios/C16/approx-process-substitution-input.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.equals` | "C16_PROCESS_VALUE" | `t/spec/probes.lisp:217` it "language-probe procsub-bare v0.7.0 baseline" | スクリプトモードで bare の cat <(echo psb) を実行し、stdout が "psb\n" と一致することを確かめる (`docs/design/conformance/language-probes-v0.7.0.json:1101`) |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe procsub-bare v0.7.0 baseline" | 同じ probe で終了コード 0 を確かめる |
+シナリオの入口: nshell FILE.nsh のスクリプトモード (バッチ、script 種)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.equals` | "C16_PROCESS_VALUE" | `t/spec/probes.lisp:217` it "language-probe procsub-bare v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | スクリプトモードで bare の cat <(echo psb) を実行し、stdout が "psb\n" と行と末尾改行の形まで一致することを確かめる (同じ種類の値) |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe procsub-bare v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | 同じ probe で終了コード 0 を確かめる |
 
 ### C17-approx-large-binary-and-invalid-utf8-output
 
@@ -724,61 +764,71 @@
 
 `t/scenarios/D01/approx-editor-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D01_EDITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で前景の sh -c が tty に "tty-read-ready>" を出すことを確かめる (READY と同じ類) |
-| `expected.stream.contains[1]` | "D01_EDITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | tty に 1 行書き、sh がそれを読んで "tty-input:<accepted-input>" と "tty-stderr-ok" を出すことを確かめる (RETURNED と同じ類) |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 前景のコマンドが終わった後に exit を書き、終了コード 0 を確かめる |
-| `steps[2].contains` | "D01_EDITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待って先に進む |
-| `steps[5].contains` | "D01_EDITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" を待って先に進む |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D01_EDITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 実 PTY に打った前景の sh -c が tty に "tty-read-ready>" を書き、端末出力に届くことを確かめる (READY と同じ種類の値) |
+| `expected.stream.contains[1]` | "D01_EDITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | PTY に 1 行書くと sh の read が返り、"tty-input:<accepted-input>" と "tty-stderr-ok" が端末出力に届くことを確かめる (RETURNED と同じ種類の値) |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 前景コマンドの後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
+| `steps[2].contains` | "D01_EDITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待ってから入力を書く |
+| `steps[5].contains` | "D01_EDITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" まで読んでから exit を書く |
 
 ### D02-approx-pager-tty
 
 `t/scenarios/D02/approx-pager-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D02_PAGER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で前景の sh -c が tty に "tty-read-ready>" を出すことを確かめる (READY と同じ類) |
-| `expected.stream.contains[1]` | "D02_PAGER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | tty に 1 行書き、sh がそれを読んで "tty-input:<accepted-input>" と "tty-stderr-ok" を出すことを確かめる (RETURNED と同じ類) |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 前景のコマンドが終わった後に exit を書き、終了コード 0 を確かめる |
-| `steps[2].contains` | "D02_PAGER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待って先に進む |
-| `steps[5].contains` | "D02_PAGER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" を待って先に進む |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D02_PAGER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 実 PTY に打った前景の sh -c が tty に "tty-read-ready>" を書き、端末出力に届くことを確かめる (READY と同じ種類の値) |
+| `expected.stream.contains[1]` | "D02_PAGER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | PTY に 1 行書くと sh の read が返り、"tty-input:<accepted-input>" と "tty-stderr-ok" が端末出力に届くことを確かめる (RETURNED と同じ種類の値) |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 前景コマンドの後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
+| `steps[2].contains` | "D02_PAGER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待ってから入力を書く |
+| `steps[5].contains` | "D02_PAGER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" まで読んでから exit を書く |
 
 ### D03-approx-monitor-tty
 
 `t/scenarios/D03/approx-monitor-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D03_MONITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で前景の sh -c が tty に "tty-read-ready>" を出すことを確かめる (READY と同じ類) |
-| `expected.stream.contains[1]` | "D03_MONITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | tty に 1 行書き、sh がそれを読んで "tty-input:<accepted-input>" と "tty-stderr-ok" を出すことを確かめる (RETURNED と同じ類) |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 前景のコマンドが終わった後に exit を書き、終了コード 0 を確かめる |
-| `steps[2].contains` | "D03_MONITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待って先に進む |
-| `steps[5].contains` | "D03_MONITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" を待って先に進む |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D03_MONITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 実 PTY に打った前景の sh -c が tty に "tty-read-ready>" を書き、端末出力に届くことを確かめる (READY と同じ種類の値) |
+| `expected.stream.contains[1]` | "D03_MONITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | PTY に 1 行書くと sh の read が返り、"tty-input:<accepted-input>" と "tty-stderr-ok" が端末出力に届くことを確かめる (RETURNED と同じ種類の値) |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 前景コマンドの後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
+| `steps[2].contains` | "D03_MONITOR_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待ってから入力を書く |
+| `steps[5].contains` | "D03_MONITOR_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" まで読んでから exit を書く |
 
 ### D04-approx-remote-tty
 
 `t/scenarios/D04/approx-remote-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D04_REMOTE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で前景の sh -c が tty に "tty-read-ready>" を出すことを確かめる (READY と同じ類) |
-| `expected.stream.contains[1]` | "D04_REMOTE_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | tty に 1 行書き、sh がそれを読んで "tty-input:<accepted-input>" と "tty-stderr-ok" を出すことを確かめる (RETURNED と同じ類) |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 前景のコマンドが終わった後に exit を書き、終了コード 0 を確かめる |
-| `steps[2].contains` | "D04_REMOTE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待って先に進む |
-| `steps[5].contains` | "D04_REMOTE_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" を待って先に進む |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D04_REMOTE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 実 PTY に打った前景の sh -c が tty に "tty-read-ready>" を書き、端末出力に届くことを確かめる (READY と同じ種類の値) |
+| `expected.stream.contains[1]` | "D04_REMOTE_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | PTY に 1 行書くと sh の read が返り、"tty-input:<accepted-input>" と "tty-stderr-ok" が端末出力に届くことを確かめる (RETURNED と同じ種類の値) |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 前景コマンドの後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
+| `steps[2].contains` | "D04_REMOTE_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待ってから入力を書く |
+| `steps[5].contains` | "D04_REMOTE_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" まで読んでから exit を書く |
 
 ### D05-approx-fzf-tty
 
 `t/scenarios/D05/approx-fzf-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D05_FZF_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D05_FZF_READY に当たる: 前景の sh -c が tty-read-ready> を出してから tty を read するコマンドを実 PTY で打ち、tty-read-ready> が届くことを expect している。 |
-| `expected.stream.contains[1]` | "D05_FZF_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D05_FZF_RETURNED に当たる: PTY に accepted-input を書くと read が返り、その後の出力 tty-input:<accepted-input> が届くことを expect している (selected-item の代わり)。 |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | exit を打った後に %assert-pty-child-exit (`t/e2e/test-smoke.lisp:266`) で子の終了コード 0 を expect している。 |
-| `steps[2].contains` | "D05_FZF_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: tty-read-ready> を待ってから入力を書く同じ手順で、その出力を expect している。 |
-| `steps[5].contains` | "D05_FZF_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: read 後の tty-input:<accepted-input> と tty-stderr-ok まで読み、届くことを expect している。 |
+シナリオの入口: 実 PTY の対話 REPL (キー入力 → 行エディタ → 送信 → 実行 → 端末への出力、exit/Ctrl-D で終了)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D05_FZF_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 実 PTY に打った前景の sh -c が tty に "tty-read-ready>" を書き、端末出力に届くことを確かめる (READY と同じ種類の値) |
+| `expected.stream.contains[1]` | "D05_FZF_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | PTY に 1 行書くと sh の read が返り、"tty-input:<accepted-input>" と "tty-stderr-ok" が端末出力に届くことを確かめる (RETURNED と同じ種類の値) |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | 前景コマンドの後に exit を書き、%assert-pty-child-exit で終了コード 0 を確かめる |
+| `steps[2].contains` | "D05_FZF_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-read-ready>" を待ってから入力を書く |
+| `steps[5].contains` | "D05_FZF_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY で nshell main を対話起動し、行を PTY に書いて出力を読む (%call-with-job-pty → %e2e-pty-spawn) | はい | シナリオ自身の印を待つ同期。同じテストが "tty-stderr-ok" まで読んでから exit を書く |
 
 ### D06-approx-editor-child-tty
 
@@ -797,48 +847,56 @@
 
 `t/scenarios/D07/approx-password-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D07_PASSWORD_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D07_PASSWORD_READY に当たる: 前景の sh -c が tty-read-ready> を出してから tty を read するコマンドを実 PTY で打ち、tty-read-ready> が届くことを expect している。 |
-| `expected.stream.contains[1]` | "D07_PASSWORD_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D07_PASSWORD_RETURNED に当たる: PTY に accepted-input を書くと read が返り、その後の出力 tty-input:<accepted-input> が届くことを expect している (test-password の代わり)。 |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | exit を打った後に %assert-pty-child-exit (`t/e2e/test-smoke.lisp:266`) で子の終了コード 0 を expect している。 |
-| `steps[2].contains` | "D07_PASSWORD_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: tty-read-ready> を待ってから入力を書く同じ手順で、その出力を expect している。 |
-| `steps[5].contains` | "D07_PASSWORD_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: read 後の tty-input:<accepted-input> と tty-stderr-ok まで読み、届くことを expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D07_PASSWORD_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 前景の sh が tty-read-ready> を出して tty を read するコマンドを PTY に打ち、その出力を確かめている (D07_PASSWORD_READY の代わりのマーカー)。 |
+| `expected.stream.contains[1]` | "D07_PASSWORD_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | PTY に accepted-input と改行を書くと read が返り、その後の tty-input:<accepted-input> が届くことを確かめている (D07_PASSWORD_RETURNED の代わり)。 |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | exit を打った後に %assert-pty-child-exit (`t/e2e/test-smoke.lisp:266`) で子の終了コード 0 を確かめている。 |
+| `steps[2].contains` | "D07_PASSWORD_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | tty-read-ready> を待ってから入力を書く同じ同期手順で、その出力を確かめている。 |
+| `steps[5].contains` | "D07_PASSWORD_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | read の後の tty-input:<…> と tty-stderr-ok まで読み、届くことを確かめている。 |
 
 ### D08-approx-repl-tty
 
 `t/scenarios/D08/approx-repl-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D08_REPL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D08_REPL_READY に当たる: 前景の sh -c が tty-read-ready> を出してから tty を read するコマンドを実 PTY で打ち、tty-read-ready> が届くことを expect している。 |
-| `expected.stream.contains[1]` | "D08_REPL_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D08_REPL_RETURNED に当たる: PTY に accepted-input を書くと read が返り、その後の出力 tty-input:<accepted-input> が届くことを expect している (1 + 1 の代わり)。 |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | exit を打った後に %assert-pty-child-exit (`t/e2e/test-smoke.lisp:266`) で子の終了コード 0 を expect している。 |
-| `steps[2].contains` | "D08_REPL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: tty-read-ready> を待ってから入力を書く同じ手順で、その出力を expect している。 |
-| `steps[5].contains` | "D08_REPL_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: read 後の tty-input:<accepted-input> と tty-stderr-ok まで読み、届くことを expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D08_REPL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 前景の sh が tty-read-ready> を出して tty を read するコマンドを PTY に打ち、その出力を確かめている (D08_REPL_READY の代わりのマーカー)。 |
+| `expected.stream.contains[1]` | "D08_REPL_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | PTY に accepted-input と改行を書くと read が返り、その後の tty-input:<accepted-input> が届くことを確かめている (D08_REPL_RETURNED の代わり)。 |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | exit を打った後に %assert-pty-child-exit (`t/e2e/test-smoke.lisp:266`) で子の終了コード 0 を確かめている。 |
+| `steps[2].contains` | "D08_REPL_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | tty-read-ready> を待ってから入力を書く同じ同期手順で、その出力を確かめている。 |
+| `steps[5].contains` | "D08_REPL_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | read の後の tty-input:<…> と tty-stderr-ok まで読み、届くことを確かめている。 |
 
 ### D10-approx-container-tty
 
 `t/scenarios/D10/approx-container-tty.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D10_CONTAINER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D10_CONTAINER_READY に当たる: 前景の sh -c が tty-read-ready> を出してから tty を read するコマンドを実 PTY で打ち、tty-read-ready> が届くことを expect している。 |
-| `expected.stream.contains[1]` | "D10_CONTAINER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | D10_CONTAINER_RETURNED に当たる: PTY に accepted-input を書くと read が返り、その後の出力 tty-input:<accepted-input> が届くことを expect している (container-command の代わり)。 |
-| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | exit を打った後に %assert-pty-child-exit (`t/e2e/test-smoke.lisp:266`) で子の終了コード 0 を expect している。 |
-| `steps[2].contains` | "D10_CONTAINER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: tty-read-ready> を待ってから入力を書く同じ手順で、その出力を expect している。 |
-| `steps[5].contains` | "D10_CONTAINER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 同期待ち: read 後の tty-input:<accepted-input> と tty-stderr-ok まで読み、届くことを expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D10_CONTAINER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 前景の sh が tty-read-ready> を出して tty を read するコマンドを PTY に打ち、その出力を確かめている (D10_CONTAINER_READY の代わりのマーカー)。 |
+| `expected.stream.contains[1]` | "D10_CONTAINER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | PTY に accepted-input と改行を書くと read が返り、その後の tty-input:<accepted-input> が届くことを確かめている (D10_CONTAINER_RETURNED の代わり)。 |
+| `expected.exit_code` | 0 | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | exit を打った後に %assert-pty-child-exit (`t/e2e/test-smoke.lisp:266`) で子の終了コード 0 を確かめている。 |
+| `steps[2].contains` | "D10_CONTAINER_READY" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | tty-read-ready> を待ってから入力を書く同じ同期手順で、その出力を確かめている。 |
+| `steps[5].contains` | "D10_CONTAINER_RETURNED" | `t/e2e/test-job-control.lisp:149` it "e2e-external-command-tty-input-and-live-output" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | read の後の tty-input:<…> と tty-stderr-ok まで読み、届くことを確かめている。 |
 
 ### D12-ctrl-c-stops-foreground-child
 
-`t/scenarios/D12/ctrl-c-stops-foreground-child.json` [削除]
+`t/scenarios/D12/ctrl-c-stops-foreground-child.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "D12_CHILD_STOPPED" | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | 前景の sh -c '...; exec sleep 10' に Ctrl-C (0x03) を書いた後、次の行 printf 'after-ctrl-c:<%s>' $status が実行されて after-ctrl-c:<130> が出ることを expect している (シナリオでは次の行が cat input.txt)。 |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | exit の後に Goodbye! と %assert-pty-child-exit による終了コード 0 を expect している。 |
-| `steps[2].contains` | "D12_CHILD_STARTED" | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | 同期待ち: 前景コマンドが出す ctrl-c-foreground-ready を待ってから Ctrl-C を送る同じ同期を expect している。 |
-| `steps[6].contains` | "D12_CHILD_STOPPED" | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | Ctrl-C の後に打った次のコマンドの出力 after-ctrl-c:<130> が届くことを expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "D12_CHILD_STOPPED" | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | Ctrl-C の後に打った printf の after-ctrl-c:<130> を確かめており、次のコマンドが動くことは確かめるが、前景は exec sleep の 1 プロセスで、cat input.txt の出力 D12_CHILD_STOPPED は確かめていない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | exit 後に %assert-pty-child-exit で終了コード 0 を確かめている。 |
+| `steps[2].contains` | "D12_CHILD_STARTED" | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | ctrl-c-foreground-ready を待っているが、sh が子の sleep を待つ (exec しない) 形ではない。 |
+| `steps[6].contains` | "D12_CHILD_STOPPED" | `t/e2e/test-smoke.lisp:532` it "e2e-main-interactive-pty-ctrl-c-recovers-foreground-command" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | Ctrl-C 後の次のコマンドの出力を待つ点は同じだが、値と前景プロセスの形が違う。 |
 
 ### E02-bg-resumes-stopped-descendant
 
@@ -1043,19 +1101,21 @@
 
 ### E06-completion-notification-and-removal
 
-`t/scenarios/E06/completion-notification-and-removal.json` [削除]
+`t/scenarios/E06/completion-notification-and-removal.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "Done" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 実 PTY で /bin/sleep 2 & の完了後に Done /bin/sleep 2 がちょうど 1 回出ることを expect している。 |
-| `expected.stream.contains[1]` | "E06_WORK_DONE_6" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 同期の印: 前景の /bin/sleep 3; jobs; printf E2E_BACKGROUND_5 が終わって印が出ることを expect している (シナリオの sleep 2; echo と同じ形)。 |
-| `expected.stream.contains[2]` | "E06_AFTER_DONE_7" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | Done 通知の後に打った jobs; printf E2E_JOBS_CAPTURED_7 が実行されて印が出ることを expect している。 |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | exit の後に Goodbye! と %assert-pty-child-exit による 0 を expect している。 |
-| `expected.side_effects.files[0].path` | "completed-jobs.txt" | `t/unit/test-repl-background.lisp:114` it "reap-background-jobs-notifies-and-retains-completed-status" | 通知後の jobs ビルトインの出力に当たる。回収後に call-builtin context "jobs" の出力を文字列として受け取り、等しさで expect している。 |
-| `expected.side_effects.files[0].exists` | true | `t/unit/test-repl-background.lisp:114` it "reap-background-jobs-notifies-and-retains-completed-status" | jobs ビルトインが通知後も終了コード 0 で出力を返すことを expect している (ファイルはリダイレクトが作る)。 |
-| `expected.side_effects.files[0].equals` | "" | `t/unit/test-repl-background.lisp:114` it "reap-background-jobs-notifies-and-retains-completed-status" | 完了ジョブを回収した後、(jobs monitor) が生きているジョブ 1 件だけを返し、jobs の出力が "[2] Created sleep\n" と等しいことを expect している。完了ジョブの行がないことを等しさで含意する。SM611 も実 PTY で通知後の jobs に Done/Running /bin/sleep 2 がないことを expect している。 |
-| `steps[4].contains` | "E06_WORK_DONE_6" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 同期待ち: 前景コマンドの完了を印で待つ同じ同期を expect している。 |
-| `steps[7].contains` | "E06_AFTER_DONE_7" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 通知後に打った jobs と printf の印 E2E_JOBS_CAPTURED_7 が届くことを expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "Done" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | /bin/sleep 2 & の完了通知 Done /bin/sleep 2 がちょうど 1 回出ることを確かめている。 |
+| `expected.stream.contains[1]` | "E06_WORK_DONE_6" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 前景の /bin/sleep 3; jobs; printf E2E_BACKGROUND_5 のマーカーを待つ (E06_WORK_DONE_6 の代わり)。 |
+| `expected.stream.contains[2]` | "E06_AFTER_DONE_7" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | jobs; printf E2E_JOBS_CAPTURED_7 のマーカーを待つ (E06_AFTER_DONE_7 の代わり)。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | exit 後に %assert-pty-child-exit で終了コード 0 を確かめている。 |
+| `expected.side_effects.files[0].path` | "completed-jobs.txt" | `t/unit/test-repl-background.lisp:114` it "reap-background-jobs-notifies-and-retains-completed-status" | reap-background-jobs をスタブしたプロセス状態で直接呼ぶ (PTY・jobs 実行なし) | いいえ | reap-background-jobs を 2 回直接呼び、2 回目の通知が空であることを確かめるだけで、jobs > completed-jobs.txt のファイルは作らない。 |
+| `expected.side_effects.files[0].exists` | true | `t/unit/test-repl-background.lisp:114` it "reap-background-jobs-notifies-and-retains-completed-status" | reap-background-jobs をスタブしたプロセス状態で直接呼ぶ (PTY・jobs 実行なし) | いいえ | ファイルの存在は確かめていない。 |
+| `expected.side_effects.files[0].equals` | "" | `t/unit/test-repl-background.lisp:114` it "reap-background-jobs-notifies-and-retains-completed-status" | reap-background-jobs をスタブしたプロセス状態で直接呼ぶ (PTY・jobs 実行なし) | いいえ | 完了ジョブを回収した後に jobs をファイルへリダイレクトした内容が空であることは確かめていない (e2e 側も jobs の出力に Done/Running が含まれないことだけを見る)。 |
+| `steps[4].contains` | "E06_WORK_DONE_6" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 前景コマンドのマーカーを待つ同じ同期手順 (値は違う)。 |
+| `steps[7].contains` | "E06_AFTER_DONE_7" | `t/e2e/test-smoke.lisp:611` it "e2e-main-interactive-pty-job-control-lifecycle" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | jobs の後のマーカーを待つ同じ同期手順 (値は違う)。 |
 
 ### E07-pipeline-is-one-stopped-job
 
@@ -1108,16 +1168,18 @@
 
 `t/scenarios/F01/approx-cooked-mode-after-crash.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "F01_COOKED_READY" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:35` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[0] | 残す D11 が同じ crash-terminal.sh と cat after-crash.txt の後に D11_COOKED_READY が出ることを assert している (マーカー名だけが違う)。 |
-| `expected.stream.contains[1]` | "F01_CANON_OK" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:36` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[1] | 残す D11 が同じ stty -a の検査で icanon が有効な印 D11_CANON_OK を assert している。 |
-| `expected.stream.contains[2]` | "F01_ISIG_OK" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:37` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[2] | 残す D11 が同じ検査で isig が有効な印 D11_ISIG_OK を assert している。 |
-| `expected.stream.contains[3]` | "F01_ECHO_OK" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:38` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[3] | 残す D11 が同じ検査で echo が有効な印 D11_ECHO_OK を assert している。 |
-| `expected.stream.contains[4]` | "F01_CHECK_DONE" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:39` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[4] | 残す D11 が検査コマンドの最後の印 D11_CHECK_DONE を assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/D11/approx-cooked-mode-after-crash.json:42` [残す] の "D11-approx-cooked-mode-after-crash" expected.exit_code | 残す D11 が同じ手順の後の終了コード 0 を assert している。 |
-| `steps[4].contains` | "F01_COOKED_READY" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:63` [残す] の "D11-approx-cooked-mode-after-crash" steps[4].contains | 残す D11 が同じ位置で D11_COOKED_READY を待っている。 |
-| `steps[7].contains` | "F01_CHECK_DONE" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:81` [残す] の "D11-approx-cooked-mode-after-crash" steps[8].contains | 残す D11 が検査コマンドの実行後に D11_CHECK_DONE を待っている (D11 は間に wait_input が入るので番号が 1 つずれる)。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "F01_COOKED_READY" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:35` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[0] | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 は同じ crash-terminal.sh と cat after-crash.txt の手順で D11_COOKED_READY を stream に求める。 |
+| `expected.stream.contains[1]` | "F01_CANON_OK" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:36` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[1] | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 は同じ stty -a \| grep icanon の検査で D11_CANON_OK を求める。 |
+| `expected.stream.contains[2]` | "F01_ISIG_OK" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:37` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[2] | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 は同じ isig の検査で D11_ISIG_OK を求める。 |
+| `expected.stream.contains[3]` | "F01_ECHO_OK" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:38` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[3] | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 は同じ echo の検査で D11_ECHO_OK を求める。 |
+| `expected.stream.contains[4]` | "F01_CHECK_DONE" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:39` [残す] の "D11-approx-cooked-mode-after-crash" expected.stream.contains[4] | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 は同じ検査の終わりの D11_CHECK_DONE を求める。 |
+| `expected.exit_code` | 0 | `t/scenarios/D11/approx-cooked-mode-after-crash.json:42` [残す] の "D11-approx-cooked-mode-after-crash" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 も終了コード 0 を求める。 |
+| `steps[4].contains` | "F01_COOKED_READY" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:63` [残す] の "D11-approx-cooked-mode-after-crash" steps[4].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 は同じ位置で D11_COOKED_READY を待つ。 |
+| `steps[7].contains` | "F01_CHECK_DONE" | `t/scenarios/D11/approx-cooked-mode-after-crash.json:81` [残す] の "D11-approx-cooked-mode-after-crash" steps[8].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | D11 は wait_input を 1 つ挟むので steps[8] で D11_CHECK_DONE を待つ。 |
 
 ### F10-unicode-grapheme-cursor-edit
 
@@ -1176,24 +1238,28 @@
 
 ### G01-approx-emacs-transpose
 
-`t/scenarios/G01/approx-emacs-transpose.json` [削除]
+`t/scenarios/G01/approx-emacs-transpose.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "ba" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 行末 (cursor 4) の "abcd" に ctrl-t を当てると最後の 2 文字が入れ替わって "abdc" になることを expect している (シナリオは echo ab の行末で ba)。ctrl-t は既定で transpose-chars (`t/unit/test-builtin-bind.lisp:113`)、0x14 のデコードから実行行の解析までは `t/e2e/test-smoke-input.lisp:85` が確かめる。 |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で起動した対話セッションが exit で終了コード 0 になることを expect している。 |
-| `steps[3].contains` | "ba" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 変換後の出力を待つ同期。行末の ctrl-t の結果を同じテストが expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "ba" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | buffer "abcd" で reduce-once :ctrl-t を呼び "abdc" になることだけを確かめ、実行結果の出力 ba は見ていない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 実 PTY で exit を打ち終了コード 0 を確かめているが、C-t は打っていない。 |
+| `steps[3].contains` | "ba" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | 出力を待つ手順はない。 |
 
 ### G01-approx-emacs-word-delete
 
-`t/scenarios/G01/approx-emacs-word-delete.json` [削除]
+`t/scenarios/G01/approx-emacs-word-delete.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.side_effects.files[0].path` | "created" | `t/unit/test-input-state-kill-yank.lisp:162` it "input-state-alt-d-kills-next-word" | 単語の途中 ("echo hello world" の cursor 7) で alt-d を当てると単語の残りだけが消えて "echo he world" になることを expect している。シナリオは M-b (`t/unit/test-input-state-navigation.lisp:93`) で単語先頭へ戻ってから M-d で discarded を消し、created を打つ。 |
-| `expected.side_effects.files[0].exists` | true | `t/unit/test-input-state-kill-yank.lisp:162` it "input-state-alt-d-kills-next-word" | 上と同じ。M-d が単語の終わりまでを消し後ろを残すことを expect しているので、touch created が実行されてファイルができる。ESC b と ESC d のデコードは `t/integration/test-terminal-stream.lisp:344` が確かめる。 |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で起動した対話セッションが exit で終了コード 0 になることを expect している。 |
-| `steps[5].contains` | "G01_2" | `t/unit/test-input-state-kill-yank.lisp:162` it "input-state-alt-d-kills-next-word" | シナリオ自身の同期の印 G01_2。編集後の行の内容を同じテストが expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.side_effects.files[0].path` | "created" | `t/unit/test-input-state-kill-yank.lisp:162` it "input-state-alt-d-kills-next-word" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | buffer "echo   hello world" で reduce-once :alt-d を呼びバッファを確かめるだけで、touch の実行もファイル created も見ていない。 |
+| `expected.side_effects.files[0].exists` | true | `t/unit/test-input-state-kill-yank.lisp:162` it "input-state-alt-d-kills-next-word" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | ファイルの存在は確かめていない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 実 PTY で exit を打ち終了コード 0 を確かめているが、M-b / M-d は打っていない。 |
+| `steps[5].contains` | "G01_2" | `t/unit/test-input-state-kill-yank.lisp:162` it "input-state-alt-d-kills-next-word" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | G01_2 の出力を待つ手順はない。 |
 
 ### G01-case-conversion
 
@@ -1211,23 +1277,27 @@
 
 ### G01-char-transpose
 
-`t/scenarios/G01/char-transpose.json` [削除]
+`t/scenarios/G01/char-transpose.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G01_CHAR_TRANSPOSE_OK" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 行末の "abcd" に ctrl-t を当てると "abdc" になる (最後の 2 文字を入れ替える) ことを expect している (シナリオは sh checker.sh ba の行末で ab)。 |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で起動した対話セッションが exit で終了コード 0 になることを expect している。 |
-| `steps[3].contains` | "G01_CHAR_TRANSPOSE_OK" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 変換後の出力を待つ同期。行末の ctrl-t の結果を同じテストが expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G01_CHAR_TRANSPOSE_OK" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | reduce-once :ctrl-t のバッファだけを確かめ、checker.sh の実行結果は見ていない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 実 PTY で exit を打ち終了コード 0 を確かめているが、C-t は打っていない。 |
+| `steps[3].contains` | "G01_CHAR_TRANSPOSE_OK" | `t/unit/test-input-state-commands.lisp:259` it "input-state-ctrl-t-at-eol-transposes-last-two-chars" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | 出力を待つ手順はない。 |
 
 ### G01-word-forward-motion
 
-`t/scenarios/G01/word-forward-motion.json` [削除]
+`t/scenarios/G01/word-forward-motion.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G01_WORD_FORWARD_OK" | `t/unit/test-input-state-navigation.lisp:93` it "input-state-meta-b-and-f-move-by-word" | "git checkout main" の行末から alt-b で単語先頭 13 へ、alt-f で単語末 17 へ動くことを expect している。続く C-k と入力による行末の置き換えは `t/e2e/test-smoke-input.lisp:180` が "echo hello shell" で expect している。 |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY で起動した対話セッションが exit で終了コード 0 になることを expect している。 |
-| `steps[7].contains` | "G01_COMMAND_FINISHED" | `t/e2e/test-smoke-input.lisp:180` it "e2e-ctrl-k-replaces-line-suffix" | checker.sh が必ず出す同期の印。カーソル位置から ctrl-k で行末を消して打ち直した行が "echo hello shell" と解析されることを expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G01_WORD_FORWARD_OK" | `t/unit/test-input-state-navigation.lisp:93` it "input-state-meta-b-and-f-move-by-word" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | reduce-once :alt-b / :alt-f のカーソル位置だけを確かめ、C-k と追記の後の実行結果は見ていない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:439` it "e2e-main-interactive-pty-smoke" | 実 PTY 上で起動した対話 nshell (%e2e-pty-spawn、キーのバイトを PTY に書いて出力を読む) | はい | 実 PTY で exit を打ち終了コード 0 を確かめているが、M-b / M-f / C-k は打っていない。 |
+| `steps[7].contains` | "G01_COMMAND_FINISHED" | `t/e2e/test-smoke-input.lisp:180` it "e2e-ctrl-k-replaces-line-suffix" | 文字列からキーを復号して reducer に適用し、行を解析するだけ (REPL ループ・実行なし) | いいえ | C-b と C-k の復号と reducer の後の行を解析するだけで、実行して G01_COMMAND_FINISHED を出すことはない。 |
 
 ### G01-word-motion-deletion
 
@@ -1252,49 +1322,57 @@
 
 ### G02-approx-vi-mode-editing
 
-`t/scenarios/G02/approx-vi-mode-editing.json` [削除]
+`t/scenarios/G02/approx-vi-mode-editing.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G02_2" | `t/unit/test-input-state-vi.lisp:41` it "vi-i-returns-to-insert-mode" | command モードの "abc" で A を当てると insert モードで cursor 3 (行末) になることを expect している。Escape で command モードへ移ることは `t/unit/test-input-state-vi.lisp:7` が確かめ、NSHELL_VI_MODE=1 で vi が有効になることは残す G02-insert-command-cursor-shape が assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残す G02-insert-command-cursor-shape が NSHELL_VI_MODE=1 のセッションの終了コード 0 を assert している。 |
-| `steps[5].contains` | "G02_2" | `t/unit/test-input-state-vi.lisp:41` it "vi-i-returns-to-insert-mode" | 出力を待つ同期。A で行末から insert に入ることを同じテストが expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)、NSHELL_VI_MODE=1 の vi モード
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G02_2" | `t/unit/test-input-state-vi.lisp:41` it "vi-i-returns-to-insert-mode" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | vi command 状態の input-state に reduce-once :char #\A を呼び insert と cursor 3 を確かめるだけで、実行結果 G02_2 は見ていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も NSHELL_VI_MODE=1 の実 PTY で終了コード 0 を求める。 |
+| `steps[5].contains` | "G02_2" | `t/unit/test-input-state-vi.lisp:41` it "vi-i-returns-to-insert-mode" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | 出力を待つ手順はない。 |
 
 ### G02-delete-a-word
 
-`t/scenarios/G02/delete-a-word.json` [削除]
+`t/scenarios/G02/delete-a-word.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G02_A_WORD_OBJECT_OK" | `t/unit/test-input-state-vi.lisp:504` it "applies inner and around word and paired text objects" | command モードの "one two" の cursor 1 で d a w を当てると "two" (単語と後ろの空白を消す) になることを expect している。0 は `t/unit/test-input-state-vi.lisp:29`、w による単語移動は :70 が確かめる。 |
-| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残す G02-insert-command-cursor-shape が NSHELL_VI_MODE=1 のセッションの終了コード 0 を assert している。 |
-| `steps[2].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残す G02-insert-command-cursor-shape が、文字を打った後の Escape で \e[2 q が出ることを同じ位置の待ちで assert している。 |
-| `steps[10].contains` | "G02_COMMAND_FINISHED" | `t/scenarios/G02/insert-command-cursor-shape.json:34` [残す] の "G02-insert-command-cursor-shape" steps[9].contains | checker.sh が必ず出す同期の印。残す G02-insert-command-cursor-shape が、vi で編集した行を Enter で実行して出力が届くことを assert している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)、NSHELL_VI_MODE=1 の vi モード
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G02_A_WORD_OBJECT_OK" | `t/unit/test-input-state-vi.lisp:504` it "applies inner and around word and paired text objects" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | buffer "one two" に d a w を reduce-once で与えてバッファを確かめるだけで、0 w w の移動も実行結果 G02_A_WORD_OBJECT_OK も見ていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も同じ入口で終了コード 0 を求める。 |
+| `steps[2].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も Escape の後に ESC[2 q を待つ。 |
+| `steps[10].contains` | "G02_COMMAND_FINISHED" | `t/scenarios/G02/insert-command-cursor-shape.json:34` [残す] の "G02-insert-command-cursor-shape" steps[9].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も実行後のマーカーを待つ (値は違う)。 |
 
 ### G02-delete-inner-word
 
-`t/scenarios/G02/delete-inner-word.json` [削除]
+`t/scenarios/G02/delete-inner-word.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G02_INNER_WORD_OBJECT_OK" | `t/unit/test-input-state-vi.lisp:504` it "applies inner and around word and paired text objects" | command モードの "one two" の cursor 1 で d i w を当てると " two" (単語だけを消す) になることを expect している。0 は `t/unit/test-input-state-vi.lisp:29`、w による単語移動は :70 が確かめる。 |
-| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残す G02-insert-command-cursor-shape が NSHELL_VI_MODE=1 のセッションの終了コード 0 を assert している。 |
-| `steps[2].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残す G02-insert-command-cursor-shape が、文字を打った後の Escape で \e[2 q が出ることを同じ位置の待ちで assert している。 |
-| `steps[10].contains` | "G02_COMMAND_FINISHED" | `t/scenarios/G02/insert-command-cursor-shape.json:34` [残す] の "G02-insert-command-cursor-shape" steps[9].contains | checker.sh が必ず出す同期の印。残す G02-insert-command-cursor-shape が、vi で編集した行を Enter で実行して出力が届くことを assert している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)、NSHELL_VI_MODE=1 の vi モード
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G02_INNER_WORD_OBJECT_OK" | `t/unit/test-input-state-vi.lisp:504` it "applies inner and around word and paired text objects" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | buffer "one two" に d i w を reduce-once で与えてバッファを確かめるだけで、0 w w の移動も実行結果 G02_INNER_WORD_OBJECT_OK も見ていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も同じ入口で終了コード 0 を求める。 |
+| `steps[2].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も Escape の後に ESC[2 q を待つ。 |
+| `steps[10].contains` | "G02_COMMAND_FINISHED" | `t/scenarios/G02/insert-command-cursor-shape.json:34` [残す] の "G02-insert-command-cursor-shape" steps[9].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も実行後のマーカーを待つ (値は違う)。 |
 
 ### G02-goto-end
 
-`t/scenarios/G02/goto-end.json` [削除]
+`t/scenarios/G02/goto-end.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G02_GOTO_END_OK" | `t/integration/test-terminal-stream.lisp:8` it "terminal-stream-splits-vi-escape-from-buffered-keys" | ESC G を 1 回の読み込みで渡し :vi-mode-p を付けると :escape と G の 2 イベントに分かれることを expect している。G で最終行の末尾へ動くことは `t/unit/test-input-state-vi.lisp:460`、a で次の位置から insert に入ることは :205、Home は `t/unit/test-input-state-navigation.lisp:32` が確かめる。REPL は insert と command の両モードで同じ vi フラグを渡し (`src/presentation/repl.lisp:7-16`)、その配線は残す G02-vi-insert-escape-e-same-write が通す。 |
-| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残す G02-insert-command-cursor-shape が NSHELL_VI_MODE=1 のセッションの終了コード 0 を assert している。 |
-| `steps[1].contains` | "\u001b[6 q" | `t/scenarios/G02/runtime-vi-toggle.json:48` [残す] の "G02-runtime-vi-toggle" expected.stream.contains[0] | 新しいプロンプトの描画で \e[6 q が出ることに当たる。描画のたびに vi が有効なら insert のカーソル形を出し (`src/presentation/repl-rendering.lisp:334-337`)、残す G02-runtime-vi-toggle が vi を有効にした後のプロンプトで \e[6 q を assert している。 |
-| `steps[5].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残す G02-insert-command-cursor-shape が Escape の後の \e[2 q を assert している。 |
-| `steps[8].contains` | "\u001b[6 q" | `t/scenarios/G02/insert-command-cursor-shape.json:29` [残す] の "G02-insert-command-cursor-shape" steps[4].contains | 残す G02-insert-command-cursor-shape が a の後の \e[6 q を assert している。 |
-| `steps[11].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:32` [残す] の "G02-insert-command-cursor-shape" steps[7].contains | 残す G02-insert-command-cursor-shape が 2 回目の Escape の後の \e[2 q を assert している。 |
-| `steps[13].contains` | "G02_COMMAND_FINISHED" | `t/scenarios/G02/insert-command-cursor-shape.json:34` [残す] の "G02-insert-command-cursor-shape" steps[9].contains | checker.sh が必ず出す同期の印。残す G02-insert-command-cursor-shape が vi で編集した行を Enter で実行して出力が届くことを assert している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)、NSHELL_VI_MODE=1 の vi モード
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G02_GOTO_END_OK" | `t/integration/test-terminal-stream.lisp:8` it "terminal-stream-splits-vi-escape-from-buffered-keys" | read-key-event を文字列ストリームで直接呼ぶ (REPL ループ・実行なし) | いいえ | ESC G を 1 回の読み込みで渡しても 2 つのキーに分かれることだけを確かめ、G・a・f の後の実行結果 G02_GOTO_END_OK は見ていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も同じ入口で終了コード 0 を求める。 |
+| `steps[1].contains` | "\u001b[6 q" | `t/scenarios/G02/runtime-vi-toggle.json:48` [残す] の "G02-runtime-vi-toggle" expected.stream.contains[0] | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-runtime-vi-toggle も ESC[6 q を stream に求める (空行の Enter 後かどうかは違う)。 |
+| `steps[5].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も Escape の後に ESC[2 q を待つ。 |
+| `steps[8].contains` | "\u001b[6 q" | `t/scenarios/G02/insert-command-cursor-shape.json:29` [残す] の "G02-insert-command-cursor-shape" steps[4].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も a の後に ESC[6 q を待つ。 |
+| `steps[11].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:32` [残す] の "G02-insert-command-cursor-shape" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も 2 回目の Escape の後に ESC[2 q を待つ。 |
+| `steps[13].contains` | "G02_COMMAND_FINISHED" | `t/scenarios/G02/insert-command-cursor-shape.json:34` [残す] の "G02-insert-command-cursor-shape" steps[9].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も実行後のマーカーを待つ (値は違う)。 |
 
 ### G02-undo-find-replace-repeat
 
@@ -1309,16 +1387,18 @@
 
 ### G02-vi-e-nfd-grapheme-boundary
 
-`t/scenarios/G02/vi-e-nfd-grapheme-boundary.json` [削除]
+`t/scenarios/G02/vi-e-nfd-grapheme-boundary.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G02_NFD_OK" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | 行末 (cursor 7) の "echo é" (e + U+0301 の NFD) で Escape の後に e、x を当てると cursor 5 で buffer が "echo " になる (é を書記素ごと消す) ことを expect している。シナリオも同じ NFD の é を行末で消す。 |
-| `expected.stream.excludes[0]` | "G02_NFD_OKe" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | buffer が "echo " と等しいことを expect しているので、結合文字だけが消えて e が残る場合を等しさで除いている。 |
-| `expected.stream.excludes[1]` | "G02_NFD_OKé" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | 同じく buffer が "echo " と等しいので、é が残る場合を等しさで除いている。 |
-| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残す G02-insert-command-cursor-shape が NSHELL_VI_MODE=1 のセッションの終了コード 0 を assert している。 |
-| `steps[2].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残す G02-insert-command-cursor-shape が Escape の後の \e[2 q を assert している。 |
-| `steps[6].contains` | "G02_NFD_OK" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | 出力を待つ同期。e と x の結果のバッファを同じテストが等しさで expect している。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)、NSHELL_VI_MODE=1 の vi モード
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G02_NFD_OK" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | buffer "echo é" (NFD) に e と x を reduce-once で与えカーソルとバッファを確かめるだけで、実行結果の出力は見ていない。 |
+| `expected.stream.excludes[0]` | "G02_NFD_OKe" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | 出力に G02_NFD_OKe が含まれないことは確かめていない。 |
+| `expected.stream.excludes[1]` | "G02_NFD_OKé" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | 出力に G02_NFD_OKé が含まれないことは確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/G02/insert-command-cursor-shape.json:43` [残す] の "G02-insert-command-cursor-shape" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も同じ入口で終了コード 0 を求める。 |
+| `steps[2].contains` | "\u001b[2 q" | `t/scenarios/G02/insert-command-cursor-shape.json:27` [残す] の "G02-insert-command-cursor-shape" steps[2].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G02-insert-command-cursor-shape も Escape の後に ESC[2 q を待つ。 |
+| `steps[6].contains` | "G02_NFD_OK" | `t/unit/test-input-state-vi.lisp:222` it "vi-e-and-caret-motions" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | 出力を待つ手順はない。 |
 
 ### G02-yank-put-inner-word
 
@@ -1364,16 +1444,18 @@
 
 ### G05-approx-multiline-buffer-navigation
 
-`t/scenarios/G05/approx-multiline-buffer-navigation.json` [削除]
+`t/scenarios/G05/approx-multiline-buffer-navigation.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.side_effects.files[0].path` | "G05_FIRSTX" | `t/unit/test-input-state-continuation.lisp:84` it "e03-vertical-motion-keeps-a-preferred-visual-column-across-short-lines" | Up 2 回で継続行の 2 行目に移ること（希望列は短い行をまたいでも保たれる、この it）、C-e が物理行の末尾へ移ること（`t/unit/test-input-state-continuation.lisp:164`）、括弧が閉じていない Enter が継続行になること（`t/unit/test-input-state-continuation.lisp:31`）を reducer が確かめている。編集後の複数行 progn がまとめて 1 回実行されることは、残す G07 の steps[6] が確かめている。 |
-| `expected.side_effects.files[0].exists` | true | `t/unit/test-input-state-continuation.lisp:164` it "e03-ctrl-e-moves-to-the-physical-line-end-and-keeps-single-line-behavior" | 複数行バッファで C-e がカーソルのある物理行の末尾（バッファの末尾ではない）へ移ることを assert している。その位置に X を挿入するので G05_FIRST が G05_FIRSTX になる。 |
-| `expected.side_effects.files[1].path` | "G05_SECOND" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の G07-nested-continuation-indentation-and-single-execution steps[6].contains | progn の中の 2 つ目の式も同じ 1 回の実行で評価されることを、残す G07 が複数行の progn で確かめている。 |
-| `expected.side_effects.files[1].exists` | true | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の G07-nested-continuation-indentation-and-single-execution steps[6].contains | files[1].path と同じ。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[22].contains` | "G05_AFTER_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 実行後に C-c と C-a C-k で行を空にし、echo を打って実行する。入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.side_effects.files[0].path` | "G05_FIRSTX" | `t/unit/test-input-state-continuation.lisp:84` it "e03-vertical-motion-keeps-a-preferred-visual-column-across-short-lines" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | 3 行のバッファで reduce-once :up のカーソル位置を確かめるだけで、X を足した行を実行してファイル G05_FIRSTX ができることは見ていない。 |
+| `expected.side_effects.files[0].exists` | true | `t/unit/test-input-state-continuation.lisp:164` it "e03-ctrl-e-moves-to-the-physical-line-end-and-keeps-single-line-behavior" | 行エディタの reducer を直接呼ぶ (reduce-once、端末・REPL ループ・実行なし) | いいえ | reduce-once :ctrl-e のカーソル位置だけで、ファイルの存在は見ていない。 |
+| `expected.side_effects.files[1].path` | "G05_SECOND" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の "G07-nested-continuation-indentation-and-single-execution" steps[6].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G07 は同じ入口で複数行 progn が 1 回実行されることを確かめるが、G05_SECOND は作らない。 |
+| `expected.side_effects.files[1].exists` | true | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の "G07-nested-continuation-indentation-and-single-execution" steps[6].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 同上。ファイル G05_SECOND の存在は確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `steps[22].contains` | "G05_AFTER_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も C-c の後に打ったコマンドの出力を待つ (値は違う)。 |
 
 ### G06-nested-matching-delimiters
 
@@ -1409,15 +1491,17 @@
 
 ### G09-approx-balanced-parentheses-before-enter
 
-`t/scenarios/G09/approx-balanced-parentheses-before-enter.json` [削除]
+`t/scenarios/G09/approx-balanced-parentheses-before-enter.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G09_BALANCED" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の G07-nested-continuation-indentation-and-single-execution steps[6].contains | 閉じていない括弧の Enter が継続行になり、閉じ括弧の Enter で 1 回だけ実行されて出力が出ることを、残す G07 が確かめている。コマンド形式 "(touch ..." が継続行に入ることは `t/unit/test-input-state-continuation.lisp:31` が確かめている。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[4].contains` | "G09_BALANCED G09_SUB" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の G07-nested-continuation-indentation-and-single-execution steps[6].contains | contains[0] と同じ出力を待つ同期。 |
-| `steps[8].contains` | "G09_READY_MARKER" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:87` [残す] の G07-nested-continuation-indentation-and-single-execution steps[9].contains | 継続行の実行の後に echo $VAR が動くことを、残す G07 の steps[9] が同じ形で確かめている。空のプロンプトでの C-c がバッファを空にすることは `t/unit/test-input-state-continuation.lisp:31` の後半が assert している。 |
-| `steps[13].contains` | "G09_AFTER_2" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の G07-nested-continuation-indentation-and-single-execution steps[6].contains | C-a C-k の後の (format t ...) の host 評価が出力されることを、残す G07 が (format t "G07_ONCE ") で確かめている。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G09_BALANCED" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の "G07-nested-continuation-indentation-and-single-execution" steps[6].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す G07 は同じ入口で、閉じ括弧の Enter で継続行が 1 回実行されることを確かめるが、(echo $G09_MESSAGE …) の環境変数展開の出力 G09_BALANCED は確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `steps[4].contains` | "G09_BALANCED G09_SUB" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の "G07-nested-continuation-indentation-and-single-execution" steps[6].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | G07 は format と printf の出力を待つだけで、S 式の echo が 2 行にまたがった引数を出すことは確かめていない。 |
+| `steps[8].contains` | "G09_READY_MARKER" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:87` [残す] の "G07-nested-continuation-indentation-and-single-execution" steps[9].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | G07 も echo $G07_READY の出力を待つが、シナリオは直前に C-c を打つ。 |
+| `steps[13].contains` | "G09_AFTER_2" | `t/scenarios/G07/nested-continuation-indentation-and-single-execution.json:74` [残す] の "G07-nested-continuation-indentation-and-single-execution" steps[6].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | G07 の format t の出力待ちで、~d と (+ 1 1) の出力 G09_AFTER_2 と C-a C-k の後の実行は確かめていない。 |
 
 ### G11-clear-screen-keeps-prompt
 
@@ -1433,13 +1517,15 @@
 
 ### G11-clear-screen
 
-`t/scenarios/G11/clear-screen.json` [削除]
+`t/scenarios/G11/clear-screen.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "\u001b[2J" | `t/unit/test-repl-rendering.lisp:98` it "repl-clear-screen-clears-terminal-and-keeps-input-state" | capture-process-output-event :clear-screen の出力に (esc-sequence "[2J") が含まれることを assert している。0x0c が :ctrl-l に復号されることは `t/integration/test-terminal-stream.lisp:49`、:ctrl-l が :clear-screen を返すことは `t/e2e/test-smoke-editing.lisp:142` が assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[1].contains` | "\u001b[2J" | `t/unit/test-repl-rendering.lisp:98` it "repl-clear-screen-clears-terminal-and-keeps-input-state" | contains[0] と同じ ESC[2J の出力。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "\u001b[2J" | `t/unit/test-repl-rendering.lisp:98` it "repl-clear-screen-clears-terminal-and-keeps-input-state" | REPL の描画関数を with-repl-test-state の中で直接呼ぶ (端末・キー入力なし) | いいえ | 画面消去の関数を直接呼び ESC[2J を出すことを確かめるだけで、PTY から 0x0c を打ってはいない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `steps[1].contains` | "\u001b[2J" | `t/unit/test-repl-rendering.lisp:98` it "repl-clear-screen-clears-terminal-and-keeps-input-state" | REPL の描画関数を with-repl-test-state の中で直接呼ぶ (端末・キー入力なし) | いいえ | PTY の出力を待つ手順はない。 |
 
 ### G12-approx-grapheme-cursor-boundary
 
@@ -1453,71 +1539,83 @@
 
 ### G12-grapheme-boundary
 
-`t/scenarios/G12/grapheme-boundary.json` [削除]
+`t/scenarios/G12/grapheme-boundary.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G12_GRAPHEME_BOUNDARY_OK" | `t/unit/test-east-asian-width.lisp:155` it "moves-and-deletes-input-by-grapheme" | "a"+ZWJ 絵文字+"b" で絵文字の直後（b の前）にカーソルを置き、backspace-before-cursor が絵文字全体を消して "ab" になることを assert している。reducer の :backspace はこの関数を呼び（`src/presentation/input-state-dispatch.lisp:213`、`t/e2e/test-smoke-editing.lisp:103` が reducer 経由の Backspace を確かめる）、0x7f が :backspace に復号されることは `t/integration/test-terminal-stream.lisp:218` が assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[5].contains` | "G12_GRAPHEME_BOUNDARY_OK" | `t/unit/test-east-asian-width.lisp:155` it "moves-and-deletes-input-by-grapheme" | contains[0] と同じ出力。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G12_GRAPHEME_BOUNDARY_OK" | `t/unit/test-east-asian-width.lisp:155` it "moves-and-deletes-input-by-grapheme" | backspace-before-cursor を直接呼ぶ (キー入力・REPL ループ・実行なし) | いいえ | 家族の絵文字 (シナリオの 👩‍💻 とは別) の後で backspace-before-cursor を直接呼び "ab" を確かめるだけで、C-e・Left・DEL を打って実行した結果は見ていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `steps[5].contains` | "G12_GRAPHEME_BOUNDARY_OK" | `t/unit/test-east-asian-width.lisp:155` it "moves-and-deletes-input-by-grapheme" | backspace-before-cursor を直接呼ぶ (キー入力・REPL ループ・実行なし) | いいえ | 出力を待つ手順はない。 |
 
 ### G13-ctrl-y-yank
 
-`t/scenarios/G13/ctrl-y-yank.json` [削除]
+`t/scenarios/G13/ctrl-y-yank.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G13_CTRL_Y_YANK_OK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | 任意の位置（0 を含む）で C-k の後の C-y がバッファを元に戻すことを PBT が assert している。シナリオは C-a で位置 0 にしてから行全体を kill して yank する。0x01・0x0b・0x19 の復号は `t/integration/test-terminal-stream.lisp:49` が assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[5].contains` | "G13_CTRL_Y_YANK_OK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | contains[0] と同じ出力。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G13_CTRL_Y_YANK_OK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | reducer に C-k と C-y を直接与える性質テスト (端末・REPL ループ・実行なし) | いいえ | 生成した行に C-k と C-y を reducer で与えてバッファが戻ることだけを確かめ、C-a と実行結果は見ていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `steps[5].contains` | "G13_CTRL_Y_YANK_OK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | reducer に C-k と C-y を直接与える性質テスト (端末・REPL ループ・実行なし) | いいえ | 出力を待つ手順はない。 |
 
 ### G13-ctrl-y-yanks-killed-text
 
-`t/scenarios/G13/ctrl-y-yanks-killed-text.json` [削除]
+`t/scenarios/G13/ctrl-y-yanks-killed-text.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "G13_YANK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | 任意の位置（0 を含む）で C-k の後の C-y がバッファを元に戻すことを PBT が assert している。シナリオは C-a で位置 0 にしてから行全体を kill して yank する。0x01・0x0b・0x19 の復号は `t/integration/test-terminal-stream.lisp:49` が assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[5].contains` | "G13_YANK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | contains[0] と同じ出力。 |
-| `steps[9].contains` | "G13_AFTER_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 空のプロンプトでの C-c の後に echo を打って実行する。入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "G13_YANK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | reducer に C-k と C-y を直接与える性質テスト (端末・REPL ループ・実行なし) | いいえ | C-k と C-y でバッファが戻ることだけを reducer で確かめ、$G13_MESSAGE を展開した実行結果は見ていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `steps[5].contains` | "G13_YANK" | `t/unit/test-input-state-kill-yank-properties.lisp:19` it "pbt-input-state-ctrl-k-then-yank-restores-buffer" | reducer に C-k と C-y を直接与える性質テスト (端末・REPL ループ・実行なし) | いいえ | 出力を待つ手順はない。 |
+| `steps[9].contains` | "G13_AFTER_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も C-c の後に打ったコマンドの出力を待つ (値は違う)。 |
 
 ### H01-history-persists-after-exit
 
-`t/scenarios/H01/history-persists-after-exit.json` [削除]
+`t/scenarios/H01/history-persists-after-exit.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H01_PERSISTED_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 nshell を PTY で起動し、入力した行の出力が届くことを await-command で assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。（e2e は Ctrl-D で終了する） |
-| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | HOME だけ設定し XDG_DATA_HOME を未設定・空・相対にしたとき history-file-path が $HOME/.local/share/nshell/history になることを assert している。 |
-| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 nshell を PTY で起動して入力した行を、次の load-history-file が入力どおりのテキスト（引用符を含む）として返すことを assert している。ファイル上の \" はその直列化形式。 |
-| `steps[2].contains` | "H01_PERSISTED_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | contains[0] と同じ出力を待つ同期。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H01_PERSISTED_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY 上で起動した対話 nshell (*history-file-path-override* で保存先を差し替え、--no-config) | はい | 実 PTY で printf のコマンドを打ちその出力を待つ。echo "$SCENARIO_VALUE" の展開結果 H01_PERSISTED_ENTRY は確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | 履歴パスを決める関数を環境変数を変えて直接呼ぶ (REPL・PTY なし) | いいえ | HOME と XDG_DATA_HOME を変えて保存先を決める関数を直接呼ぶだけで、REPL を終えた後に <HOME>/.local/share/nshell/history ができることは確かめていない。 |
+| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY 上で起動した対話 nshell (*history-file-path-override* で保存先を差し替え、--no-config) | はい | 記録されたテキストを load-history-file で確かめるが、保存先は override で差し替えた一時ファイルで、変数を展開する前の echo \"$SCENARIO_VALUE\" が記録されることも確かめていない。 |
+| `steps[2].contains` | "H01_PERSISTED_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY 上で起動した対話 nshell (*history-file-path-override* で保存先を差し替え、--no-config) | はい | コマンドの出力を待つ同じ同期手順 (値は違う)。 |
 
 ### H02-approx-seeded-session-history
 
-`t/scenarios/H02/approx-seeded-session-history.json` [削除]
+`t/scenarios/H02/approx-seeded-session-history.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H02_SHARED_SEED" | `t/integration/test-file-history.lisp:378` it "file-history-seed-recalls-newest-first" | 履歴ファイルの記録を %seed-history-from-file で履歴に取り込むことを assert している。取り込んだ *history* に対する REPL 経路の C-r（:search-start、:search-update）がバッファを一致した記録にすることは `t/e2e/test-history.lisp:82` が assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[7].contains` | "H02_AFTER_2" | `t/unit/test-input-state-search-results.lisp:143` it "input-state-history-search-ctrl-c-clears-and-exits-search-mode" | 検索中の C-c がバッファを空にして検索モードを抜けることを assert している。その後の echo の実行は残す I04 の steps[7] と同じ形。 |
-| `steps[10].contains` | "H02_AFTER_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H02_SHARED_SEED" | `t/integration/test-file-history.lisp:378` it "file-history-seed-recalls-newest-first" | 履歴ファイルの読み込みと history-add を直接呼ぶ (REPL・PTY なし) | いいえ | 履歴ファイルを読み込んで history-add に渡す関数を直接呼ぶだけで、HOME 下の既定の履歴を読んだ REPL で C-r の検索が H02_SHARED_SEED を端末に出すことは確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `steps[7].contains` | "H02_AFTER_2" | `t/unit/test-input-state-search-results.lisp:143` it "input-state-history-search-ctrl-c-clears-and-exits-search-mode" | 履歴検索の reducer を直接呼ぶ (REPL ループ・実行なし) | いいえ | 検索状態に :ctrl-c を reducer で与えてバッファが空になることだけで、その後の実行結果は見ていない。 |
+| `steps[10].contains` | "H02_AFTER_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も C-c の後に打ったコマンドの出力を待つ (値は違う)。 |
 
 ### H02-live-history-shared-between-sessions
 
-`t/scenarios/H02/live-history-shared-between-sessions.json` [削除]
+`t/scenarios/H02/live-history-shared-between-sessions.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H02_WRITER_DONE" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | writer セッションの echo "$VAR" の出力。入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.stream.contains[1]` | "H02_READER_READY" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | reader セッションの export X=1 && echo の出力。入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.stream.contains[2]` | "H02_READER_VALUE" | `t/unit/test-repl-history-refresh.lisp:91` it "an-external-append-is-visible-from-the-next-prompt" | 別プロセスが追記した記録が、今のプロンプトではなく次のプロンプトで *history* に取り込まれることを assert している。シナリオの runner は writer を最後まで動かしてから reader の手順を進める（`scripts/run-scenarios.py` の session ループ）ので、reader の export 実行の後のプロンプトで取り込まれる。C-r の部分一致は `t/e2e/test-history.lisp:109`、Right による採用は `t/unit/test-input-state-search-results.lisp:93` が assert している。 |
-| `expected.stream.contains[3]` | "H02_READER_DONE" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | HOME だけ設定し XDG_DATA_HOME を未設定・空・相対にしたとき history-file-path が $HOME/.local/share/nshell/history になることを assert している。 |
-| `expected.side_effects.history.contains[0]` | "SCENARIO_READER_ONLY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 nshell を PTY で起動して入力した行を、次の load-history-file が入力どおりのテキスト（引用符を含む）として返すことを assert している。ファイル上の \" はその直列化形式。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)、同じ HOME で 2 セッションを順に動かす
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H02_WRITER_DONE" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | I04 は 1 セッションで、writer セッションの出力 H02_WRITER_DONE は確かめていない。 |
+| `expected.stream.contains[1]` | "H02_READER_READY" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | I04 は reader セッションを持たず、H02_READER_READY は確かめていない。 |
+| `expected.stream.contains[2]` | "H02_READER_VALUE" | `t/unit/test-repl-history-refresh.lisp:91` it "an-external-append-is-visible-from-the-next-prompt" | 履歴の再読み込み関数を直接呼ぶ (別プロセス・PTY なし) | いいえ | 別プロセスの追記を append-history-entry で真似て再読み込み関数を直接呼ぶだけで、別の nshell が書いた記録を C-r で呼び出して実行した出力 H02_READER_VALUE は見ていない。 |
+| `expected.stream.contains[3]` | "H02_READER_DONE" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | I04 は H02_READER_DONE を確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | 履歴パスを決める関数を環境変数を変えて直接呼ぶ (REPL・PTY なし) | いいえ | 保存先を決める関数を直接呼ぶだけで、2 つのセッションが同じ既定の履歴ファイルを使うことは確かめていない。 |
+| `expected.side_effects.history.contains[0]` | "SCENARIO_READER_ONLY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY 上で起動した対話 nshell (*history-file-path-override* で保存先を差し替え、--no-config) | はい | 2 つの実プロセスで履歴が引き継がれることは確かめるが、保存先は override で、SCENARIO_READER_ONLY を含む記録は確かめていない。 |
 
 ### H03-duplicate-entry-suppression
 
@@ -1637,80 +1735,92 @@
 
 ### H09-up-arrow-prefix-search
 
-`t/scenarios/H09/up-arrow-prefix-search.json` [削除]
+`t/scenarios/H09/up-arrow-prefix-search.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H09_REPLAY_READBACK_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | sed の出力の後の echo の目印。入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `expected.side_effects.files[0].path` | "prefix-results.txt" | `t/e2e/test-history.lisp:242` it "e2e-history-up-prefers-continuation-line-prefix" | "git" の Up が、より新しいが前方一致しない "printf 'not a prefix git'" を飛ばして前方一致する記録を選ぶことを REPL 経路で assert している。シナリオでは "echo H09_PREFIX_INTERNAL" を中に含むだけの記録が飛ばされる側。同じセッションで実行した行が次の Up の対象になることは `t/unit/test-repl-history-refresh.lisp:105` が assert している。選んだ行の再実行で 2 行目が追記される。 |
-| `expected.side_effects.files[0].equals` | "H09_PREFIX_RESULT\nH09_PREFIX_RESULT\n" | `t/e2e/test-history.lisp:242` it "e2e-history-up-prefers-continuation-line-prefix" | files[0].path と同じ。最初の実行と、Up で選ばれた同じ行の再実行で 2 行になる。 |
-| `steps[2].contains` | "H09_REPLAY_READY_1" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `steps[5].contains` | "H09_DECOY_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `steps[9].contains` | "H09_REPLAY_READY_2" | `t/e2e/test-history.lisp:242` it "e2e-history-up-prefers-continuation-line-prefix" | Up で前方一致の記録が選ばれ、その再実行で H09_RUN が 2 になる。files[0].path と同じ根拠。 |
-| `steps[12].contains` | "H09_REPLAY_READBACK_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H09_REPLAY_READBACK_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | I04 は Up の前方一致検索をしておらず、H09_REPLAY_READBACK_2 は確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の "I04-multiline-history-suggestion" expected.exit_code | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | 残す I04 も同じ入口で終了コード 0 を求める。 |
+| `expected.side_effects.files[0].path` | "prefix-results.txt" | `t/e2e/test-history.lisp:242` it "e2e-history-up-prefers-continuation-line-prefix" | 履歴を仕込んだ input-state に :up を reducer で与える (PTY・実行なし) | いいえ | 履歴を仕込んだ状態に :up を reducer で与えてバッファを確かめるだけで、呼び出した行を実行してファイルに追記することは見ていない (t/e2e にあるが PTY も実行もない)。 |
+| `expected.side_effects.files[0].equals` | "H09_PREFIX_RESULT\nH09_PREFIX_RESULT\n" | `t/e2e/test-history.lisp:242` it "e2e-history-up-prefers-continuation-line-prefix" | 履歴を仕込んだ input-state に :up を reducer で与える (PTY・実行なし) | いいえ | prefix-results.txt の内容が H09_PREFIX_RESULT\nH09_PREFIX_RESULT\n に等しいことは確かめていない。 |
+| `steps[2].contains` | "H09_REPLAY_READY_1" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | I04 は H09_REPLAY_READY_1 を待たない。 |
+| `steps[5].contains` | "H09_DECOY_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | I04 は H09_DECOY_2 を待たない。 |
+| `steps[9].contains` | "H09_REPLAY_READY_2" | `t/e2e/test-history.lisp:242` it "e2e-history-up-prefers-continuation-line-prefix" | 履歴を仕込んだ input-state に :up を reducer で与える (PTY・実行なし) | いいえ | Up で呼び出した行の実行結果 H09_REPLAY_READY_2 は見ていない。 |
+| `steps[12].contains` | "H09_REPLAY_READBACK_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の "I04-multiline-history-suggestion" steps[7].contains | 残すシナリオ (実 PTY 上の対話 REPL、シナリオランナー) | はい | I04 は H09_REPLAY_READBACK_2 を待たない。 |
 
 ### H10-token-history-search
 
 `t/scenarios/H10/token-history-search.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "before H10_TOKEN_MATCH after" | `t/e2e/test-history.lisp:109` it "e2e-history-reverse-search-selects-and-executes-match" | C-r の部分一致クエリ "status" が "git status --short" をバッファに入れることを assert している。シナリオではファイルから取り込んだ記録が対象で、取り込みは `t/integration/test-file-history.lisp:378` が確かめている。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[7].contains` | "H10_AFTER_2" | なし | シナリオは検索中に Escape を押す。`src/presentation/input-state-history-search.lisp:179` は :escape と :ctrl-g を同じ分岐で扱うが、`t/unit/test-input-state-search-results.lisp:4` などのテストは :ctrl-g しか通していない。Escape で検索を抜けた後に C-a C-k と入力が効くことを確かめるテストはない。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → C-r の履歴検索 → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "before H10_TOKEN_MATCH after" | `t/unit/test-search-history.lisp:192` it "interactive-history-search-prefers-line-prefix-before-contains" | interactive-history-search-use-case を with-history で作ったメモリ上の履歴に対して直接呼ぶ（キー入力・REPL・履歴ファイルの読み込みを通らない） | いいえ | REPL の C-r が呼ぶ interactive-history-search-use-case（`src/presentation/repl-output-handlers.lisp:1029`、`src/presentation/repl-search-ui.lisp:158`）が、行頭に一致しない部分一致の "printf 'not a prefix git'" も結果に含めることを確かめている。シナリオは履歴ファイルから読んだ記録を、大文字を含む（大文字小文字を区別する）クエリで語の途中から一致させ、端末に表示させるが、そこは通らない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | PTY 上の対話 REPL（残す I04 シナリオ） | はい | exit と Enter で終了コード 0 になることを、残す I04 が同じ入口と同じ手順で確かめている。 |
+| `steps[7].contains` | "H10_AFTER_2" | なし | なし | いいえ | 検索中の Escape は `src/presentation/input-state-history-search.lisp:179` で :ctrl-g と同じ分岐だが、`t/unit/test-input-state-search-results.lisp:4` は reducer に :ctrl-g を渡すだけで、Escape で検索を抜けた後に C-a C-k と入力した行が実行されて出力が出ることを確かめるテストはない。 |
 
 ### H11-last-argument-insertion
 
-`t/scenarios/H11/last-argument-insertion.json` [削除]
+`t/scenarios/H11/last-argument-insertion.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H11_LAST_ARGUMENT" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 最初の echo "$VAR" の出力で、Alt-. によらず出る。入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[2].contains` | "H11_LAST_ARGUMENT" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | contains[0] と同じ最初の出力を待つ同期。 |
-| `steps[6].contains` | "H11_LAST_ARGUMENT" | `t/e2e/test-history.lisp:281` it "e2e-history-alt-dot-inserts-last-argument-for-editing" | "echo " で :alt-dot を押すと REPL の handler が直前の記録の最後の引数を挿入することを assert している。引用符付きの引数を引用符ごと返すことは `t/unit/test-last-argument.lisp:4` ("\"hello world\"")、ESC . が :alt-dot に復号されることは `t/integration/test-terminal-stream.lisp:344`、同じセッションの実行が履歴に入ることは `t/unit/test-repl-history-refresh.lisp:105` が assert している。wait は前回の待機より後の出力だけを探すので（`scripts/run-scenarios.py` の take_wait_start）、2 回目の実行の出力を見ている。 |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H11_LAST_ARGUMENT" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.contains[0] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が PTY で echo "$VAR"（実行時の環境変数）を入力し、その出力が端末に届くことを確かめている。値は別の目印。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" expected.exit_code | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で exit と Enter を送り終了コード 0 を確かめている。 |
+| `steps[2].contains` | "H11_LAST_ARGUMENT" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" steps[4].contains | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | 1 回目の echo "$VAR" の出力を待つ同期と同じ形を F07 が待っている。 |
+| `steps[6].contains` | "H11_LAST_ARGUMENT" | `t/e2e/test-history.lisp:281` it "e2e-history-alt-dot-inserts-last-argument-for-editing" | reduce-input-state に :alt-dot イベントを直接渡し、記録は with-repl-history-lines で置く（端末からの ESC . の復号、Enter による提出と実行、同じセッションでの記録を通らない） | いいえ | バッファが "echo --short" になることだけを見ており、ESC . を端末から送って直前の実行の最後の引数（引用符付き "$SCENARIO_VALUE"）を挿入し、実行した出力に H11_LAST_ARGUMENT が出ることは確かめていない。 |
 
 ### H12-history-expansion
 
-`t/scenarios/H12/history-expansion.json` [削除]
+`t/scenarios/H12/history-expansion.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H12_EXPANSION_WORD" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 最初の echo "$VAR" の出力。入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[2].contains` | "H12_EXPANSION_WORD" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | contains[0] と同じ最初の出力を待つ同期。 |
-| `steps[5].contains` | "H12_EXPANSION_WORD" | `t/unit/test-history-expansion.lisp:4` it "expands-the-most-recent-command" | expand-history-input "echo !$" が直前の記録の最後の引数に展開されることを assert している。対話の実行経路で !$ を展開してから評価することは `t/unit/test-repl-submission.lisp:34`、同じセッションの実行が履歴に入ることは `t/unit/test-repl-history-refresh.lisp:105` が assert している。 |
-| `steps[8].contains` | "H12_EXPANSION_WORD" | `t/unit/test-repl-execution.lisp:146` it "repl-execute-expands-history-designator-before-parsing" | バッファ "!!" で capture-process-output-event :execute を呼ぶと、直前の記録に展開されたテキストが実行・保存されることを assert している。 |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H12_EXPANSION_WORD" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.contains[0] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が PTY で echo "$VAR" の出力が端末に届くことを確かめている。値は別の目印。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" expected.exit_code | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で exit と Enter を送り終了コード 0 を確かめている。 |
+| `steps[2].contains` | "H12_EXPANSION_WORD" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" steps[4].contains | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | 1 回目の echo "$VAR" の出力を待つ同期と同じ形を F07 が待っている。 |
+| `steps[5].contains` | "H12_EXPANSION_WORD" | `t/unit/test-history-expansion.lisp:4` it "expands-the-most-recent-command" | domain の history-expand-line を直接呼ぶ（キー入力・提出・実行を通らない） | いいえ | !! の展開結果の文字列だけを見ており、!$ を入力して実行した出力は確かめていない。 |
+| `steps[8].contains` | "H12_EXPANSION_WORD" | `t/unit/test-repl-execution.lisp:146` it "repl-execute-expands-history-designator-before-parsing" | :execute 出力イベントを直接処理し、バッファは with-repl-input-state で置く（キー入力と Enter を通らず、出力ではなく保存する文字列を見る） | いいえ | !! が展開されてから保存されることを見ているが、PTY で !! と Enter を送り展開後の echo の出力が端末に出ることは確かめていない。 |
 
 ### H13-malformed-history-recovers
 
 `t/scenarios/H13/malformed-history-recovers.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "nshell: history: unable to read" | なし | "nshell: history: unable to read" の文言を assert するテストはない（`t/integration/test-file-history.lisp:737` 付近の 753 行が "unable to append to" を見るだけ。`t/integration/test-file-history.lisp:580` は通知が 1 行であることだけを数える）。 |
-| `expected.stream.contains[1]` | "H13_BEFORE_REPLAY_RESULT" | なし | シナリオの壊れたフレームは、宣言した長さは正しいが S 式が閉じていない記録。`t/integration/test-file-history.lisp:303` はこの種の記録が 1 件だけのファイルで NIL を返すことを、`t/integration/test-file-history.lisp:580` は不正なバイトの後ろを読むことを確かめるが、壊れたフレームの前後の記録を両方読むことを確かめるテストはない。 |
-| `expected.stream.contains[2]` | "H13_AFTER_REPLAY_RESULT" | なし | contains[1] と同じ。壊れたフレームの後ろの記録の読み込みを確かめるテストはない。 |
-| `expected.stream.contains[3]` | "H13_RECOVERY_OK" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | HOME だけ設定し XDG_DATA_HOME を未設定・空・相対にしたとき history-file-path が $HOME/.local/share/nshell/history になることを assert している。 |
-| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_BEFORE_RESULT\\\" # H13_BEFORE_CORRUPTION" | なし | 壊れたフレームを含むファイルに追記した後も前の記録がファイルに残ることを確かめるテストはない（`t/integration/test-file-history.lisp:580` は不正なバイトの場合だけ）。 |
-| `expected.side_effects.history.contains[1]` | "echo \\\"$SCENARIO_AFTER_RESULT\\\" # H13_AFTER_CORRUPTION" | なし | contains[0] と同じ。後ろの記録が残ることを確かめるテストはない。 |
-| `expected.side_effects.history.contains[2]` | "echo \\\"$SCENARIO_VALUE\\\"" | なし | 壊れたフレームを含むファイルへの追記が成功することを確かめるテストはない。 |
-| `steps[10].contains` | "H13_RECOVERY_OK" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 実 PTY 上の対話 REPL (キー入力 → 行エディタ → C-r の履歴検索 → Enter で実行 → 端末への出力)
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "nshell: history: unable to read" | なし | なし | いいえ | `src/infrastructure/persistence/file-history.lisp:261` の "unable to ~a" で "read" を出すことを確かめるテストはない（`t/integration/test-file-history.lisp:580` は load を直接呼んで通知が 1 行であることを数えるだけ）。起動時の履歴読み込みから端末に出ることも確かめていない。 |
+| `expected.stream.contains[1]` | "H13_BEFORE_REPLAY_RESULT" | なし | なし | いいえ | 壊れたフレームの前の記録を C-r で探し Right で確定し Enter で実行して出力が出ることを、REPL の C-r の入口で確かめるテストはない。`t/e2e/test-history.lisp:158` は Right で確定した buffer を、`t/e2e/test-history.lisp:109` は Enter が :execute を返すことを確かめるが、どちらも reducer を直接呼び、結果は REPL が使わない search-history-use-case :contains で作り、実行もしない。読み込みは `t/integration/test-file-history.lisp:303` が単独の壊れた記録だけを見る。 |
+| `expected.stream.contains[2]` | "H13_AFTER_REPLAY_RESULT" | なし | なし | いいえ | contains[1] と同じ。壊れたフレームの後ろの記録を C-r で再実行する経路を通るテストはない。 |
+| `expected.stream.contains[3]` | "H13_RECOVERY_OK" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | PTY 上の対話 REPL（残す I04 シナリオ） | はい | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ入口で確かめている（同期用の目印）。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | PTY 上の対話 REPL（残す I04 シナリオ） | はい | exit と Enter で終了コード 0 になることを、残す I04 が同じ入口と同じ手順で確かめている。 |
+| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | history-file-path と load を直接呼ぶ（REPL の起動と終了を通らない） | いいえ | HOME だけ設定し XDG_DATA_HOME を未設定・空・相対にしたとき history-file-path が $HOME/.local/share/nshell/history になることを確かめている。REPL がそのパスに書くことは通らない。 |
+| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_BEFORE_RESULT\\\" # H13_BEFORE_CORRUPTION" | なし | なし | いいえ | 壊れたフレームを含むファイルに REPL が追記した後も前の記録がファイルに残ることを確かめるテストはない（`t/integration/test-file-history.lisp:580` は不正なバイトの場合だけ）。 |
+| `expected.side_effects.history.contains[1]` | "echo \\\"$SCENARIO_AFTER_RESULT\\\" # H13_AFTER_CORRUPTION" | なし | なし | いいえ | contains[0] と同じ。後ろの記録が残ることは確かめていない。 |
+| `expected.side_effects.history.contains[2]` | "echo \\\"$SCENARIO_VALUE\\\"" | なし | なし | いいえ | 壊れたフレームを含むファイルへ、REPL で入力した行が追記されることは確かめていない。 |
+| `steps[10].contains` | "H13_RECOVERY_OK" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | PTY 上の対話 REPL（残す I04 シナリオ） | はい | 入力した bare-line の echo が実行され出力が届くことを、残す I04 の steps[7] が同じ入口で確かめている（同期用の目印）。 |
 
 ### H14-approx-history-timestamp-metadata
 
-`t/scenarios/H14/approx-history-timestamp-metadata.json` [削除]
+`t/scenarios/H14/approx-history-timestamp-metadata.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H14_TIMESTAMP_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 nshell を PTY で起動し、入力した行の出力が届くことを await-command で assert している。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。（e2e は Ctrl-D で終了する） |
-| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | HOME だけ設定し XDG_DATA_HOME を未設定・空・相対にしたとき history-file-path が $HOME/.local/share/nshell/history になることを assert している。 |
-| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 nshell を PTY で起動して入力した行を、次の load-history-file が入力どおりのテキスト（引用符を含む）として返すことを assert している。ファイル上の \" はその直列化形式。 |
-| `steps[2].contains` | "H14_TIMESTAMP_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | contains[0] と同じ出力を待つ同期。 |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H14_TIMESTAMP_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY で nshell の MAIN を起動（%e2e-pty-spawn）するが、*history-file-path-override* で履歴ファイルの場所を一時ファイルに差し替える | はい | 実 PTY で入力した printf の出力が端末に届くことを確かめている。入力は echo "$VAR" ではない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" expected.exit_code | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で exit と Enter を送り終了コード 0 を確かめている。 |
+| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | history-file-path と load-history-file を関数として直接呼ぶ（REPL を起動せず、実行した行の書き込みも通らない） | いいえ | XDG_DATA_HOME を設定した場合のパスを等値で見ているが、XDG_DATA_HOME が無いときに対話で実行した行が HOME/.local/share/nshell/history に書かれることは確かめていない。 |
+| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY で nshell の MAIN を起動（%e2e-pty-spawn）するが、*history-file-path-override* で履歴ファイルの場所を一時ファイルに差し替える | いいえ | 保存される文字列は見ているが、保存先を差し替えているうえ load-history-file で読み戻した text を比べており、既定の場所のファイルに引用符を \" と書いた `echo \"$SCENARIO_VALUE\"` が入ることは確かめていない。 |
+| `steps[2].contains` | "H14_TIMESTAMP_ENTRY" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY で nshell の MAIN を起動（%e2e-pty-spawn）するが、*history-file-path-override* で履歴ファイルの場所を一時ファイルに差し替える | はい | 実 PTY で入力した行の出力を待つ同期は同じ形で行っている。値は別の目印。 |
 
 ### H14-history-persists-timestamp-metadata
 
@@ -1736,43 +1846,49 @@
 
 ### H14-history-timestamps-display-utc
 
-`t/scenarios/H14/history-timestamps-display-utc.json` [削除]
+`t/scenarios/H14/history-timestamps-display-utc.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H14_FRESH_TIMESTAMP_OUTPUT_2" | `t/unit/test-builtins-test.lisp:162` it "evaluates complete, empty, and malformed command lines" | eval が文字列のコマンド行を実行してその出力を返すことを assert している（シナリオの eval "$SCENARIO_COMMAND"）。 |
-| `expected.stream.contains[1]` | "H14_AFTER_TIMESTAMP_LIST_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.stream.contains[2]` | "1900-01-01T00:00:01Z" | `t/unit/test-search-history.lisp:157` it "history-builtin-filters-metadata-and-renders-utc-timestamps" | history --timestamps が記録の時刻を UTC の ISO 形式 "2000-01-02T03:04:05Z" で出すことを assert している。シナリオの timestamp 1 は同じ整形で 1900-01-01T00:00:01Z になる。 |
-| `expected.stream.contains[3]` | "H14_TIMESTAMP_SEEDED_RECORD" | `t/unit/test-search-history.lisp:157` it "history-builtin-filters-metadata-and-renders-utc-timestamps" | history builtin が shell context の履歴の記録を一覧することを assert している。REPL の context の履歴は *history*（`src/presentation/repl-execution-context.lisp:15`）で、ファイルの記録を取り込むことは `t/integration/test-file-history.lisp:378` が確かめている。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。 |
-| `steps[2].contains` | "H14_FRESH_TIMESTAMP_OUTPUT_2" | `t/unit/test-builtins-test.lisp:162` it "evaluates complete, empty, and malformed command lines" | contains[0] と同じ出力を待つ同期。 |
-| `steps[7].contains` | "H14_AFTER_TIMESTAMP_LIST_2" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H14_FRESH_TIMESTAMP_OUTPUT_2" | `t/unit/test-builtins-test.lisp:162` it "evaluates complete, empty, and malformed command lines" | eval builtin を call-builtin で直接呼び、echo の実行を with-stubbed-command-executor で差し替える | いいえ | eval が引数を実行することだけを見ており、PTY から eval "$SCENARIO_COMMAND" を入力して算術展開を含む echo の出力が出ることは確かめていない。 |
+| `expected.stream.contains[1]` | "H14_AFTER_TIMESTAMP_LIST_2" | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" steps[7].contains | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で echo I04_AFTER_$((1+1)) を入力し、算術展開した I04_AFTER_2 が出ることを確かめている。値は別の目印。 |
+| `expected.stream.contains[2]` | "1900-01-01T00:00:01Z" | `t/unit/test-search-history.lisp:157` it "history-builtin-filters-metadata-and-renders-utc-timestamps" | history builtin を call-builtin で直接呼び、記録は add-history-record でメモリに置く（起動時の履歴ファイルの読み込みと PTY を通らない） | いいえ | UTC 表示の形式は見ているが、起動時に読み込んだ :timestamp 1 の記録が 1900-01-01T00:00:01Z と表示されることは確かめていない。 |
+| `expected.stream.contains[3]` | "H14_TIMESTAMP_SEEDED_RECORD" | `t/unit/test-search-history.lisp:157` it "history-builtin-filters-metadata-and-renders-utc-timestamps" | history builtin を call-builtin で直接呼ぶ（履歴ファイルの読み込みを通らない） | いいえ | メモリに置いた記録の一覧だけを見ており、ファイルから読み込んだ H14_TIMESTAMP_SEEDED_RECORD が一覧に出ることは確かめていない。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" expected.exit_code | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で exit と Enter を送り終了コード 0 を確かめている。 |
+| `steps[2].contains` | "H14_FRESH_TIMESTAMP_OUTPUT_2" | `t/unit/test-builtins-test.lisp:162` it "evaluates complete, empty, and malformed command lines" | eval builtin を call-builtin で直接呼ぶ（PTY・提出を通らない） | いいえ | contains[0] と同じで、PTY での eval の出力を待つ同期は確かめていない。 |
+| `steps[7].contains` | "H14_AFTER_TIMESTAMP_LIST_2" | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" steps[7].contains | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で算術展開を含む echo の出力を待つ同期を同じ形で行っている。 |
 
 ### H15-history-ignores-xdg-state-home
 
-`t/scenarios/H15/history-ignores-xdg-state-home.json` [削除]
+`t/scenarios/H15/history-ignores-xdg-state-home.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H15_XDG_HISTORY" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。（e2e は Ctrl-D で終了する） |
-| `expected.side_effects.files[0].path` | ".local/state/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | XDG_DATA_HOME が未設定・空・相対のとき history-file-path が $HOME/.local/share/nshell/history と equal であることを assert している。保存先がこのパスに決まるので、.local/state 側には書かれない（equal が不在を含意する）。 |
-| `expected.side_effects.files[0].exists` | false | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | XDG_DATA_HOME が未設定・空・相対のとき history-file-path が $HOME/.local/share/nshell/history と equal であることを assert している。保存先がこのパスに決まるので、.local/state 側には書かれない（equal が不在を含意する）。 |
-| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | HOME だけ設定し XDG_DATA_HOME を未設定・空・相対にしたとき history-file-path が $HOME/.local/share/nshell/history になることを assert している。 |
-| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 nshell を PTY で起動して入力した行を、次の load-history-file が入力どおりのテキスト（引用符を含む）として返すことを assert している。ファイル上の \" はその直列化形式。 |
-| `steps[2].contains` | "H15_XDG_HISTORY" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）。cwd は HOME
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H15_XDG_HISTORY" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.contains[0] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が PTY で echo "$VAR" の出力が端末に届くことを確かめている。値は別の目印。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" expected.exit_code | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で exit と Enter を送り終了コード 0 を確かめている。 |
+| `expected.side_effects.files[0].path` | ".local/state/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | history-file-path を関数として直接呼ぶ（REPL を起動せず、ファイルの書き込みも通らない） | いいえ | パスの選び方を等値で見ているだけで、対話の実行の後に HOME/.local/state/nshell/history が作られないことは確かめていない。 |
+| `expected.side_effects.files[0].exists` | false | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | history-file-path を関数として直接呼ぶ | いいえ | 同上。state 側にファイルが無いことを実行の後に確かめていない。 |
+| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | history-file-path を関数として直接呼ぶ（XDG_DATA_HOME を設定した場合） | いいえ | XDG_DATA_HOME が無いとき、対話で実行した行が HOME/.local/share/nshell/history に書かれることは確かめていない。 |
+| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY で nshell の MAIN を起動（%e2e-pty-spawn）するが、*history-file-path-override* で履歴ファイルの場所を一時ファイルに差し替える | いいえ | 保存先を差し替え、読み戻した text を比べており、既定の場所のファイルに `echo \"$SCENARIO_VALUE\"` が書かれることは確かめていない。 |
+| `steps[2].contains` | "H15_XDG_HISTORY" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" steps[4].contains | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | echo "$VAR" の出力を待つ同期と同じ形を F07 が待っている。 |
 
 ### H15-history-uses-xdg-data-home
 
-`t/scenarios/H15/history-uses-xdg-data-home.json` [削除]
+`t/scenarios/H15/history-uses-xdg-data-home.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "H15_XDG_HISTORY" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
-| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:87` [残す] の I04-multiline-history-suggestion expected.exit_code | exit と Enter で終了コード 0 になることを残す I04 が同じ手順で確かめている。（e2e は Ctrl-D で終了する） |
-| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | HOME だけ設定し XDG_DATA_HOME を未設定・空・相対にしたとき history-file-path が $HOME/.local/share/nshell/history になることを assert している。 |
-| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 nshell を PTY で起動して入力した行を、次の load-history-file が入力どおりのテキスト（引用符を含む）として返すことを assert している。ファイル上の \" はその直列化形式。 |
-| `steps[2].contains` | "H15_XDG_HISTORY" | `t/scenarios/I04/multiline-history-suggestion.json:65` [残す] の I04-multiline-history-suggestion steps[7].contains | 入力した bare-line の echo（変数・算術展開を含む）が実行され出力が届くことを、残す I04 の steps[7] が同じ形で確かめている（同期用の目印）。 |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "H15_XDG_HISTORY" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.contains[0] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が PTY で echo "$VAR" の出力が端末に届くことを確かめている。値は別の目印。 |
+| `expected.exit_code` | 0 | `t/scenarios/I04/multiline-history-suggestion.json:2` scenario "I04-multiline-history-suggestion" expected.exit_code | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | I04 が PTY で exit と Enter を送り終了コード 0 を確かめている。 |
+| `expected.side_effects.history.path` | ".local/share/nshell/history" | `t/integration/test-file-history.lisp:448` it "file-history-xdg-path-and-empty-load" | history-file-path を関数として直接呼ぶ（XDG_DATA_HOME を設定した場合） | いいえ | XDG_DATA_HOME が無いとき、対話で実行した行が HOME/.local/share/nshell/history に書かれることは確かめていない。 |
+| `expected.side_effects.history.contains[0]` | "echo \\\"$SCENARIO_VALUE\\\"" | `t/e2e/test-history.lisp:3` it "e2e-history-persists-across-sessions" | 実 PTY で nshell の MAIN を起動（%e2e-pty-spawn）するが、*history-file-path-override* で履歴ファイルの場所を一時ファイルに差し替える | いいえ | 保存先を差し替え、読み戻した text を比べており、既定の場所のファイルに `echo \"$SCENARIO_VALUE\"` が書かれることは確かめていない。 |
+| `steps[2].contains` | "H15_XDG_HISTORY" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" steps[4].contains | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | echo "$VAR" の出力を待つ同期と同じ形を F07 が待っている。 |
 
 ### I01-history-autosuggestion
 
@@ -1892,12 +2008,14 @@
 
 ### J01-command-name
 
-`t/scenarios/J01/command-name.json` [削除]
+`t/scenarios/J01/command-name.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "echo" | `t/unit/test-builtin-shell-extras.lisp:255` it "complete-C-lists-completions-for-the-given-line-one-per-line" | complete -C "ech" を builtin として呼び、出力に "echo" が含まれることを確かめている。シナリオの "ec" と同じ、コマンド名の前方一致 |
-| `expected.exit_code` | 0 | `t/unit/test-builtin-shell-extras.lisp:255` it "complete-C-lists-completions-for-the-given-line-one-per-line" | 同じ呼び出しの code が 0 であることを確かめている |
+シナリオの入口: `nshell --no-config --command TEXT`（scripts/run-scenarios.py:1061、別プロセスの stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "echo" | `t/unit/test-builtin-shell-extras.lisp:255` it "complete-C-lists-completions-for-the-given-line-one-per-line" | complete builtin を call-builtin で直接呼ぶ（--command・MAIN・バッチの終了状態を通らない） | いいえ | "ech" を渡して echo が出ることを見ているが、--command で `complete -C "ec"` を走らせた stdout ではない。 |
+| `expected.exit_code` | 0 | `t/unit/test-builtin-shell-extras.lisp:255` it "complete-C-lists-completions-for-the-given-line-one-per-line" | complete builtin を call-builtin で直接呼ぶ（--command・MAIN・バッチの終了状態を通らない） | いいえ | builtin の戻り値 0 を見ており、プロセスの終了状態ではない。 |
 
 ### J02-same-second-directory-cache-invalidation
 
@@ -1987,16 +2105,18 @@
 
 ### J02-filename-variants
 
-`t/scenarios/J02/filename-variants.json` [削除]
+`t/scenarios/J02/filename-variants.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "plain.txt" | `t/unit/test-filesystem-file-completion.lisp:4` it "bare-filename-prefixes-include-files-and-knowledge-base-candidates" | "tool f" の補完で通常のファイル "file.txt" が候補に入ることを確かめている。"cat plain" の通常ファイルと同じ |
-| `expected.stdout.contains[1]` | ".hidden.txt" | `t/unit/test-filesystem-file-completion.lisp:289` it "host port preserves kinds and ordered legacy candidates" | 実ファイルシステムで、接頭辞 "." のときに ".hidden-file" が候補に入ることを確かめている |
-| `expected.stdout.contains[2]` | "space name.txt" | `t/unit/test-filesystem-file-completion.lisp:102` it "filesystem-candidate-insertion-preserves-spaces-and-unicode" | "cat spa" の補完で "space name.txt" の候補が出ることを確かめている |
-| `expected.stdout.contains[3]` | "café.txt" | `t/unit/test-filesystem-file-completion.lisp:102` it "filesystem-candidate-insertion-preserves-spaces-and-unicode" | "cat 日" の補完で非 ASCII の名前 "日本語.txt" がそのまま候補になることを確かめている。café.txt と同じ非 ASCII の名前 |
-| `expected.stdout.contains[4]` | "link.txt" | `t/unit/test-filesystem-file-completion.lisp:289` it "host port preserves kinds and ordered legacy candidates" | 実ファイルシステムで、ファイルへのリンク "file-link" が候補に入ることを確かめている |
-| `expected.exit_code` | 0 | `t/unit/test-builtin-shell-extras.lisp:255` it "complete-C-lists-completions-for-the-given-line-one-per-line" | complete -C を呼んで code 0 を確かめている |
+シナリオの入口: `nshell --no-config --command TEXT`（scripts/run-scenarios.py:1061、別プロセスの stdout と終了状態を見る）。作業ディレクトリに plain.txt・.hidden.txt・space name.txt・café.txt を置く
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "plain.txt" | `t/unit/test-filesystem-file-completion.lisp:4` it "bare-filename-prefixes-include-files-and-knowledge-base-candidates" | domain の補完関数を直接呼ぶ | いいえ | 接頭辞からファイルの候補が出ることを見ているが、--command の complete -C "cat plain" の stdout ではない。 |
+| `expected.stdout.contains[1]` | ".hidden.txt" | `t/unit/test-filesystem-file-completion.lisp:289` it "host port preserves kinds and ordered legacy candidates" | infrastructure のファイルシステム port を直接呼ぶ | いいえ | 候補の種類と順序を見ているが、complete -C "cat ." で隠しファイルが出ることは確かめていない。 |
+| `expected.stdout.contains[2]` | "space name.txt" | `t/unit/test-filesystem-file-completion.lisp:102` it "filesystem-candidate-insertion-preserves-spaces-and-unicode" | with-test-filesystem の偽のファイルシステムで補完関数を直接呼ぶ | いいえ | 空白をエスケープした挿入文字列を見ており、complete -C の出力に space name.txt が出ることは確かめていない。 |
+| `expected.stdout.contains[3]` | "café.txt" | `t/unit/test-filesystem-file-completion.lisp:102` it "filesystem-candidate-insertion-preserves-spaces-and-unicode" | with-test-filesystem の偽のファイルシステムで補完関数を直接呼ぶ | いいえ | 非 ASCII の名前の扱いは見ているが、実ファイル café.txt を --command の complete -C で出すことは確かめていない。 |
+| `expected.stdout.contains[4]` | "link.txt" | `t/unit/test-filesystem-file-completion.lisp:289` it "host port preserves kinds and ordered legacy candidates" | infrastructure のファイルシステム port を直接呼ぶ | いいえ | ファイルへのリンクの種類は見ているが、同じ --command の中で ln -s した link.txt が候補に出ることは確かめていない。 |
+| `expected.exit_code` | 0 | `t/unit/test-builtin-shell-extras.lisp:255` it "complete-C-lists-completions-for-the-given-line-one-per-line" | complete builtin を call-builtin で直接呼ぶ（--command・MAIN・バッチの終了状態を通らない） | いいえ | builtin の戻り値 0 を見ており、5 つの complete -C と ln を続けたプロセスの終了状態ではない。 |
 
 ### J03-cd-and-cdpath
 
@@ -2216,16 +2336,18 @@
 
 ### K04-unbalanced-parenthesis-diagnostic
 
-`t/scenarios/K04/unbalanced-parenthesis-diagnostic.json` [削除]
+`t/scenarios/K04/unbalanced-parenthesis-diagnostic.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "> " | `t/unit/test-repl-rendering-layout.lisp:149` it "repl-render-edit-buffer-styles-continuation-prompt" | 2 行目のある buffer を render-edit-buffer で描画し、継続行のプロンプト "> " が出ることを確かめている |
-| `expected.exit_code` | 0 | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | (同期) 同じ入力で Enter から Ctrl-C までを通し、buffer "" と :redraw を確かめている |
-| `expected.side_effects.files[0].path` | "K04_SHOULD_NOT_EXIST" | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | "(touch K04_SHOULD_NOT_EXIST" で Enter を reduce すると :execute ではなく :suggest-update になり、継続行に入る。Ctrl-C で buffer が "" になるので、touch は実行されない |
-| `expected.side_effects.files[0].exists` | false | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | files[0].path と同じ |
-| `steps[2].contains` | ">" | `t/unit/test-repl-rendering-layout.lisp:149` it "repl-render-edit-buffer-styles-continuation-prompt" | 継続行のプロンプト "> " が描画されることを確かめている |
-| `steps[6].contains` | "K04_AFTER_RECOVERED" | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | (同期) Ctrl-C で buffer "" と cursor-pos 0 に戻ることを確かめている。次のコマンドが実行できる状態に戻ることに当たる |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）。入力の間隔 0.12 秒、右プロンプト {time}
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "> " | `t/unit/test-repl-rendering-layout.lisp:149` it "repl-render-edit-buffer-styles-continuation-prompt" | render-edit-buffer を直接呼ぶ（キー入力と Enter を通らない） | いいえ | 2 行目の継続プロンプトの描画は見ているが、( で始まる未完の入力で Enter を押した後に端末へ "> " が出ることは確かめていない。 |
+| `expected.exit_code` | 0 | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | reducer（reduce-once）と scan を直接呼ぶ | いいえ | 状態の遷移は見ているが、プロセスが Ctrl-D で終了コード 0 になることは確かめていない。 |
+| `expected.side_effects.files[0].path` | "K04_SHOULD_NOT_EXIST" | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | reducer と scan を直接呼ぶ（実行を通らない） | いいえ | Ctrl-C で取り消した状態は見ているが、実行器が呼ばれず K04_SHOULD_NOT_EXIST が作られないことを実ファイルで確かめていない。 |
+| `expected.side_effects.files[0].exists` | false | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | reducer と scan を直接呼ぶ（実行を通らない） | いいえ | 同上。 |
+| `steps[2].contains` | ">" | `t/unit/test-repl-rendering-layout.lisp:149` it "repl-render-edit-buffer-styles-continuation-prompt" | render-edit-buffer を直接呼ぶ | いいえ | 画面に > が出るのを待つ同期は REPL の描画ループを通らないと確かめられない。 |
+| `steps[6].contains` | "K04_AFTER_RECOVERED" | `t/unit/test-input-state-continuation.lisp:31` it "K04-incomplete-parenthesis-enters-continuation-before-cancel" | reducer と scan を直接呼ぶ（提出と実行を通らない） | いいえ | 取り消し後の入力を reducer で見ているが、printf K04_AFTER_%s RECOVERED を実行して K04_AFTER_RECOVERED が出ることは確かめていない。 |
 
 ### K05-string-highlighting
 
@@ -2287,6 +2409,8 @@
 ```
 
 この期待値は、aarch64-darwin でビルドした nshell に、golden の実行器と同じ作業ディレクトリ・環境・正規化で 3 回流し、`error.message` を除いた envelope 全体が 3 回とも一致したものです。Linux では流していません。
+
+削除の前に: `t/e2e/test-smoke-script.lisp:18` の it "e2e-main-script-executes-multiline-blocks" の隣に it を足す。with-temporary-output-file (path :prefix "nshell-k06-script") に、シナリオの invocation.text "(progn (echo K06_COMMAND_ISLAND) (+ 20 22))"（末尾改行なし）をそのまま書く。`t/e2e/test-smoke-script.lisp:372` の it "e2e-main-script-errexit-option-and-shell-command-delegation" と同じく `t/support/runtime.lisp:37` の %e2e-child-environment を使い、HOME を新しい空の一時ディレクトリに、PATH を "PATH=/usr/bin:/bin" に、TERM を "TERM=xterm-256color" に置き換えた環境を :environment に渡す（シナリオの environment.variables）。(%run-nshell-main (list path) :environment environment)（`t/e2e/test-smoke.lisp:60` の %run-nshell-main）の結果について、exit-code が 0、stdout に "K06_COMMAND_ISLAND" と "42" が含まれることを確かめる。シナリオは stderr を確かめないので、stderr "" を要求する %assert-nshell-main-result ではなく %run-nshell-main と expect で書く。
 
 ### K07-one-line-source-diagnostic
 
@@ -2353,14 +2477,16 @@
 
 ### L04-approx-transient-prompt-keeps-current-prompt
 
-`t/scenarios/L04/approx-transient-prompt-keeps-current-prompt.json` [削除]
+`t/scenarios/L04/approx-transient-prompt-keeps-current-prompt.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "L04_SECOND" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 2 回目の対話入力の出力を確かめる |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 同じテストが exit の後に終了コード 0 を確かめる |
-| `steps[2].contains` | "L04_FIRST" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 1 回目の対話入力の出力を確かめる |
-| `steps[5].contains` | "L04_SECOND" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 2 回目の対話入力の出力を確かめる |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "L04_SECOND" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 実 PTY で nshell の MAIN を起動しキー入力を書き込む（%e2e-pty-spawn、--no-config --no-history） | はい | 2 回目以降の提出の出力が端末に届くことは見ているが、入力は printf と $status で、実行時の環境変数を echo "$VAR" で出す 2 回目の L04_SECOND ではない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 実 PTY で nshell の MAIN を起動しキー入力を書き込む（%e2e-pty-spawn、--no-config --no-history） | はい | exit と改行を送り %assert-pty-child-exit で終了コード 0 を確かめている（同じ入口・同じ assertion）。 |
+| `steps[2].contains` | "L04_FIRST" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 実 PTY で nshell の MAIN を起動しキー入力を書き込む（%e2e-pty-spawn、--no-config --no-history） | はい | 1 回目の提出の出力は見ているが、入力は false と printf で echo "$SCENARIO_VALUE_A" ではない。 |
+| `steps[5].contains` | "L04_SECOND" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 実 PTY で nshell の MAIN を起動しキー入力を書き込む（%e2e-pty-spawn、--no-config --no-history） | はい | contains[0] と同じで、2 回目の echo "$VAR" の出力ではない。 |
 
 ### L05-approx-custom-prompt-format
 
@@ -2441,12 +2567,14 @@
 
 ### N01-session-variable
 
-`t/scenarios/N01/session-variable.json` [削除]
+`t/scenarios/N01/session-variable.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "hello" | `t/e2e/test-smoke-script.lisp:352` it "e2e-main-eval-runs-in-the-current-context" | --command で eval 'set EVAL_VALUE ready' の後の echo $EVAL_VALUE が ready を出すことを確かめる (set した値が同じ --command の後の項目で展開される) |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:352` it "e2e-main-eval-runs-in-the-current-context" | 同じ実行で終了コード 0 を確かめる |
+シナリオの入口: `nshell --no-config --command TEXT`（scripts/run-scenarios.py:1061、別プロセスの stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "hello" | `t/e2e/test-smoke-script.lisp:352` it "e2e-main-eval-runs-in-the-current-context" | nshell の MAIN を別プロセスで `--command TEXT` 付きで起動（%assert-nshell-main-result、`t/e2e/test-smoke.lisp:60`） | はい | 同じ --command の入口だが、入力は eval 'set EVAL_VALUE ready'; echo $EVAL_VALUE で、トップレベルの bare-line の set の後に echo $VAR が hello を出すことは確かめていない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke-script.lisp:352` it "e2e-main-eval-runs-in-the-current-context" | nshell の MAIN を別プロセスで `--command TEXT` 付きで起動（%assert-nshell-main-result、`t/e2e/test-smoke.lisp:60`） | はい | 同じ入口で終了状態 0 を確かめている。 |
 
 ### N02-export-reaches-child-process
 
@@ -2499,31 +2627,37 @@
 
 `t/scenarios/O01/O01-bare-line-sugar.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "O01_SEXP_FORM_OK" | `t/spec/probes.lisp:217` it "language-probe case-cmd v0.7.0 baseline" | (echo Hello WORLD) だけのスクリプトを実バイナリで実行し、stdout が Hello WORLD\n と一致することを確かめる |
-| `expected.stdout.contains[1]` | "O01_BARE_LINE_OK" | `t/spec/probes.lisp:217` it "language-probe bare-comment v0.7.0 baseline" | bare-line の echo c1 / echo c2 を含むスクリプトの stdout が c1\nc2\n と一致することを確かめる |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe defun-args v0.7.0 baseline" | S式の (f 1 2) と bare-line の f 3 4 を同じスクリプトに混ぜ、stdout と終了コード 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "O01_SEXP_FORM_OK" | `t/spec/probes.lisp:217` it "language-probe case-cmd v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | スクリプト (echo Hello WORLD) の stdout を "Hello WORLD\n" と等値で比べ、S 式の echo が記号の引数をそのまま出すことを確かめている（fixture: `docs/design/conformance/language-probes-v0.7.0.json:86`）。 |
+| `expected.stdout.contains[1]` | "O01_BARE_LINE_OK" | `t/spec/probes.lisp:217` it "language-probe bare-comment v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | スクリプトの bare-line `echo c2` などの stdout を "c1\nc2\n" と等値で比べている（fixture :569）。 |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe defun-args v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | S 式の行と bare-line の行を同じスクリプトに並べ、両方を実行して終了状態 0 になることを確かめている（fixture :589）。 |
 
 ### O02-command-island-evaluation
 
-`t/scenarios/O02/O02-command-island-evaluation.json` [削除]
+`t/scenarios/O02/O02-command-island-evaluation.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "preserved" | `t/spec/probes.lisp:217` it "language-probe set-builtin v0.7.0 baseline" | (set x 1)\n(echo $x) のスクリプトの stdout が 1\n と一致することを確かめる |
-| `expected.stdout.contains[1]` | "5" | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | (echo ,(progn 1 2)) のスクリプトがコンマの島の値 2 を出すことを確かめる。同じ (echo $o02_value ,(+ 2 3)) が引数 ("preserved" 5) になることは test-sexp-evaluator.lisp:1230 |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe set-builtin v0.7.0 baseline" | 同じ実行で終了コード 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "preserved" | `t/spec/probes.lisp:217` it "language-probe set-builtin v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | (set x 1)(echo $x) の stdout を等値で見ているが、値は整数で、文字列リテラル "preserved" を set して $ で展開することは確かめていない（fixture :66）。 |
+| `expected.stdout.contains[1]` | "5" | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | (echo ,(progn 1 2)) がコンマの島の値 2 を出すことは確かめているが、同じ echo に $o02_value と ,(+ 2 3) を並べた形ではない（fixture :909）。 |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe set-builtin v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | 同じ入口で終了状態 0 を確かめている。 |
 
 ### O03-let-and-set
 
-`t/scenarios/O03/O03-let-and-set.json` [削除]
+`t/scenarios/O03/O03-let-and-set.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "inner" | `t/spec/probes.lisp:217` it "language-probe let-dollar v0.7.0 baseline" | (let ((n 3)) (echo $n ,n)) のスクリプトの stdout が 3 3\n と一致することを確かめる |
-| `expected.stdout.contains[1]` | "outer" | `t/spec/probes.lisp:217` it "language-probe set-builtin v0.7.0 baseline" | (set x 1) の後の (echo $x) が 1 を出すことを確かめる |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe let-dollar v0.7.0 baseline" | 同じ実行で終了コード 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "inner" | `t/spec/probes.lisp:217` it "language-probe let-dollar v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | (let ((n 3)) (echo $n ,n)) で let の束縛を $ で参照することは確かめているが、束縛の値は整数で、文字列 "inner" ではない（fixture :246）。 |
+| `expected.stdout.contains[1]` | "outer" | `t/spec/probes.lisp:217` it "language-probe set-builtin v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | トップレベルの set と $ の参照は確かめているが、値は整数で、let の後に文字列 "outer" を参照する形ではない（fixture :66）。 |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe let-dollar v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | 同じ入口で終了状態 0 を確かめている。 |
 
 ### O04-control-forms
 
@@ -2585,42 +2719,50 @@
 
 ### O08-structured-pipeline
 
-`t/scenarios/O08/O08-structured-pipeline.json` [削除]
+`t/scenarios/O08/O08-structured-pipeline.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "1" | `t/unit/test-execute-pipeline.lisp:1558` it "O08-lowercase-pipeline-operators-dispatch-through-reader" | 同じ -> / where / select の式を実際の reader と evaluator で (スタブなしで) 評価し、値が ((:id 7 :command "demo")) と等しい (要素は 1 つ) ことを確かめる。コンマの島の値を echo が出すことは probe progn-value |
-| `expected.exit_code` | 0 | `t/unit/test-execute-pipeline.lisp:1558` it "O08-lowercase-pipeline-operators-dispatch-through-reader" | 同じ評価で status 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "1" | `t/unit/test-execute-pipeline.lisp:1558` it "O08-lowercase-pipeline-operators-dispatch-through-reader" | read-submission と evaluate-reader-result-in-context を同じプロセスで直接呼ぶ（スクリプトのファイル読み込み、echo とコンマの島、stdout を通らない） | いいえ | -> の値を等値で見ているが、スクリプトの (echo ,(length ...)) が stdout に 1 を出すことは確かめていない。 |
+| `expected.exit_code` | 0 | `t/unit/test-execute-pipeline.lisp:1558` it "O08-lowercase-pipeline-operators-dispatch-through-reader" | 評価関数を直接呼ぶ | いいえ | 評価の status は見ているが、スクリプトを実行したプロセスの終了状態ではない。v0.7.0 の probe value-pipe（fixture :699）は (echo ,(to-json (-> ...))) をスクリプトで実行すると失敗しており、入口の違いが結果を変えうる。 |
 
 ### O09-json-tsv-lines-conversion
 
-`t/scenarios/O09/O09-json-tsv-lines-conversion.json` [削除]
+`t/scenarios/O09/O09-json-tsv-lines-conversion.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "Ada" | `t/unit/test-sexp-value-conversion.lisp:26` it "converts JSON objects and lists with explicit empty-container behavior" | ("name" . "Ada") を含む値を to-json して {"name":"Ada",...} と等値、from-json で戻ることを確かめる。reader の文字列から echo ,(to-json (from-json ...)) で出すことは probe json-roundtrip |
-| `expected.stdout.contains[1]` | "name" | `t/unit/test-sexp-value-conversion.lisp:26` it "converts JSON objects and lists with explicit empty-container behavior" | 同上 (キー name)。TSV の name\tAda の往復は :93 |
-| `expected.stdout.contains[2]` | "first" | `t/unit/test-sexp-value-conversion.lisp:55` it "O09-lowercase-conversion-api-dispatches-through-reader" | シナリオと同じ (from-lines (to-lines (concatenate ... "first" (string #\Newline) "second" (string #\Newline)))) を実際の reader と evaluator で評価し、値が first\nsecond\n と等しいことを確かめる |
-| `expected.stdout.contains[3]` | "second" | `t/unit/test-sexp-value-conversion.lisp:55` it "O09-lowercase-conversion-api-dispatches-through-reader" | 同上 |
-| `expected.exit_code` | 0 | `t/unit/test-sexp-value-conversion.lisp:93` it "converts TSV rows and rejects malformed or unrepresentable data" | 2 行目の TSV の往復 (name\tAda\n) がエラーにならず等値で戻ることを確かめる。1 行目と 3 行目は :26 と :55 が status 0 を含めて確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "Ada" | `t/spec/probes.lisp:217` it "language-probe json-roundtrip v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | (echo ,(to-json (from-json "{\"k\":[1,2]}"))) をスクリプトで実行し stdout を等値で見ている。from-json → to-json の往復をコンマの島で出す形は同じだが、値はシナリオの {"name":"Ada"} ではない（fixture :709）。 |
+| `expected.stdout.contains[1]` | "name" | `t/unit/test-sexp-value-conversion.lisp:26` it "converts JSON objects and lists with explicit empty-container behavior" | to-json / from-json を直接呼ぶ | いいえ | 変換結果を等値で見ているが、スクリプトの 2 行目の to-tsv(from-tsv ...) が name を出すことは確かめていない。 |
+| `expected.stdout.contains[2]` | "first" | `t/unit/test-sexp-value-conversion.lisp:55` it "O09-lowercase-conversion-api-dispatches-through-reader" | read-submission と評価関数を直接呼ぶ（スクリプトと stdout を通らない） | いいえ | 変換 API の名前解決を見ているが、スクリプトで from-lines(to-lines ...) を echo して first が出ることは確かめていない。 |
+| `expected.stdout.contains[3]` | "second" | `t/unit/test-sexp-value-conversion.lisp:55` it "O09-lowercase-conversion-api-dispatches-through-reader" | read-submission と評価関数を直接呼ぶ | いいえ | 同上で、second が出ることは確かめていない。 |
+| `expected.exit_code` | 0 | `t/unit/test-sexp-value-conversion.lisp:93` it "converts TSV rows and rejects malformed or unrepresentable data" | to-tsv / from-tsv を直接呼ぶ | いいえ | 関数の結果を見ており、3 行のスクリプトを実行したプロセスの終了状態ではない。 |
 
 ### O10-regex-and-string-library
 
-`t/scenarios/O10/O10-regex-and-string-library.json` [削除]
+`t/scenarios/O10/O10-regex-and-string-library.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "nshell" | `t/unit/test-builtins-core-string.lisp:368` it "O10-string-builtin-matches-regular-expressions" | string match -r "^a.b$" aXb が一致した引数 aXb\n を出し code 0 を返すことを確かめる (一致した語をそのまま出す) |
-| `expected.exit_code` | 0 | `t/unit/test-builtins-core-string.lisp:368` it "O10-string-builtin-matches-regular-expressions" | 同じ呼び出しで code 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "nshell" | `t/unit/test-builtins-core-string.lisp:368` it "O10-string-builtin-matches-regular-expressions" | string builtin を with-builtins-context で直接呼ぶ（スクリプトの読み込み、bare-line の解析、引用符の扱い、stdout を通らない） | いいえ | "^a.b$" などの一致は見ているが、スクリプトの bare-line `string match -r "^[a-z]+$" nshell` が stdout に nshell を出すことは確かめていない。 |
+| `expected.exit_code` | 0 | `t/unit/test-builtins-core-string.lisp:368` it "O10-string-builtin-matches-regular-expressions" | string builtin を直接呼ぶ | いいえ | builtin の戻り値 0 を見ており、スクリプトを実行したプロセスの終了状態ではない。 |
 
 ### O11-native-arithmetic
 
 `t/scenarios/O11/O11-native-arithmetic.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "18" | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | (echo ,(progn 1 2)) のスクリプトの stdout が 2\n と一致し、コンマの島で CL の式を評価した値を echo が出すことを確かめる |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | 同じ実行で終了コード 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "18" | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | スクリプト (echo ,(progn 1 2)) の stdout を "2\n" と等値で比べ、コンマの島で評価した CL の整数を echo が出すことを確かめている（fixture :909）。* と + は CL の関数で、島の中の評価は同じ経路を通る。 |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | 同じ入口で終了状態 0 を確かめている。 |
 
 ### O12-comments
 
@@ -2645,12 +2787,14 @@
 
 ### O14-function-directory-autoload
 
-`t/scenarios/O14/O14-function-directory-autoload.json` [削除]
+`t/scenarios/O14/O14-function-directory-autoload.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "O14_AUTOLOAD_OK" | `t/unit/test-safe-mode.lisp:402` it "safe-mode-stops-function-autoloading-in-non-interactive-runs" | 対照ケースで :script 入口の MAIN が XDG_CONFIG_HOME/nshell/functions/NAME.nsh から関数を読み込み、本体 (touch marker) が走ったことを marker の有無で確かめる。シナリオは本体が echo なだけで同じ経路 |
-| `expected.exit_code` | 0 | `t/unit/test-safe-mode.lisp:402` it "safe-mode-stops-function-autoloading-in-non-interactive-runs" | 同じ対照ケースで (eql 0 status) を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）。HOME/.config/nshell/functions/o14_greet.nsh を置き、XDG_CONFIG_HOME は設定しない
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "O14_AUTOLOAD_OK" | `t/unit/test-safe-mode.lisp:402` it "safe-mode-stops-function-autoloading-in-non-interactive-runs" | nshell::main を同じプロセスで呼び、%current-process-arguments をスクリプトのパスに差し替える（MAIN のスクリプトの入口は同じ。関数ディレクトリは XDG_CONFIG_HOME で指定） | はい | 自動読み込みした関数の本体が touch で目印のファイルを作ることを見ており、stdout は捨てている。HOME/.config 側の既定の場所から読み込んだ関数の echo が O14_AUTOLOAD_OK を出すことは確かめていない。 |
+| `expected.exit_code` | 0 | `t/unit/test-safe-mode.lisp:402` it "safe-mode-stops-function-autoloading-in-non-interactive-runs" | nshell::main を同じプロセスで呼び、スクリプトのパスを引数にする | はい | *main-exit-function* に渡る終了状態 0 を確かめている。 |
 
 ### O15-asdf-library-load
 
@@ -2675,20 +2819,24 @@
 
 `t/scenarios/O17/O17-force-external-command.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "O17_EXTERNAL_OK" | `t/spec/probes.lisp:217` it "language-probe splice v0.7.0 baseline" | (^printf "[%s]" ,@(list 1 2 3)) のスクリプトで ^ 付きの外部 printf が [1][2][3] を出すことを stdout の一致で確かめる |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe splice v0.7.0 baseline" | 同じ実行で終了コード 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "O17_EXTERNAL_OK" | `t/spec/probes.lisp:217` it "language-probe splice v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | スクリプト (^printf "[%s]" ,@(list 1 2 3)) の stdout を "[1][2][3]\n" と等値で比べ、^ を付けた外部の printf を実行してその出力が stdout に出ることを確かめている（fixture :799）。 |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe splice v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | 同じ入口で終了状態 0 を確かめている。 |
 
 ### O18-alias-eval-and-string-execution
 
-`t/scenarios/O18/O18-alias-eval-and-string-execution.json` [削除]
+`t/scenarios/O18/O18-alias-eval-and-string-execution.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "O18_ALIAS_OK" | `t/spec/probes.lisp:217` it "language-probe alias-sexp v0.7.0 baseline" | alias ll 'echo LL' の後の (ll) と bare-line の ll がどちらも LL を出すことを stdout の一致で確かめる |
-| `expected.stdout.contains[1]` | "O18_EVAL_OK" | `t/spec/probes.lisp:217` it "language-probe eval-string v0.7.0 baseline" | (eval "echo E1") の stdout が E1\n と一致することを確かめる |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe eval-string v0.7.0 baseline" | 同じ実行で終了コード 0 を確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "O18_ALIAS_OK" | `t/spec/probes.lisp:217` it "language-probe alias-sexp v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | alias ll 'echo LL' の後の bare-line 呼び出しを確かめているが、本体の中に二重引用符を含む 'echo "O18_ALIAS_OK"' の展開は確かめていない（fixture :679）。 |
+| `expected.stdout.contains[1]` | "O18_EVAL_OK" | `t/spec/probes.lisp:217` it "language-probe eval-string v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | スクリプト (eval "echo E1") の stdout を等値で比べ、文字列の実行を確かめている（fixture :669）。形はシナリオと同じ。 |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe eval-string v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | eval だけのスクリプトの終了状態 0 で、alias を含む 3 行のスクリプトの終了状態ではない。 |
 
 ### P01-xdg-init-file
 
@@ -2716,15 +2864,17 @@
 
 ### P03-function-directory
 
-`t/scenarios/P03/approx-P03-function-directory.json` [削除]
+`t/scenarios/P03/approx-P03-function-directory.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "P03_FUNCTION_DIRECTORY_OK" | `t/unit/test-repl-submission.lisp:157` it "e03-new-reader-refreshes-autoload-context-for-each-submission" | 対話の提出経路 (%evaluate-repl-reader-submission) に bare-line で関数名を入れ、XDG_CONFIG_HOME/nshell/functions/ の .nsh から読み込んだ関数の出力 E03_AUTOLOAD_B が stdout に出ることを確かめる |
-| `expected.stream.contains[1]` | "P03_AFTER_2" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | PTY の対話入力で printf を 2 回実行し、各出力と exit 後の終了コード 0 を確かめる (シナリオ自身が出す目印) |
-| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:470` it "e2e-main-interactive-pty-ctrl-d-preserves-last-status" | Ctrl-D で直前の status を終了コードにすることを確かめる (false の後は 1)。シナリオは直前が成功した echo なので 0 |
-| `steps[2].contains` | "P03_FUNCTION_DIRECTORY_OK" | `t/unit/test-repl-submission.lisp:157` it "e03-new-reader-refreshes-autoload-context-for-each-submission" | 対話の提出経路 (%evaluate-repl-reader-submission) に bare-line で関数名を入れ、XDG_CONFIG_HOME/nshell/functions/ の .nsh から読み込んだ関数の出力 E03_AUTOLOAD_B が stdout に出ることを確かめる |
-| `steps[5].contains` | "P03_AFTER_2" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | PTY の対話入力で printf を 2 回実行し、各出力と exit 後の終了コード 0 を確かめる (シナリオ自身が出す目印) |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力、設定を読み込む load_config true）。HOME/.config/nshell/functions/p03_greet.nsh を置く
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "P03_FUNCTION_DIRECTORY_OK" | `t/unit/test-repl-submission.lisp:157` it "e03-new-reader-refreshes-autoload-context-for-each-submission" | REPL の %evaluate-repl-reader-submission を直接呼び、XDG_CONFIG_HOME を *environment* に置く（起動時の設定読み込み、キー入力、端末を通らない） | いいえ | 提出ごとに関数ディレクトリを読み直すことは見ているが、PTY で p03_greet と入力し、既定の HOME/.config から読み込んだ関数の出力が端末に出ることは確かめていない。 |
+| `expected.stream.contains[1]` | "P03_AFTER_2" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 実 PTY で nshell の MAIN を起動しキー入力を書き込む（%e2e-pty-spawn、--no-config --no-history） | はい | 続く提出の出力が届くことは見ているが、--no-config で起動しており設定を読み込む起動ではなく、入力も echo $SCENARIO_MARKER ではない。 |
+| `expected.exit_code` | 0 | `t/e2e/test-smoke.lisp:470` it "e2e-main-interactive-pty-ctrl-d-preserves-last-status" | 実 PTY で nshell の MAIN を起動しキー入力を書き込む（%e2e-pty-spawn、--no-config --no-history） | はい | Ctrl-D で終了し直前の状態を終了コードにすることを見ているが、期待値は false の後の 1 で、設定を読み込んだ起動での 0 ではない。 |
+| `steps[2].contains` | "P03_FUNCTION_DIRECTORY_OK" | `t/unit/test-repl-submission.lisp:157` it "e03-new-reader-refreshes-autoload-context-for-each-submission" | REPL の提出関数を直接呼ぶ | いいえ | contains[0] と同じで、端末で出力を待つ同期は確かめていない。 |
+| `steps[5].contains` | "P03_AFTER_2" | `t/e2e/test-smoke.lisp:476` it "e2e-main-interactive-pty-status-survives-input-boundaries" | 実 PTY で nshell の MAIN を起動しキー入力を書き込む（%e2e-pty-spawn、--no-config --no-history） | はい | contains[1] と同じで、設定を読み込む起動での 2 回目の提出の出力ではない。 |
 
 ### P04-abbreviation-expansion
 
@@ -2740,10 +2890,12 @@
 
 `t/scenarios/P05/P05-alias-expansion.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "P05_ALIAS_OK" | `t/spec/probes.lisp:217` it "language-probe alias-sexp v0.7.0 baseline" | `docs/design/conformance/language-probes-v0.7.0.json` の alias-sexp (alias ll 'echo LL' の後に (ll) と bare-line の ll) を実バイナリのスクリプトとして走らせ、stdout が "LL\nLL\n" と一致することを %check-baseline (`t/spec/support.lisp:692`) が確かめる。テスト名は probes.lisp:217 のマクロが生成する |
-| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe alias-sexp v0.7.0 baseline" | 同じ実行で、終了状態が観測値の 0 と一致することを確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "P05_ALIAS_OK" | `t/spec/probes.lisp:217` it "language-probe alias-sexp v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | スクリプト alias ll 'echo LL' の後の bare-line `ll` の stdout を等値で比べ、単一引用符の本体を持つ alias を bare-line で呼ぶことを確かめている（fixture :679）。シナリオと同じ形。 |
+| `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe alias-sexp v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | 同じ入口で終了状態 0 を確かめている。 |
 
 ### P06-key-binding
 
@@ -2805,6 +2957,8 @@
 
 この期待値は、aarch64-darwin でビルドした nshell に、golden の実行器と同じ作業ディレクトリ・環境・正規化で 3 回流し、`error.message` を除いた envelope 全体が 3 回とも一致したものです。Linux では流していません。
 
+削除の前に: `t/e2e/test-smoke-script.lisp:18` の it "e2e-main-script-executes-multiline-blocks" の隣に it を足す。with-temporary-output-file (path :prefix "nshell-p07-script") に、シナリオの invocation.text "theme use nord\ntheme show\n" をそのまま書く。`t/e2e/test-smoke-script.lisp:372` の it "e2e-main-script-errexit-option-and-shell-command-delegation" と同じく `t/support/runtime.lisp:37` の %e2e-child-environment を使い、HOME を新しい空の一時ディレクトリに、PATH を "PATH=/usr/bin:/bin" に、TERM を "TERM=dumb" に置き換えた環境を :environment に渡す（シナリオの environment.variables）。(%run-nshell-main (list path) :environment environment)（`t/e2e/test-smoke.lisp:60` の %run-nshell-main）の結果について、exit-code が 0、stdout に "nord" が含まれることを確かめる。シナリオは stderr を確かめないので %assert-nshell-main-result は使わない。文字列中の \n は改行で、Lisp では (format nil "...~%...") などで書く。
+
 ### P08-prompt-format
 
 `t/scenarios/P08/approx-P08-prompt-format.json` [削除 (先にテストを足す)]
@@ -2861,6 +3015,8 @@
 ```
 
 この期待値は、aarch64-darwin でビルドした nshell に、golden の実行器と同じ作業ディレクトリ・環境・正規化で 3 回流し、`error.message` を除いた envelope 全体が 3 回とも一致したものです。Linux では流していません。
+
+削除の前に: `t/e2e/test-smoke-script.lisp:18` の it "e2e-main-script-executes-multiline-blocks" の隣に it を足す。with-temporary-output-file (path :prefix "nshell-p10-script") に、シナリオの invocation.text "complete -c p10_command -f --p10-option\ncomplete -C \"p10_command --p10\"\n" をそのまま書く。`t/e2e/test-smoke-script.lisp:372` の it "e2e-main-script-errexit-option-and-shell-command-delegation" と同じく `t/support/runtime.lisp:37` の %e2e-child-environment を使い、HOME を新しい空の一時ディレクトリに、PATH を "PATH=/usr/bin:/bin" に、TERM を "TERM=dumb" に置き換えた環境を :environment に渡す（シナリオの environment.variables）。(%run-nshell-main (list path) :environment environment)（`t/e2e/test-smoke.lisp:60` の %run-nshell-main）の結果について、exit-code が 0、stdout に "--p10-option" が含まれることを確かめる。シナリオは stderr を確かめないので %assert-nshell-main-result は使わない。文字列中の \n は改行で、Lisp では (format nil "...~%...") などで書く。
 
 ### P11-continue-after-config-error
 
@@ -2923,6 +3079,8 @@
 ```
 
 この期待値は、aarch64-darwin でビルドした nshell に、golden の実行器と同じ作業ディレクトリ・環境・正規化で 3 回流し、`error.message` を除いた envelope 全体が 3 回とも一致したものです。Linux では流していません。
+
+削除の前に: `t/e2e/test-smoke-script.lisp:43` の it "e2e-main-script-stops-after-parse-error" の隣に it を足す。with-temporary-output-file (path :prefix "nshell-q01-script") に、シナリオの invocation.text ")\n" をそのまま書く。`t/e2e/test-smoke-script.lisp:372` の it "e2e-main-script-errexit-option-and-shell-command-delegation" と同じく `t/support/runtime.lisp:37` の %e2e-child-environment を使い、HOME を新しい空の一時ディレクトリに、PATH を "PATH=/usr/bin:/bin" に、TERM を "TERM=dumb" に置き換えた環境を :environment に渡す（シナリオの environment.variables）。(%run-nshell-main (list path) :environment environment)（`t/e2e/test-smoke.lisp:60` の %run-nshell-main）の結果について、exit-code が 2 であること、stdout と stderr のどちらにも "#S("、"Backtrace"、"SB-DEBUG" が含まれない（search が nil）ことを確かめる。stderr が空でないことに依存しないよう、%assert-nshell-main-result（stderr "" を要求する）は使わない。文字列中の \n は改行で、Lisp では (format nil "...~%...") などで書く。
 
 ### Q02-bounded-recursion-recovery
 
@@ -3128,12 +3286,14 @@
 
 ### T03-help-output
 
-`t/scenarios/T03/approx-T03-help-output.json` [削除]
+`t/scenarios/T03/approx-T03-help-output.json` [削除 (先にテストを足す)]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stdout.contains[0]` | "echo" | `t/unit/test-builtins-core.lisp:74` it "help-renders-overview-and-command-specific-diagnostics" | builtin-help-entries の最初の項目 (`data/domain/completion/catalog-command-data.lisp:6` の echo) で help echo を呼び、出力に synopsis "echo [argument ...]" が含まれることを確かめる |
-| `expected.exit_code` | 0 | `t/unit/test-builtins-core.lisp:74` it "help-renders-overview-and-command-specific-diagnostics" | 同じ help echo の終了コード 0 を確かめる。バッチが最後の状態を終了状態にすることは test-repl.lisp:31 が確かめる |
+シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stdout.contains[0]` | "echo" | `t/unit/test-builtins-core.lisp:74` it "help-renders-overview-and-command-specific-diagnostics" | help builtin を call-builtin で直接呼ぶ（スクリプトと stdout を通らない） | いいえ | 知識ベースの先頭の項目の synopsis を見ており、スクリプトの `help echo` が stdout に echo を出すことは確かめていない。 |
+| `expected.exit_code` | 0 | `t/unit/test-builtins-core.lisp:74` it "help-renders-overview-and-command-specific-diagnostics" | help builtin を直接呼ぶ | いいえ | builtin の戻り値 0 を見ており、スクリプトを実行したプロセスの終了状態ではない。 |
 
 ### T05-legacy-history-load
 
@@ -3166,15 +3326,17 @@
 
 `t/scenarios/U02/approx-U02-osc-133-markers.json` [削除]
 
-| assertion | 値 | 確かめているテスト | 対応 |
-|---|---|---|---|
-| `expected.stream.contains[0]` | "U02_COMMAND_OK" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.contains[0] | 残す F07 が同じ TERM=xterm-256color の PTY で echo "$F07_SECOND" の出力 F07_SECOND_OUTPUT を確かめる |
-| `expected.stream.ordered_contains[0]` | "\u001b]133;A" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[0] | 残す F07 が同じ順序の検査の最初に ESC]133;A を確かめる |
-| `expected.stream.ordered_contains[1]` | "\u001b]133;B" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[1] | 残す F07 が ESC]133;A の後に ESC]133;B を確かめる |
-| `expected.stream.ordered_contains[2]` | "\u001b]133;C" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[2] | 残す F07 が ESC]133;B の後に ESC]133;C を確かめる |
-| `expected.stream.ordered_contains[3]` | "\u001b]133;D;0" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[5] | 残す F07 がコマンドの出力の後に ESC]133;D;0 を確かめる |
-| `expected.exit_code` | 0 | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.exit_code | 残す F07 が exit の後の終了状態 0 を確かめる |
-| `steps[2].contains` | "U02_COMMAND_OK" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" steps[4].contains | 残す F07 が echo の出力を待つ |
+シナリオの入口: 対話 REPL（scripts/run-scenarios.py が nshell を PTY で起動し、キー列を端末から送る → 行エディタ → Enter で提出 → 実行 → 端末への出力）。TERM=xterm-256color
+
+| assertion | 値 | 確かめているテスト | テストの入口 | 同じ入口 | 対応 |
+|---|---|---|---|---|---|
+| `expected.stream.contains[0]` | "U02_COMMAND_OK" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.contains[0] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が同じ PTY・同じ TERM で echo "$VAR" を入力し、その出力が端末に届くことを確かめている。 |
+| `expected.stream.ordered_contains[0]` | "\u001b]133;A" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[0] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 がプロンプトの前の ESC ]133;A を同じ順序の先頭で確かめている。 |
+| `expected.stream.ordered_contains[1]` | "\u001b]133;B" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[1] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が A の後の ESC ]133;B を確かめている。 |
+| `expected.stream.ordered_contains[2]` | "\u001b]133;C" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[2] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が B の後、出力の前の ESC ]133;C を確かめている。 |
+| `expected.stream.ordered_contains[3]` | "\u001b]133;D;0" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.stream.ordered_contains[5] | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が出力の後の ESC ]133;D;0 を確かめている。 |
+| `expected.exit_code` | 0 | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" expected.exit_code | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が exit と Enter で終了コード 0 を確かめている。 |
+| `steps[2].contains` | "U02_COMMAND_OK" | `t/scenarios/F07/approx-osc-133-prompt.json:2` scenario "F07-approx-osc-133-prompt" steps[4].contains | 残す PTY シナリオ（同じ `scripts/run-scenarios.py` が nshell を PTY で起動しキーを送る） | はい | F07 が同じ形で出力を待つ同期を行っている。 |
 
 ### U03-tmux-screen-terminal
 

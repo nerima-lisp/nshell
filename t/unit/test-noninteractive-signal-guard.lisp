@@ -125,6 +125,30 @@ the thread returns :DELIVERED or :NOT-DELIVERED."
         (expect (nshell.infrastructure.acl:noninteractive-stop-reason stop)
                 :to-equal :timeout))))
 
+  (it "records the signal that ended an inner call in the outer stop without unwinding it"
+    ;; The --mcp server inside, RUN-JSON-COMMAND's guard inside that: the run
+    ;; answers the signal and the server only learns of it afterwards.
+    (with-guard-signal-states ()
+      (let* ((outer (nshell.infrastructure.acl:make-noninteractive-stop))
+             (steps '())
+             (result
+               (nshell.infrastructure.acl:call-with-noninteractive-signals
+                outer
+                (lambda ()
+                  (push (nshell.infrastructure.acl:call-with-noninteractive-signals
+                         (nshell.infrastructure.acl:make-noninteractive-stop)
+                         (lambda ()
+                           (expect (%simulate-signal sb-unix:sigterm) :to-equal :delivered)
+                           (%wait-for-sleep-forever))
+                         :after-signal (lambda (signal) (list :inner signal)))
+                        steps)
+                  ;; Still running here: the outer call was not unwound.
+                  (push (nshell.infrastructure.acl:noninteractive-stop-signal outer) steps)
+                  :outer-finished)
+                :after-signal (lambda (signal) (list :outer signal)))))
+        (expect (reverse steps) :to-equal (list (list :inner sb-unix:sigterm) sb-unix:sigterm))
+        (expect result :to-equal (list :outer sb-unix:sigterm)))))
+
   (it "restores the handlers it replaced, the same Lisp functions"
     (with-guard-signal-states ()
       ;; Known handlers of this test's own, so a restore to SIG_DFL or to

@@ -52,6 +52,118 @@ compilation unit meanwhile."
                (MACROLET ((M () (CL:SLEEP 30) NIL)) (M))"
           (namestring ready)))
 
+;;; --mcp: the server is a subprocess on pipes, started from source as the
+;;; other cases are, so the Nix sandbox runs these too.
+
+(defun %mcp-signal-line (id method params)
+  (json-kit:stringify
+   (json-kit:make-json-object
+    (append (list (cons "jsonrpc" "2.0"))
+            (and id (list (cons "id" id)))
+            (list (cons "method" method))
+            (and params (list (cons "params" params)))))))
+
+(defun %mcp-signal-initialize ()
+  (list (%mcp-signal-line
+         1 "initialize"
+         (json-kit:make-json-object
+          (list (cons "protocolVersion" "2025-06-18")
+                (cons "capabilities"
+                      (json-kit:make-json-object
+                       (list (cons "elicitation" (json-kit:make-json-object '())))))
+                (cons "clientInfo"
+                      (json-kit:make-json-object
+                       (list (cons "name" "bug4") (cons "version" "1")))))))
+        (%mcp-signal-line nil "notifications/initialized" nil)))
+
+(defun %mcp-signal-run (id input)
+  (%mcp-signal-line id "tools/call"
+                    (json-kit:make-json-object
+                     (list (cons "name" "run")
+                           (cons "arguments"
+                                 (json-kit:make-json-object
+                                  (list (cons "input" input))))))))
+
+(defun %mcp-signal-accept (n)
+  (format nil "{\"jsonrpc\":\"2.0\",\"id\":\"nshell-elicitation-~D\",\"result\":{\"action\":\"accept\",\"content\":{\"approve\":true}}}" n))
+
+(defun %mcp-signal-messages (stdout)
+  (loop for line in (uiop:split-string (%signal-e2e-read stdout) :separator '(#\Newline))
+        unless (zerop (length line))
+          collect (json-kit:parse line)))
+
+(defun %mcp-signal-session (directory lines ready signal)
+  "Start nshell --mcp in DIRECTORY, write LINES to its standard input and
+keep it open, send SIGNAL once READY, a function of the messages written so
+far, returns true, and return the messages it wrote, its exit status and its
+stderr."
+  (let* ((root (or *noninteractive-signal-source-root*
+                   (asdf:system-source-directory :nshell)))
+         (stdout (merge-pathnames "stdout" directory))
+         (stderr (merge-pathnames "stderr" directory))
+         (source-file (merge-pathnames "loaded-source" directory))
+         (program nil)
+         (bootstrap
+           (format nil
+                   "(progn
+                      (let ((*standard-output* (make-broadcast-stream))
+                            (*error-output* (make-broadcast-stream))
+                            (*trace-output* (make-broadcast-stream)))
+                        (asdf:load-system :nshell))
+                      (with-open-file (out ~S :direction :output)
+                        (write-line (namestring (asdf:system-source-directory :nshell)) out))
+                      (let ((sb-ext:*posix-argv* (list \"nshell\" \"--no-config\" \"--no-history\" \"--mcp\")))
+                        (funcall (find-symbol ~S ~S))))"
+                   (namestring source-file) "MAIN" "NSHELL")))
+    (dolist (name '("home/" "config/" "data/" "state/" "cache/"))
+      (ensure-directories-exist (merge-pathnames name directory)))
+    (unwind-protect
+         (progn
+           (setf program
+                 (sb-ext:run-program
+                  (%absolute-sbcl-executable)
+                  (append '("--noinform" "--disable-debugger")
+                          (%asdf-bootstrap-forms (namestring root))
+                          (list "--eval" bootstrap))
+                  :wait nil :directory directory
+                  :input :stream :output stdout :error stderr
+                  :environment (%signal-e2e-environment directory nil)))
+           (let ((in (sb-ext:process-input program)))
+             (dolist (line lines) (write-line line in))
+             (finish-output in))
+           (%signal-e2e-wait
+            (lambda ()
+              (and (probe-file source-file)
+                   (funcall ready (ignore-errors (%mcp-signal-messages stdout)))))
+            "the MCP server to be ready")
+           (expect (truename (string-trim '(#\Newline) (%signal-e2e-read source-file)))
+                   :to-equal (truename root))
+           (sb-posix:kill (sb-ext:process-pid program) signal)
+           (%signal-e2e-wait (lambda () (not (sb-ext:process-alive-p program)))
+                             "the signalled MCP server to exit" 10)
+           (sb-ext:process-wait program)
+           (values (%mcp-signal-messages stdout)
+                   (sb-ext:process-exit-code program)
+                   (%signal-e2e-read stderr)))
+      (when (and program (sb-ext:process-alive-p program))
+        (sb-ext:process-kill program sb-unix:sigkill)
+        (sb-ext:process-wait program))
+      (when program (sb-ext:process-close program)))))
+
+(defun %mcp-signal-ids (messages)
+  "The ids of the responses among MESSAGES, in order."
+  (loop for message in messages
+        unless (gethash "method" message)
+          collect (gethash "id" message)))
+
+(defun %mcp-signal-response (messages id)
+  (find-if (lambda (message)
+             (and (not (gethash "method" message)) (equal (gethash "id" message) id)))
+           messages))
+
+(defun %mcp-signal-envelope (response)
+  (json-kit:parse (json-at response "result" "content" 0 "text")))
+
 (defun %signal-e2e-clean-groups (directory)
   (dolist (file (directory (merge-pathnames "*.pids" directory)))
     (let ((pgid (first (%signal-e2e-pids file))))
@@ -504,4 +616,63 @@ return its stdout, stderr and exit status."
                                    (%signal-e2e-slow-compile-form ready))
                              (list ready) sb-unix:sigint :signal-delay 0.3)
           (let ((envelope (%signal-e2e-expect-envelope stdout stderr status "SIGINT")))
-            (expect (json-at envelope "stderr" "text") :to-equal "")))))))
+            (expect (json-at envelope "stderr" "text") :to-equal ""))))))
+
+  (it "bug4-mcp-signal-during-a-run-answers-it-and-ends-the-server"
+    (dolist (signal (list (list sb-unix:sigterm 143) (list sb-unix:sigint 130)
+                         (list sb-unix:sighup 129)))
+      (host-kit:with-temporary-directory (directory)
+        (unwind-protect
+             (multiple-value-bind (command pids trap-file)
+                 (%signal-e2e-fixture directory "child")
+               (multiple-value-bind (messages status)
+                   (%mcp-signal-session
+                    directory
+                    ;; sh classifies :confirm; the client accepts it.
+                    (append (%mcp-signal-initialize)
+                            (list (%mcp-signal-run 2 command) (%mcp-signal-accept 1)))
+                    (lambda (messages)
+                      (declare (ignore messages))
+                      (plusp (length (%signal-e2e-read pids))))
+                    (first signal))
+                 (expect status :to-equal (second signal))
+                 ;; The initialize answer and exactly one answer to the run.
+                 (expect (%mcp-signal-ids messages) :to-equal (list 1 2))
+                 (let ((envelope (%mcp-signal-envelope (%mcp-signal-response messages 2))))
+                   (expect (json-at envelope "error" "code") :to-equal "E_INTERRUPTED")
+                   (expect (json-at envelope "stdout" "text") :to-equal (format nil "partial~%")))
+                 (expect (%signal-e2e-read trap-file) :to-equal "TERM")
+                 (%signal-e2e-expect-gone pids)))
+          (%signal-e2e-clean-groups directory)))))
+
+  (it "bug4-mcp-signal-between-runs-ends-the-server-at-once"
+    (host-kit:with-temporary-directory (directory)
+      (multiple-value-bind (messages status stderr)
+          (%mcp-signal-session
+           directory
+           (append (%mcp-signal-initialize) (list (%mcp-signal-run 2 "echo hi")))
+           (lambda (messages) (%mcp-signal-response messages 2))
+           sb-unix:sigterm)
+        (declare (ignore stderr))
+        (expect status :to-equal 143)
+        (expect (%mcp-signal-ids messages) :to-equal (list 1 2))
+        (expect (json-at (%mcp-signal-envelope (%mcp-signal-response messages 2)) "ok")
+                :to-equal t))))
+
+  (it "bug4-mcp-signal-while-waiting-for-approval-ends-the-server"
+    (host-kit:with-temporary-directory (directory)
+      (let ((marker (merge-pathnames "ran" directory)))
+        (multiple-value-bind (messages status)
+            (%mcp-signal-session
+             directory
+             (append (%mcp-signal-initialize)
+                     (list (%mcp-signal-run 2 (format nil "sh -c ': > ~A'"
+                                                      (namestring marker)))))
+             (lambda (messages)
+               (find "elicitation/create" messages
+                     :key (lambda (message) (gethash "method" message)) :test #'equal))
+             sb-unix:sigterm)
+          (expect status :to-equal 143)
+          ;; No answer to the run that never started.
+          (expect (%mcp-signal-ids messages) :to-equal (list 1))
+          (expect (probe-file marker) :to-be-null))))))

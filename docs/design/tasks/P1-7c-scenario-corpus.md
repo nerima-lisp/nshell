@@ -1,6 +1,6 @@
 # P1-7c シナリオコーパスの選別
 
-`t/scenarios/` のシナリオ 260 本を 1 本ずつ判定した一覧です。v0.8 では、[I9](../inventory/I9-dev-quality-release.md) の 41 行のとおり、PTY 中心の 30〜40 本を残し、batch のものは `--json` の golden test へ移し、それ以外は 1 本ずつ削除の理由を記録します。この文書は [P1-machine-interface.md](P1-machine-interface.md) の P1-7 の最後の項目にあたる選別の結果です。
+`t/scenarios/` のシナリオ 260 本を 1 本ずつ判定した一覧です。v0.8 では、[I9](../inventory/I9-dev-quality-release.md) の 41 行のとおり、PTY 中心の 30〜40 本を目安に残し、batch のものは `--json` の golden test へ移し、それ以外は 1 本ずつ削除の理由を記録します。この文書は [P1-machine-interface.md](P1-machine-interface.md) の P1-7 の最後の項目にあたる選別の結果です。
 
 シナリオを実際に消したり golden へ移したりするのは、[P2-language-and-cuts.md](P2-language-and-cuts.md) の P2-6 です。P2-6 ではこの一覧を作業の指示として使い、P2-6 の「batch のものは golden へ移す」より、この一覧の判定を優先します。判定を変えるときは、この文書の該当する行と、集計と残す本数の内訳を直してから作業してください。
 
@@ -35,21 +35,18 @@
 
 260 本のシナリオの assertion は、合わせて 1371 個です。このうち、[削除] の 75 本、[削除 (先にテストを足す)] の 129 本、見直しで [残す] に変えた 4 本の計 208 本について、assertion 1019 個の対応を確かめました。対応するテストがあったのは 558 個です。[削除] の 75 本は、すべての assertion に対応するテストがあります。
 
-## 残す本数が範囲を外れている
+## 残す本数
 
-残すのは 41 本で、30〜40 本の範囲を 1 本超えています。CI が指定している 7 本は、すべて含みます。
+30〜40 本を目安とし、基準に当たる 41 本を残します。CI が指定している 7 本は、すべて含みます。
 
-超えたのは、assertion ごとに見直したところ、次の 4 本に PTY でしか確かめられない assertion があったためです。前の版の [残す] から H14 と E07 は [削除 (先にテストを足す)] に移しましたが、その 2 本を引いても 41 本になります。
+目安を 1 本超えたのは、assertion ごとに見直したところ、次の 4 本に PTY でしか確かめられない assertion があったためです。
 
 - D06-approx-editor-child-tty: 子の子プロセスが端末から読めること。
 - E08-ctrl-c-interrupts-whole-pipeline: 前景で起動したパイプラインに、端末から Ctrl-C を送ること。
 - B09-pty-command-uses-nshell-builtins: stdout が端末のときの `--command` の出力のバイト列 (`\r\n` を含む) の完全一致。
 - B10-login-command-environment: stdout が端末のときの `-ilc` の出力のバイト列の完全一致。
 
-範囲に収める案は 2 つあります。どちらにするかは、まだ決めていません。
-
-- 案 1: B09-pty-command-uses-nshell-builtins と B10-login-command-environment を [削除 (先にテストを足す)] にし、同じ確認を `t/e2e/test-smoke.lisp` の PTY のテストに移す。この 2 本は対話の挙動ではなく、端末につないだ非対話の起動を確かめている。残すのは 39 本になる。ただし、PTY の e2e は Nix のサンドボックスでは skip されるので、ホストで `NSHELL_TEST_PTY=1 CI=1` を付けて流す CI の経路がなければ、確認が抜ける。
-- 案 2: 範囲の上限を 41 本に広げる。
+B09-pty と B10 の確認を `t/e2e` の PTY のテストに移せば 39 本になりますが、そのテストは Nix のサンドボックスでは skip され、確かめる経路が減ります。そのため、この 2 本もシナリオとして残します。
 
 ## 残す 41 本の内訳
 

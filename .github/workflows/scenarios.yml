@@ -77,12 +77,6 @@ jobs:
           --p12-consumer-fixture t/scenarios/P12/public-api-consumer.lisp
           --sbcl \"\$(command -v sbcl)\""
 
-      - name: Run source scenarios
-        run: >-
-          nix develop .#scenarios -c python3 scripts/run-scenarios.py
-          --binary "$RUNNER_TEMP/nshell-scenario-binary/bin/nshell"
-          --mode source
-
       - name: Check that slow Git status does not block the prompt (L02)
         id: l02
         # Passes when the prompt and command output do not wait for a sleeping fake

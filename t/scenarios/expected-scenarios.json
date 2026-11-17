@@ -1092,13 +1092,6 @@
       "path": "G02/vi-insert-escape-e-same-write.json"
     },
     {
-      "id": "T02-etc-shells-guidance",
-      "uc": [
-        "T02"
-      ],
-      "path": "T02/etc-shells-guidance.json"
-    },
-    {
       "id": "A11-nested-nshell-session",
       "uc": ["A11"],
       "path": "A11/nested-nshell-session.json"
@@ -1207,11 +1200,6 @@
       "id": "S06-classifies-and-gates-sexp-proposals",
       "uc": ["S06"],
       "path": "S06/S06-classifies-and-gates-sexp-proposals.json"
-    },
-    {
-      "id": "T01-platform-support-matches-flake",
-      "uc": ["T01"],
-      "path": "T01/platform-support-matches-flake.json"
     },
     {
       "id": "T06-copied-release-bundle-pty-smoke",

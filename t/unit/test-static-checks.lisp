@@ -720,6 +720,30 @@
                  '(:missing-from-documentation ("new-command")
                                                :unknown-in-documentation
                                                nil))))
+          (it "matches the documented platforms to the flake systems"
+              (let* ((root (static-check-project-root))
+                     (flake (uiop:read-file-string (merge-pathnames "flake.nix" root)))
+                     (doc (uiop:read-file-string
+                           (merge-pathnames "docs/src/getting-started.md" root))))
+                (expect (remove-if (lambda (s) (search s flake))
+                                   '("systems = [" "\"x86_64-linux\"" "\"aarch64-darwin\""))
+                        :to-equal nil)
+                (expect (remove-if (lambda (s) (search s doc))
+                                   '("Apple Silicon macOS (`aarch64-darwin`) and x86-64 Linux"
+                                     "`x86_64-linux`"
+                                     "It does not declare an Intel macOS target."))
+                        :to-equal nil)))
+          (it "documents registering nshell in /etc/shells before chsh"
+              (let ((doc (uiop:read-file-string
+                          (merge-pathnames "docs/src/getting-started.md"
+                                           (static-check-project-root)))))
+                (expect (remove-if (lambda (s) (search s doc))
+                                   '("nshell_path=\"$(command -v nshell)\""
+                                     "grep -Fxq \"$nshell_path\" /etc/shells"
+                                     "sudo tee -a /etc/shells"
+                                     "grep -Fx \"$nshell_path\" /etc/shells"
+                                     "chsh -s \"$nshell_path\""))
+                        :to-equal nil)))
           (it "rejects unallowlisted test declarations in test bodies"
               (let* ((expected
                        (sort

@@ -812,6 +812,7 @@
       # the bug-report golden test, the response envelope schema
       # conformance test, and the machine --json golden tests, which read
       # the examples from the two design documents and the t/golden cases.
+      # The static checks compare flake.nix with getting-started.md.
       # Language conformance tests also read the v0.7 probe fixture, and
       # resolve every design `file:line` their rows cite when they load.
       sourceInclude = [
@@ -826,6 +827,8 @@
         ./docs/design/conformance/envelope.schema.json
         ./docs/design/proposal/02-machine-interface.md
         ./docs/design/ux/U6-response-envelope.md
+        ./flake.nix
+        ./docs/src/getting-started.md
       ];
 
       lispDependencies =
@@ -1202,7 +1205,6 @@
 
                   python3 ${self}/scripts/test-run-scenarios.py
                   python3 ${self}/scripts/run-scenarios.py --binary ${bin} --mode batch
-                  python3 ${self}/scripts/run-scenarios.py --binary ${bin} --mode source
                   touch "$out"
                 '';
 

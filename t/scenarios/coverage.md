@@ -224,8 +224,8 @@ executable scenarios and manual checks.
 | S05 | direct | 1 | 0 | `t/scenarios/S05/S05-noninteractive-ai-status.json` |
 | S06 | direct, manual | 1 | 1 | `t/scenarios/S06/S06-classifies-and-gates-sexp-proposals.json`, `t/scenarios/S06/manual.md` |
 | S07 | approximation | 2 | 0 | `t/scenarios/S07/approx-S07-shell-without-claude.json`, `t/scenarios/S07/cancel-resumes-after-new-request.json` |
-| T01 | direct, manual | 1 | 1 | `t/scenarios/T01/platform-support-matches-flake.json`, `t/scenarios/T01/manual.md` |
-| T02 | direct, manual | 1 | 1 | `t/scenarios/T02/etc-shells-guidance.json`, `t/scenarios/T02/manual.md` |
+| T01 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/T01/manual.md` |
+| T02 | removed in P2-6 (checked by tests), manual | 0 | 1 | `t/scenarios/T02/manual.md` |
 | T03 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | T04 | manual | 0 | 1 | `t/scenarios/T04/manual.md` |
 | T05 | direct, approximation | 2 | 0 | `t/scenarios/T05/legacy-history-import-is-idempotent.json`, `t/scenarios/T05/approx-T05-legacy-history-load.json` |
@@ -233,4 +233,4 @@ executable scenarios and manual checks.
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | removed in P2-6 (checked by the F07 scenario) | 0 | 0 | — |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 180 | 47 | — |
+| Total | expected corpus | 178 | 47 | — |

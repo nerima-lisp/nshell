@@ -209,15 +209,27 @@ class ScenarioRunnerTests(unittest.TestCase):
             self.assertNotIn("TMUX", options["env"])
             self.assertNotIn("TMUX_PANE", options["env"])
 
-    def test_t02_source_scenario_checks_login_shell_guidance(self) -> None:
-        scenario_path = RUNNER_PATH.parents[1] / "t/scenarios/T02/etc-shells-guidance.json"
-        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+    def test_source_scenario_matches_repository_file_text(self) -> None:
+        def scenario(contains: list[str]) -> dict:
+            return {
+                "id": "source-fixture",
+                "uc": ["T02"],
+                "mode": "source",
+                "source_checks": [{"path": "scripts/run-scenarios.py", "contains": contains}],
+                "expected": {"exit_code": 0},
+            }
 
-        runner._validate_scenario(scenario, scenario_path)
-        status, detail = runner._run_once(scenario, Path("/not-used-by-source-scenarios"))
-
+        present = scenario(["def _run_source("])
+        runner._validate_scenario(present, Path("source-fixture.json"))
+        status, detail = runner._run_once(present, Path("/not-used-by-source-scenarios"))
         self.assertEqual(status, "PASS")
         self.assertEqual(detail, "")
+
+        absent = scenario(["def _run_source(", "text absent from the runner"])
+        runner._validate_scenario(absent, Path("source-fixture.json"))
+        status, detail = runner._run_once(absent, Path("/not-used-by-source-scenarios"))
+        self.assertEqual(status, "FAIL")
+        self.assertIn("text absent from the runner", detail)
 
     def test_source_scenario_rejects_paths_outside_the_repository(self) -> None:
         scenario = {

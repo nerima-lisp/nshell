@@ -121,6 +121,7 @@ nix develop -c env HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/config" \
 Without Nix (e.g. a cloud sandbox where the Nix cache is unreachable):
 
 The procedure requires network access, `jq`, `git`, `cc` (a C compiler), and SBCL >= 2.6.0 and < 2.6.10. SBCL 2.6.10 removed `sb-unix:unix-ioctl`, which `cl-tty-kit` uses.
+It builds an nshell binary and a fixed bin of GNU coreutils, bash and findutils for the `t/golden` cases under its temporary root; on macOS it stops unless GNU coreutils is installed with g-prefixed names (`gwc`, as Homebrew `coreutils` installs them).
 
 Run the complete no-Nix setup and test procedure from the repository root:
 
@@ -137,7 +138,7 @@ When running as root inside a container, these environment-only tests may fail:
 
 After `nix build`, run a script with `./result/bin/nshell FILE.nsh` or a command
 with `./result/bin/nshell --command '(+ 1 2)'`; the command prints `3`.
-The `t/golden` cases run that binary: add `NSHELL_BIN="$PWD/result/bin/nshell"` and `NSHELL_SPEC_BIN_DIR=<dir>` to the `nix develop -c env` command, where `<dir>` is an absolute directory of tools that a case without `env.PATH` gets on its PATH after `$WORK/bin` (`checks.default` uses coreutils, bash, findutils and a `last` stub); without them these tests skip, and with `CI` set they fail.
+The `t/golden` cases run that binary: add `NSHELL_BIN="$PWD/result/bin/nshell"` and `NSHELL_SPEC_BIN_DIR=<dir>` to the `nix develop -c env` command, where `<dir>` is the absolute `bin` directory of `nix build .#spec-bin` (coreutils, bash, findutils and a `last` stub), which a case without `env.PATH` gets on its PATH after `$WORK/bin`; without them these tests skip, and with `CI` set they fail.
 
 The flake checks run in a Nix build sandbox, where PTY integration tests are skipped.
 To run them on the host, set `NSHELL_TEST_PTY=1` and `CI=1` in the `nix develop -c env` command, as in this example:

@@ -570,6 +570,8 @@
 
       # Script-mode probes run with one closed PATH. Stub `last` so host login
       # records cannot vary the PATH-first compatibility case.
+      # scripts/bootstrap-without-nix.sh builds the same bin from host tools
+      # for the t/golden cases; keep the two in sync.
       specBinEnvFor =
         ctx:
         let
@@ -1053,6 +1055,7 @@
         let
           delivery = deliveryFor ctx;
           bin = "${delivery}/bin/nshell";
+          specBinEnv = specBinEnvFor ctx;
           q08FaultSource =
             ctx.pkgs.runCommand "nshell-q08-fault-source"
               {
@@ -1074,6 +1077,11 @@
           # repackaging of the same dumped image -- see its definition for
           # why the two cannot be the same derivation.
           packages.releaseBundle = releaseBundleFor ctx;
+
+          # The fixed bin the t/golden cases and t/spec probes put on PATH, so
+          # the ci.yml jobs that run nshell/test outside this sandbox can pass
+          # the same directory as NSHELL_SPEC_BIN_DIR.
+          packages.spec-bin = specBinEnv;
 
           # Q03 uses a real storage-condition without imposing a process-wide
           # address-space limit. Keep its small dynamic space in a separate
@@ -1139,6 +1147,9 @@
                     # The machine --json golden tests no longer need git; they put a
                     # fixture bin/git script on PATH instead of making a repository.
                     nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.git ];
+                    # The t/golden case runner, as in checks.default.
+                    NSHELL_BIN = bin;
+                    NSHELL_SPEC_BIN_DIR = "${specBinEnv}/bin";
                   }
                   // ptyBootstrapEnvironmentFor ctx
                 );

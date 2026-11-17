@@ -54,6 +54,18 @@ case "$(uname -s)" in
     ;;
 esac
 
+# The t/golden fixed bin needs GNU tools. They carry a g prefix on macOS
+# (Homebrew coreutils and findutils); BSD wc pads its count, which the golden
+# expectations do not allow.
+gnu_prefix=""
+if [[ "$(uname -s)" == Darwin ]]; then
+  if ! type -P gwc >/dev/null; then
+    printf 'GNU coreutils with g-prefixed names (gwc, gcat, ...; Homebrew coreutils) is required on macOS for the t/golden fixed bin.\n' >&2
+    exit 1
+  fi
+  gnu_prefix="g"
+fi
+
 deps_dir="$test_root/deps"
 kit_manifest="$test_root/locked-kits.tsv"
 jq -r '
@@ -147,6 +159,87 @@ case "$(uname -s)" in
 esac
 
 export CL_SOURCE_REGISTRY="$deps_dir//:$repo_root/"
+export NSHELL_ASDF_OUTPUT_DIR="$test_root/asdf"
+
+# The t/golden cases run a built nshell (NSHELL_BIN) with a fixed bin on PATH
+# (NSHELL_SPEC_BIN_DIR); with CI set they fail without them, as the PTY tests
+# do. program-op would write the image into the checkout (src/nshell), so the
+# output path is redirected to $test_root; nshell.asd's own perform still
+# dumps it.
+nshell_bin_dir="$test_root/nshell-bin"
+mkdir -p "$nshell_bin_dir"
+export NSHELL_BIN="$nshell_bin_dir/nshell"
+printf 'Building nshell into %s\n' "$NSHELL_BIN"
+sbcl --non-interactive \
+  --load scripts/asdf-runtime.lisp \
+  --eval '(nshell-configure-writable-asdf-output)' \
+  --eval '(asdf:load-asd (truename "nshell.asd"))' \
+  --eval '(defmethod asdf:output-files :around
+              ((operation asdf:program-op)
+               (system (eql (asdf:find-system "nshell"))))
+            (values (list (uiop:parse-native-namestring (uiop:getenv "NSHELL_BIN")))
+                    t))' \
+  --eval '(asdf:operate (quote asdf:program-op) "nshell")' \
+  > "$test_root/build-nshell.log" 2>&1 || {
+  tail -n 40 "$test_root/build-nshell.log" >&2
+  printf 'Building the nshell binary failed; the log is %s\n' \
+    "$test_root/build-nshell.log" >&2
+  exit 1
+}
+if [[ ! -x "$NSHELL_BIN" ]]; then
+  printf 'The nshell build wrote no executable at %s\n' "$NSHELL_BIN" >&2
+  exit 1
+fi
+
+# Keep in sync with specBinEnvFor in flake.nix: coreutils, bash, findutils
+# and the same `last` stub. The coreutils names are those of nixpkgs
+# coreutils except the multicall `coreutils` program.
+spec_bin_coreutils=(
+  '[' b2sum base32 base64 basename basenc cat chcon chgrp chmod chown chroot
+  cksum comm cp csplit cut date dd df dir dircolors dirname du echo env expand
+  expr factor false fmt fold groups head hostid id install join kill link ln
+  logname ls md5sum mkdir mkfifo mknod mktemp mv nice nl nohup nproc numfmt od
+  paste pathchk pinky pr printenv printf ptx pwd readlink realpath rm rmdir
+  runcon seq sha1sum sha224sum sha256sum sha384sum sha512sum shred shuf sleep
+  sort split stat stdbuf stty sum sync tac tail tee test timeout touch tr true
+  truncate tsort tty uname unexpand uniq unlink uptime users vdir wc who whoami
+  yes
+)
+spec_bin_findutils=(find xargs)
+export NSHELL_SPEC_BIN_DIR="$test_root/spec-bin/bin"
+mkdir -p "$NSHELL_SPEC_BIN_DIR"
+spec_bin_missing=""
+spec_bin_link() {
+  local name="$1" source_name="$2" source_path
+  # type -P: the executable on PATH, never a builtin such as kill or [.
+  if source_path="$(type -P "$source_name")"; then
+    ln -s "$source_path" "$NSHELL_SPEC_BIN_DIR/$name"
+  else
+    spec_bin_missing="$spec_bin_missing $name"
+  fi
+}
+for name in "${spec_bin_coreutils[@]}"; do
+  spec_bin_link "$name" "$gnu_prefix$name"
+done
+for name in "${spec_bin_findutils[@]}"; do
+  if [[ -n "$gnu_prefix" ]] && type -P "$gnu_prefix$name" >/dev/null; then
+    spec_bin_link "$name" "$gnu_prefix$name"
+  else
+    spec_bin_link "$name" "$name"
+  fi
+done
+spec_bin_link bash bash
+spec_bin_link sh bash
+spec_bin_link bashbug bashbug
+cat > "$NSHELL_SPEC_BIN_DIR/last" <<'LAST'
+#!/bin/sh
+printf '%s\n' 'nshell-spec-last'
+LAST
+chmod 0755 "$NSHELL_SPEC_BIN_DIR/last"
+if [[ -n "$spec_bin_missing" ]]; then
+  printf 'Not on this host, left out of the golden fixed bin:%s\n' "$spec_bin_missing"
+fi
+
 test_log="$test_root/run-tests.log"
 printf 'Running the full suite with isolated state in %s\n' "$test_root"
 sbcl --script run-tests.lisp 2>&1 | tee "$test_log"

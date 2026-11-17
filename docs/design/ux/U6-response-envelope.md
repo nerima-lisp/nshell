@@ -18,7 +18,7 @@ Schema は `conformance/envelope.schema.json` に置く。下の表にない細�
 | error | object? | code・message・span・fixes[] |
 | warnings | array? | 移行の警告 (W_ で始まるコードと書き換え案) (L7) |
 | forms | array? | explain が返す各形式の判定 (02) |
-| effects | array | kind (reads / writes / deletes / network / privilege)・path・size |
+| effects | array | kind (reads / writes / deletes / network / privilege)・path・size。事実から導いた一部の一覧で、書き込みをすべて挙げるものではない。埋め込みの Lisp が行う書き込みは出ない (06 B) |
 | safety | object | level (safe / confirm / block)・reasons[] {rule, text} |
 | state | object | cwd・env_changed[]・jobs[]・last_status |
 | duration_ms | int | 所要時間 |

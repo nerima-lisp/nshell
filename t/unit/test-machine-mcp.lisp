@@ -599,8 +599,9 @@ envelope, and isError is set exactly when the envelope is not ok."
   (it "shows the input quoted with its control and format characters escaped"
     (with-json-cache-home (root)
       (declare (ignorable root))
-      (let* ((input (format nil "echo ~C[2J~Cok~%~Cx\\y~C~C" (code-char 27) (code-char 13)
-                            (code-char #x202E) (code-char 127) (code-char #x9B)))
+      (let* ((input (format nil "echo ~C[2J~Cok~%~Cx\\y~C~C \"q\"~Cz" (code-char 27) (code-char 13)
+                            (code-char #x202E) (code-char 127) (code-char #x9B)
+                            (code-char #x2028)))
              (message (json-at (first (%mcp-elicitations
                                        (%mcp-exchange (%mcp-initialize :elicitation t)
                                                       (%mcp-run-call 2 input))))
@@ -610,11 +611,13 @@ envelope, and isError is set exactly when the envelope is not ok."
                             while line collect line))))
         ;; The input is the second line, quoted, so it cannot pass for the
         ;; message's own lines or redraw the client's screen.
-        (expect (second lines) :to-equal "\"echo \\e[2J\\rok\\n\\u202Ex\\\\y\\u007F\\u009B\"")
+        (expect (second lines) :to-equal "\"echo \\e[2J\\rok\\n\\u202Ex\\\\y\\u007F\\u009B \\\"q\\\"\\u2028z\"")
         (expect (remove-if-not (lambda (char)
                                  (and (char/= char #\Newline)
                                       (member (symbol-name (sb-unicode:general-category char))
                                               '("Cc" "Cf" "Zl" "Zp")
                                               :test #'string-equal)))
                                message)
-                :to-equal "")))))
+                :to-equal "")
+        (expect (find (code-char #x2028) input) :to-be-truthy)
+        (expect (find (code-char #x2028) message) :to-be-null)))))

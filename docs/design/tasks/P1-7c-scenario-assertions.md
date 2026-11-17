@@ -730,7 +730,7 @@
 
 ### C16-approx-process-substitution-input
 
-`t/scenarios/C16/approx-process-substitution-input.json` [削除]
+`t/scenarios/C16/approx-process-substitution-input.json` [削除 (先にテストを足す)]
 
 シナリオの入口: nshell FILE.nsh のスクリプトモード (バッチ、script 種)
 
@@ -738,6 +738,10 @@
 |---|---|---|---|---|---|
 | `expected.stdout.equals` | "C16_PROCESS_VALUE" | `t/spec/probes.lisp:217` it "language-probe procsub-bare v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | スクリプトモードで bare の cat <(echo psb) を実行し、stdout が "psb\n" と行と末尾改行の形まで一致することを確かめる (同じ種類の値) |
 | `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe procsub-bare v0.7.0 baseline" | NSHELL_BIN のバイナリに case.nsh を渡すスクリプトモード (`t/spec/support.lisp:281` %run-probe) | はい | 同じ probe で終了コード 0 を確かめる |
+
+probe はスクリプトモードで入るが、このシナリオの入力と assertion をそのまま確かめてはいないので、[削除 (先にテストを足す)] にする。
+
+削除の前に: `t/e2e/test-smoke-script.lisp:18` の it と同じく、スクリプトファイルを `%run-nshell-main` に引数で渡す e2e を足す。スクリプトの本文は "cat <(printf 'C16_PROCESS_VALUE')"。確かめる値: stdout が "C16_PROCESS_VALUE" に等しいこと、終了状態 0。
 
 ### C17-approx-large-binary-and-invalid-utf8-output
 
@@ -2755,7 +2759,7 @@
 
 ### O11-native-arithmetic
 
-`t/scenarios/O11/O11-native-arithmetic.json` [削除]
+`t/scenarios/O11/O11-native-arithmetic.json` [削除 (先にテストを足す)]
 
 シナリオの入口: スクリプトモード（scripts/run-scenarios.py が scenario.nsh を書き、`nshell scenario.nsh` で起動して stdout と終了状態を見る）
 
@@ -2763,6 +2767,10 @@
 |---|---|---|---|---|---|
 | `expected.stdout.contains[0]` | "18" | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | スクリプト (echo ,(progn 1 2)) の stdout を "2\n" と等値で比べ、コンマの島で評価した CL の整数を echo が出すことを確かめている（fixture :909）。* と + は CL の関数で、島の中の評価は同じ経路を通る。 |
 | `expected.exit_code` | 0 | `t/spec/probes.lisp:217` it "language-probe progn-value v0.7.0 baseline" | `NSHELL_BIN case.nsh` でスクリプトモードの nshell を起動し、stdout・stderr・終了状態を v0.7.0 の記録と比べる（`t/spec/support.lisp:281` %run-probe） | はい | 同じ入口で終了状態 0 を確かめている。 |
+
+probe はスクリプトモードで入るが、このシナリオの入力と assertion をそのまま確かめてはいないので、[削除 (先にテストを足す)] にする。
+
+削除の前に: `t/e2e/test-smoke-script.lisp:18` の it と同じく、スクリプトファイルを `%run-nshell-main` に引数で渡す e2e を足す。スクリプトの本文は "(echo ,(* 3 (+ 2 4)))\n"。確かめる値: stdout に "18" が含まれること、終了状態 0。
 
 ### O12-comments
 

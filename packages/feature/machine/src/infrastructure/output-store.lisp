@@ -80,6 +80,26 @@ or NIL when ROOT or the new directory is not private to this user."
                        nil)))))
     (sb-posix:syscall-error () nil)))
 
+(defun reopen-output-session (session &key (root (output-store-root)))
+  "Return SESSION when its directory under ROOT is private to this user,
+creating it again under the same name when another process pruned it, or NIL
+when it cannot be made so.  A long-lived session (--mcp) calls this before
+each save, since pruning goes by age and an empty directory never ages less."
+  (handler-case
+      (let* ((root (concatenate 'string (%without-trailing-slash root) "/"))
+             (directory (concatenate 'string root (output-session-id session))))
+        (%ensure-directories (%without-trailing-slash root))
+        (handler-case (sb-posix:mkdir directory #o700)
+          (sb-posix:syscall-error (condition)
+            (unless (%errno-p condition sb-posix:eexist)
+              (error condition))))
+        (and (%private-directory-p root)
+             (%private-directory-p directory)
+             (string= (output-session-directory session)
+                      (concatenate 'string directory "/"))
+             session))
+    (sb-posix:syscall-error () nil)))
+
 (defun %plain-file-name-p (name)
   (and (stringp name)
        (plusp (length name))

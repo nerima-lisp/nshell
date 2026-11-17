@@ -11,30 +11,40 @@
          (%assistant-mcp-test-request json)
          state))
 
+(defun %assistant-mcp-test-served-response (json)
+  "Return the response `nshell --mcp' gives the one request JSON, or NIL when
+it writes none.  The served protocol is the machine server's; the earlier
+handler above answers only its deprecated tools."
+  (let ((output (make-string-output-stream)))
+    (with-input-from-string (input (format nil "~a~%" json))
+      (nshell.feature.machine:run-mcp-server :input input :output output))
+    (let ((line (read-line (make-string-input-stream (get-output-stream-string output))
+                           nil nil)))
+      (and line (%assistant-mcp-test-request line)))))
+
 (describe "assistant-mcp-protocol-contracts"
   (it "handles-initialize-notification-and-tools-list"
     (let ((response
-            (%assistant-mcp-test-response
+            (%assistant-mcp-test-served-response
              "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}")))
       (expect "2.0" :to-equal (%assistant-mcp-test-field response "jsonrpc"))
-      (expect "2024-11-05" :to-equal
+      (expect "2025-06-18" :to-equal
               (%assistant-mcp-test-field
                (%assistant-mcp-test-field response "result")
                "protocolVersion"))
       (expect nil :to-be
-              (%assistant-mcp-test-response
+              (%assistant-mcp-test-served-response
                "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")))
     (let* ((response
-             (%assistant-mcp-test-response
+             (%assistant-mcp-test-served-response
               "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}"))
            (tools (%assistant-mcp-test-field
                    (%assistant-mcp-test-field response "result")
                    "tools")))
-      (expect 2 :to-equal (length tools))
-      (expect "list_sessions" :to-equal
-              (%assistant-mcp-test-field (aref tools 0) "name"))
-      (expect "read_state" :to-equal
-              (%assistant-mcp-test-field (aref tools 1) "name"))))
+      (expect 12 :to-equal (length tools))
+      (expect '("list_sessions" "read_state") :to-equal
+              (mapcar (lambda (tool) (%assistant-mcp-test-field tool "name"))
+                      (last tools 2)))))
 
   (it "returns-bounded-state-content-through-the-read-tool"
     (let* ((response
@@ -109,21 +119,23 @@
       (expect error-message :to-be-truthy)))
 
   (it "negotiates the requested supported protocol version"
-    (let ((response
-            (%assistant-mcp-test-response
-             "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}")))
-      (expect nshell.feature.assistant:+assistant-mcp-protocol-version+
-              :to-equal
-              (%assistant-mcp-test-field
-               (%assistant-mcp-test-field response "result")
-               "protocolVersion"))))
+    (dolist (version '("2025-06-18" "2024-11-05"))
+      (let ((response
+              (%assistant-mcp-test-served-response
+               (format nil "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"~a\"}}"
+                       version))))
+        (expect version
+                :to-equal
+                (%assistant-mcp-test-field
+                 (%assistant-mcp-test-field response "result")
+                 "protocolVersion")))))
 
   (it "returns-json-rpc-errors-for-unknown-methods-and-tools"
     (let ((method-response
-            (%assistant-mcp-test-response
+            (%assistant-mcp-test-served-response
              "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"unknown\"}"))
           (tool-response
-            (%assistant-mcp-test-response
+            (%assistant-mcp-test-served-response
              "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"unknown\"}}")))
       (expect -32601 :to-equal
               (%assistant-mcp-test-field

@@ -87,6 +87,7 @@ depend on one stable feature package.")
      #:+assistant-audit-max-bytes+
      #:+assistant-max-transcript-sessions+
      #:run-assistant-mcp-server
+     #:assistant-mcp-state-response-line
      #:*assistant-boundaries*
      #:make-assistant-boundary-context
      #:assistant-model-boundary

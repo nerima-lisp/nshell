@@ -261,7 +261,7 @@ optional decimal fraction, or NIL."
     ((%json-option-error invocation)
      (%print-startup-option-error (%json-option-error invocation)))
     ((cl-cli:option-value invocation :mcp)
-     (nshell.feature.assistant:run-assistant-mcp-server))
+     (nshell.feature.machine:run-mcp-server))
     (t
      (multiple-value-bind (interactive-p no-config-p config-path no-history-p
                            private-p errexit-p safe-flag-p)

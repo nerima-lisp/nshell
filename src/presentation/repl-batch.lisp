@@ -113,10 +113,12 @@ nshell's own output has no color. The interactive shell never reads it.")
        (%record-crash-log crash *error-output*)
        (setf *last-exit-code* 1)))))
 
-(defun run-repl-batch (&key line script-args (errexit-p nil))
+(defun run-repl-batch (&key line script-args (errexit-p nil) (reset-state-p t))
   "Batch mode for stdin or the nshell-specific --command option.
-SCRIPT-ARGS are exposed as $argv for --command."
-  (%initialize-batch-state)
+SCRIPT-ARGS are exposed as $argv for --command. RESET-STATE-P false runs LINE
+in the shell state the previous batch run left."
+  (when reset-state-p
+    (%initialize-batch-state))
   (let ((nshell.domain.expansion:*positional-args* script-args)
         (nshell.application:*errexit-p* errexit-p))
     (if line
@@ -125,14 +127,16 @@ SCRIPT-ARGS are exposed as $argv for --command."
          (nshell.application:collect-source-lines *standard-input*))))
   *last-exit-code*)
 
-(defun run-repl-batch-observed (line observer &key script-args errexit-p)
+(defun run-repl-batch-observed (line observer &key script-args errexit-p
+                                                   (reset-state-p t))
   "Run LINE as RUN-REPL-BATCH does and return its exit status. OBSERVER is
 called with :MISSING-COMMAND, the last command name that was not found and its
 source span (NIL when unknown),
 :COMMAND-FAILED and the condition that ended the run, or :CRASH, the condition
 and whether the user's own Lisp code signalled it."
   (let ((*batch-outcome-observer* observer))
-    (run-repl-batch :line line :script-args script-args :errexit-p errexit-p)))
+    (run-repl-batch :line line :script-args script-args :errexit-p errexit-p
+                    :reset-state-p reset-state-p)))
 (defun run-repl-shell-command (command arguments
                               &key (load-config-p t) config-path)
   "Load the interactive startup configuration and delegate COMMAND to /bin/sh."

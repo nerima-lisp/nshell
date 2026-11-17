@@ -121,6 +121,7 @@
                  (:file "domain/methods")
                  (:file "domain/output-economy")
                  (:file "domain/noninteractive")
+                 (:file "domain/mcp")
                  (:file "infrastructure/output-store")
                  (:file "infrastructure/output-reader")))
    (:file "util/struct-macros")
@@ -423,7 +424,8 @@
    (:module "feature-machine-presentation"
     :pathname "../packages/feature/machine/src"
     :serial t
-    :components ((:file "presentation/json-command")))
+    :components ((:file "presentation/json-command")
+                 (:file "presentation/mcp-server")))
 	   (:file "main")
     (:file "presentation/input-state-structural-editing")
     (:file "domain/completion/generated-external-command-kb-data"
@@ -648,6 +650,7 @@
    (:file "unit/test-machine-read-output")
    (:file "unit/test-machine-noninteractive")
    (:file "unit/test-machine-full-screen")
+   (:file "unit/test-machine-mcp")
    (:file "unit/static-check-allowlist")
    (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is
@@ -708,7 +711,8 @@
    (:file "perf/test-startup")
    (:file "perf/key-cost")
    (:file "perf/test-key-cost")
-   (:file "e2e/test-machine-json-golden"))
+   (:file "e2e/test-machine-json-golden")
+   (:file "e2e/test-machine-mcp"))
    :perform (asdf:test-op (o s)
               (declare (ignore o s))
               (unless (funcall (find-symbol "RUN-TESTS" (find-package "NSHELL/TEST")))

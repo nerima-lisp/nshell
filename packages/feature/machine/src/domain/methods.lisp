@@ -57,10 +57,10 @@ initialize announces it.")
 
 (defun initialize-value (&key version methods cwd os
                               (rules (nshell.feature.kb:classify-rule-catalog))
-                              (user-rules 0))
+                              (user-rules 0) session-id)
   "Return the value of the initialize response (ux/U5): the version, the
 implemented METHODS, the limits, a count of the RULES per level, and the
-session's CWD and OS."
+session's CWD and OS, and its SESSION-ID when there is one."
   (flet ((rules-at (level) (count level rules :key #'second)))
     (json-kit:make-json-object
      (list (cons "version" version)
@@ -72,9 +72,11 @@ session's CWD and OS."
                                  (cons "confirm" (rules-at :confirm))
                                  (cons "user_rules" user-rules))))
            (cons "session" (json-kit:make-json-object
-                            (list (cons "cwd" cwd)
-                                  (cons "os" os)
-                                  (cons "attached" json-kit:+json-false+))))))))
+                            (append
+                             (and session-id (list (cons "id" session-id)))
+                             (list (cons "cwd" cwd)
+                                   (cons "os" os)
+                                   (cons "attached" json-kit:+json-false+)))))))))
 
 (defun policy-value (&key (rules (nshell.feature.kb:classify-rule-catalog))
                           (user-rules 0))

@@ -132,6 +132,12 @@
      :transcript-present-p transcript-present-p
      :transcript-lines transcript-lines)))
 
+(defun assistant-mcp-state-response-line (request)
+  "Return the JSON-RPC response line this server gives the parsed REQUEST.
+The machine --mcp server answers its deprecated list_sessions and read_state
+tools with it, so their payload stays as it was."
+  (%assistant-mcp-response-line (%assistant-mcp-response-for-request request)))
+
 (defun run-assistant-mcp-server ()
   (loop for line = (read-line *standard-input* nil nil)
         while line

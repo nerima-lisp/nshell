@@ -24,7 +24,7 @@ language/L7.1 の各行は、v0.8 で新しい挙動に切り替えるものと�
 
 ## P2-3 コマンド形式と値 (L3・L4)
 
-- [ ] 引数の書き方の表 (L3.1) と値の変換表 (L3.2)。`(FORM)` 置換と `$(…)`
+- [ ] 引数の書き方の表 (L3.1) と値の変換表 (L3.2)。`(FORM)` 置換と `$(…)`。defun の既知の不具合 2 つ (どちらも v0.7.0 からある) もここで直す。BUG-6: defun をパイプラインの段にすると、本体で動かした外部コマンドの出力が消える (`eval '(defun f () (sh -c "echo x"))'; f | cat` が何も出力しない)。このため F3 は、`t/e2e/test-machine-json-golden.lisp` の it "keeps a function stage's output from before its exec in order" の本体から exec の前の `sh -c 'echo x'` を外し、期待する出力から `X` の行を外した。BUG-6 を直したら、defun の本体の exec の前に `(sh -c "echo x")` を戻し、期待する出力を `A`・`X`・`B`・`after` の 4 行に戻す。BUG-7: `$(…)` の中のパイプラインでは defun が見つからず、`$(f | cat)` が `f: command not found` になる (`$(f)` は動く)。このため F3 は、同じファイルの it "keeps a function stage's output from before its exec in a command substitution" (`echo $(f | cat); echo after` が `a b` と `after` を出す) を削除した。BUG-7 を直したら、f を defun で定義してこの it を戻す
 - [ ] `:kw` をコマンドの引数にしたときは、v0.8 から `":kw"` として渡し、警告を出す
 - [ ] リダイレクトの対象に `,EXPR`、`2>&1` などの複製。L3.4 の表にない `>|`・`<&`・`0<`・`1>` も残す
 - [ ] `(& FORM)`・`with-env`

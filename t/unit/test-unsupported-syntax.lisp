@@ -83,9 +83,46 @@ external-NAME and its arguments."
                     ("true; and not false" "(and (true) (not (false)))")
                     ("a; and b; or c" "(or (and (a) (b)) (c))")
                     ("not grep x | wc -l" "(not (grep x | wc -l))")
+                    ;; && and || bind tighter than ; (L5.1) and fold from the left.
+                    ("a && b; and c" "(and (and (a) (b)) (c))")
+                    ("a || b; or c" "(or (or (a) (b)) (c))")
+                    ("a || b; and c" "(and (or (a) (b)) (c))")
+                    ("a; and b && c" "(and (and (a) (b)) (c))")
+                    ("a; or b || c" "(or (or (a) (b)) (c))")
+                    ("a && not b" "(and (a) (not (b)))")
+                    ("a || not b" "(or (a) (not (b)))")
+                    ("not a && b" "(and (not (a)) (b))")
+                    ("a && b || not c" "(or (and (a) (b)) (not (c)))")
+                    ("a && not b; or c" "(or (and (a) (not (b))) (c))")
+                    ;; fish runs a; and b || c as a; and (b || c), v0.7.0 as
+                    ;; (a; and b) || c; and and or after && or ||, or a list run
+                    ;; in the background, have no S-expression: the generic form.
+                    ("a; and b || c" "(and (cmd1) (cmd2))")
+                    ("a; or b && c" "(or (cmd1) (cmd2))")
+                    ("a && and b" "(and (cmd1) (cmd2))")
+                    ("a || or b" "(or (cmd1) (cmd2))")
+                    ("a & and b" "(and (cmd1) (cmd2))")
+                    ("a; and b &" "(and (cmd1) (cmd2))")
+                    ("a && not b &" "(not (cmd))")
                     ("echo pre; function f; echo hi; end; f" "(defcmd f () (echo hi))")
                     ("function f" "(defcmd f () …)")
-                    ("function -e f" "(defcmd f () …)")
+                    ;; The name is the first word that is neither an option nor
+                    ;; the value of one; with none, the generic form.
+                    ("function -d desc greet; echo hi; end" "(defcmd greet () (echo hi))")
+                    ("function greet -d desc" "(defcmd greet () …)")
+                    ("function --description desc greet" "(defcmd greet () …)")
+                    ("function --description=desc greet" "(defcmd greet () …)")
+                    ("function -ddesc greet" "(defcmd greet () …)")
+                    ("function -Sd desc greet" "(defcmd greet () …)")
+                    ("function -S greet" "(defcmd greet () …)")
+                    ("function -a x -w ls -e e -v v -j 1 -p 2 -s INT -V y greet"
+                     "(defcmd greet () …)")
+                    ("function --argument-names x --wraps ls --on-event e --on-variable v --on-job-exit 1 --on-process-exit 2 --on-signal INT --inherit-variable y greet"
+                     "(defcmd greet () …)")
+                    ("function -- -greet" "(defcmd -greet () …)")
+                    ("function -e greet" "(defcmd f () …)")
+                    ("function -d desc; echo hi; end" "(defcmd f () …)")
+                    ("function --" "(defcmd f () …)")
                     ("and echo x" "(and (cmd1) (cmd2))")
                     ("echo x | not cat" "(not (cmd))")
                     ;; Each further not wraps the command it negates.

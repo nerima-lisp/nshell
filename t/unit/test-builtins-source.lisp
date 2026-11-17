@@ -403,7 +403,10 @@ first, so the line that sets $pre never runs, and no function is defined."
                               "(defcmd greet () (echo hello))")
                         (list '("echo pre" "function greet" "echo hello" "end" "greet")
                               "(defcmd greet () …)")
-                        (list '("function -e greet") "(defcmd greet () …)")))
+                        ;; -e (fish's --on-event) takes greet as its value,
+                        ;; so no function is named: the generic form.
+                        (list '("function -e greet") "(defcmd f () …)")
+                        (list '("function -d desc greet") "(defcmd greet () …)")))
       (destructuring-bind (lines rewrite) case
         (multiple-value-bind (condition pre-set-p context)
             (%source-lines-rejection lines)

@@ -74,16 +74,16 @@ executable scenarios and manual checks.
 | D09 | direct, manual | 1 | 1 | `t/scenarios/D09/tmux-attach-session.json`, `t/scenarios/D09/manual.md` |
 | D10 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | D11 | approximation | 1 | 0 | `t/scenarios/D11/approx-cooked-mode-after-crash.json` |
-| D12 | direct | 1 | 0 | `t/scenarios/D12/ctrl-c-stops-foreground-child.json` |
+| D12 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | E01 | direct | 1 | 0 | `t/scenarios/E01/ctrl-z-stops-redirected-foreground-job.json` |
-| E02 | direct | 3 | 0 | `t/scenarios/E02/bg-resumes-stopped-descendant.json`, `t/scenarios/E02/fg-bg-and-jobs.json`, `t/scenarios/E02/T3-fg-resumes-stopped-descendant.json` |
+| E02 | direct | 1 | 0 | `t/scenarios/E02/T3-fg-resumes-stopped-descendant.json` |
 | E03 | direct | 1 | 0 | `t/scenarios/E03/kill-percent-one.json` |
 | E04 | direct | 1 | 0 | `t/scenarios/E04/disown-removes-job.json` |
 | E05 | direct | 1 | 0 | `t/scenarios/E05/wait-collects-background-status.json` |
-| E06 | direct | 1 | 0 | `t/scenarios/E06/completion-notification-and-removal.json` |
-| E07 | direct | 1 | 0 | `t/scenarios/E07/pipeline-is-one-stopped-job.json` |
+| E06 | removed in P2-6 (checked by tests) | 0 | 0 | — |
+| E07 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | E08 | direct | 1 | 0 | `t/scenarios/E08/ctrl-c-interrupts-whole-pipeline.json` |
-| E09 | direct | 1 | 0 | `t/scenarios/E09/script-job-state-updates.json` |
+| E09 | removed in P2-6 (checked by tests) | 0 | 0 | — |
 | F01 | direct | 1 | 0 | `t/scenarios/F01/foreground-child-restores-terminal-output.json` |
 | F02 | manual | 0 | 1 | `t/scenarios/F02/manual.md` |
 | F03 | direct, manual | 1 | 1 | `t/scenarios/F03/WP-R01-sigterm-exit-status.json`, `t/scenarios/F03/manual.md` |
@@ -233,4 +233,4 @@ executable scenarios and manual checks.
 | U01 | manual | 0 | 1 | `t/scenarios/U01/manual.md` |
 | U02 | removed in P2-6 (checked by the F07 scenario) | 0 | 0 | — |
 | U03 | approximation | 1 | 0 | `t/scenarios/U03/approx-U03-tmux-screen-terminal.json` |
-| Total | expected corpus | 186 | 47 | — |
+| Total | expected corpus | 180 | 47 | — |

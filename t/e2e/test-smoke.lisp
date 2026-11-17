@@ -332,6 +332,18 @@ The regular read timeout remains short for command-response assertions.")
            (%assert-pty-child-exit pty))
       (%terminate-pty-process pty))))
 
+(defun %e2e-child-environment-overriding (&rest entries)
+  "Return the E2E child environment with ENTRIES (NAME=VALUE) replacing the same names."
+  (let ((names (mapcar (lambda (entry) (subseq entry 0 (1+ (position #\= entry))))
+                       entries)))
+    (append entries
+            (remove-if (lambda (entry)
+                         (some (lambda (name)
+                                 (and (<= (length name) (length entry))
+                                      (string= name entry :end2 (length name))))
+                               names))
+                       (%e2e-child-environment)))))
+
 (describe "e2e-tests"
   (it "e2e-main-tty-batch-builtin-preserves-terminal"
     (skip-when-pty-unavailable "compares terminal settings around actual batch main"
@@ -392,6 +404,30 @@ The regular read timeout remains short for command-response assertions.")
       (expect 1 :to-equal exit-code)
       (expect "" :to-equal stderr)
       (expect "" :to-equal stdout)))
+  (it "e2e-main-script-jobs-lists-running-job-until-wait"
+    "A script's jobs lists a running background job, and the list is empty after wait %1."
+    (host-kit:with-temporary-directory (directory)
+      (with-temporary-output-file (script-path :prefix "nshell-e2e-script-jobs")
+        (let ((before (sb-ext:native-namestring (merge-pathnames "e09-before.txt" directory)))
+              (after (sb-ext:native-namestring (merge-pathnames "e09-after.txt" directory))))
+          (with-open-file (stream script-path :direction :output :if-exists :supersede)
+            (write-line "sleep 1 &" stream)
+            (format stream "jobs > '~a'~%" before)
+            (write-line "wait %1" stream)
+            (format stream "test $? -eq 0 && jobs > '~a' && printf \"E09_SCRIPT_DONE_$((1+2))\\n\"~%"
+                    after))
+          (multiple-value-bind (stdout stderr exit-code)
+              (%run-nshell-main (list (namestring script-path)))
+            (expect (format nil "E09_SCRIPT_DONE_3~%") :to-equal stdout)
+            (expect "" :to-equal stderr)
+            (expect 0 :to-equal exit-code))
+          (let ((listing (or (and (probe-file before) (host-kit:read-file-string before))
+                             "")))
+            (expect (search "Running" listing) :to-be-truthy)
+            (expect (search "sleep 1" listing) :to-be-truthy))
+          (expect (probe-file after) :to-be-truthy)
+          (expect "" :to-equal
+                  (and (probe-file after) (host-kit:read-file-string after)))))))
   (it "e2e-main-wait-without-jobs-is-successful"
     "wait without job arguments succeeds when there are no jobs."
     (multiple-value-bind (stdout stderr exit-code)
@@ -565,6 +601,52 @@ The regular read timeout remains short for command-response assertions.")
                  (%assert-pty-child-exit pty)))
           (%terminate-pty-process pty)))))
 
+  (it "e2e-main-interactive-pty-ctrl-c-stops-foreground-child-and-its-sleep"
+    "Ctrl-C reaches a foreground sh waiting on its own sleep child, and the next command runs."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "launches real nshell under a PTY"
+      (let ((program (%absolute-sbcl-executable))
+            (pty nil))
+        (unless program
+          (skip "requires an absolute SBCL runtime path"))
+        (host-kit:with-temporary-directory (directory)
+          (with-open-file (stream (merge-pathnames "input.txt" directory)
+                                  :direction :output :if-exists :supersede)
+            (write-line "D12_CHILD_STOPPED" stream))
+          (unwind-protect
+               (progn
+                 (setf pty
+                       (%e2e-pty-spawn
+                        program (%nshell-main-pty-arguments)
+                        :environment (%e2e-child-environment-overriding
+                                      "NSHELL_RIGHT_PROMPT={time}"
+                                      "PATH=/usr/bin:/bin")
+                        :rows 24 :cols 80))
+                 (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty)))
+                   (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
+                   (%e2e-pty-write-line
+                    fd (format nil "cd '~a'" (sb-ext:native-namestring directory)))
+                   (%e2e-pty-write-line
+                    fd "sh -c 'printf \"D12_CHILD_%s\\n\" STARTED; sleep 10'")
+                   (expect (search "D12_CHILD_STARTED"
+                                   (%e2e-pty-read-until fd "D12_CHILD_STARTED"))
+                           :to-be-truthy)
+                   (nshell.infrastructure.acl:pty-write fd (string (code-char 3)))
+                   (%e2e-pty-write-line fd "cat input.txt")
+                   ;; Shorter than the child's sleep 10, so an ignored Ctrl-C
+                   ;; cannot pass by letting the sleep run out.
+                   (expect (search "D12_CHILD_STOPPED"
+                                   (%e2e-pty-read-until fd "D12_CHILD_STOPPED"
+                                                        :timeout 5.0))
+                           :to-be-truthy)
+                   (%e2e-pty-write-line fd "exit")
+                   (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!"))
+                           :to-be-truthy)
+                   (%assert-pty-child-exit pty)))
+            (%terminate-pty-process pty))))))
+
   (it "e2e-pty-reader-waits-for-complete-job-listing"
     (cl-weave:expect-assertions 4)
     (dolist (status '("Running" "Done"))
@@ -680,6 +762,52 @@ The regular read timeout remains short for command-response assertions.")
                          :to-be-truthy)
                  (%assert-pty-child-exit pty)))
           (%terminate-pty-process pty)))))
+
+  (it "e2e-main-interactive-pty-completed-job-is-notified-and-removed"
+    "A finished background job is reported Done, and a later jobs redirected to a file writes nothing."
+    #-(or darwin linux)
+    (skip "PTY tests are only supported on Darwin and Linux")
+    #+(or darwin linux)
+    (skip-when-pty-unavailable "launches real nshell under a PTY"
+      (let ((program (%absolute-sbcl-executable))
+            (pty nil)
+            (captured-output ""))
+        (unless program
+          (skip "requires an absolute SBCL runtime path"))
+        (host-kit:with-temporary-directory (directory)
+          (unwind-protect
+               (progn
+                 (setf pty
+                       (%e2e-pty-spawn
+                        program (%nshell-main-pty-arguments)
+                        :environment (%e2e-child-environment-overriding
+                                      "PATH=/usr/bin:/bin")
+                        :rows 24 :cols 80))
+                 (let ((fd (nshell.infrastructure.acl:pty-process-master-fd pty))
+                       (jobs-file (merge-pathnames "completed-jobs.txt" directory)))
+                   (%e2e-pty-await-ready fd (nshell.infrastructure.acl:pty-process-pid pty))
+                   (%e2e-pty-write-line
+                    fd (format nil "cd '~a'" (sb-ext:native-namestring directory)))
+                   (%e2e-pty-write-line fd "sleep 1 &")
+                   (%e2e-pty-write-line fd "sleep 2; echo E06_WORK_DONE_$((2+4))")
+                   (let ((output (%e2e-pty-read-until fd "E06_WORK_DONE_6")))
+                     (setf captured-output (concatenate 'string captured-output output))
+                     (expect (search "E06_WORK_DONE_6" output) :to-be-truthy))
+                   (%e2e-pty-write-line
+                    fd "jobs > completed-jobs.txt; echo E06_AFTER_DONE_$((3+4))")
+                   (let ((output (%e2e-pty-read-until fd "E06_AFTER_DONE_7")))
+                     (setf captured-output (concatenate 'string captured-output output))
+                     (expect (search "E06_AFTER_DONE_7" output) :to-be-truthy))
+                   (expect (search "Done" captured-output) :to-be-truthy)
+                   (expect (probe-file jobs-file) :to-be-truthy)
+                   (expect "" :to-equal
+                           (and (probe-file jobs-file)
+                                (host-kit:read-file-string jobs-file)))
+                   (%e2e-pty-write-line fd "exit")
+                   (expect (search "Goodbye!" (%e2e-pty-read-until fd "Goodbye!"))
+                           :to-be-truthy)
+                   (%assert-pty-child-exit pty)))
+            (%terminate-pty-process pty))))))
 
   (it "e2e-main-interactive-pty-foreground-pipeline-ignores-external-command-timeout"
   "A foreground external pipeline connected to a real interactive terminal."

@@ -1,5 +1,19 @@
 (in-package #:nshell/test)
- 
+
+(defun %kill-registered-job-processes (context)
+  "SIGKILL and reap every process group still registered in CONTEXT."
+  (let ((processes nil))
+    (maphash (lambda (job-id entry)
+               (declare (ignore job-id))
+               (setf processes
+                     (append (nshell.application::%job-process-list entry) processes)))
+             (nshell.application::shell-context-process-registry context))
+    (dolist (process processes)
+      (ignore-errors
+        (nshell.infrastructure.acl:kill-process
+         (- (nshell.infrastructure.acl:process-pid process)) :sigkill))
+      (ignore-errors (nshell.infrastructure.acl:process-wait process)))))
+
 (describe "builtin-job-tests"
   (it "fg-and-bg-builtins-propagate-status-and-missing-job-errors"
     "fg/bg builtins return job status and missing-job failures."
@@ -64,6 +78,60 @@
         (assert-builtin-call (context "disown" (list (format nil "~d" job-id)))
           :code 1
           :output (format nil "disown: job [~d] not found~%" job-id)))))
+
+  (it "stopped-foreground-command-is-listed-resumed-by-bg-and-finished-by-fg"
+    "A foreground child that stops itself is listed as Stopped, runs after bg, and fg waits for it to finish and leave the list."
+    (let ((context (make-test-builtins-context)))
+      (host-kit:with-temporary-directory (directory)
+        (let ((child-file (sb-ext:native-namestring
+                           (merge-pathnames "e02-child.txt" directory))))
+          (unwind-protect
+               (progn
+                 (expect (+ 128 sb-unix:sigtstp) :to-equal
+                         (nth-value 1
+                           (nshell.application::%run-terminal-command
+                            context "/bin/sh"
+                            (list "-c"
+                                  (format nil "kill -STOP $$; sleep 1; printf E02_CHILD_DONE > '~a'"
+                                          child-file)))))
+                 (assert-builtin-call (context "jobs" nil)
+                   :contains (list "Stopped" "sleep 1"))
+                 (assert-builtin-call (context "bg" '("%1"))
+                   :code 0)
+                 (assert-builtin-call (context "jobs" nil)
+                   :contains (list "Running" "sleep 1"))
+                 (assert-builtin-call (context "fg" '("%1"))
+                   :code 0)
+                 (expect "E02_CHILD_DONE" :to-equal
+                         (and (probe-file child-file)
+                              (host-kit:read-file-string child-file)))
+                 (assert-builtin-call (context "jobs" nil)
+                   :output-empty t))
+            (%kill-registered-job-processes context))))))
+
+  (it "bg-resumes-a-stopped-foreground-command-with-its-descendant"
+    "bg continues the whole stopped group, so the descendant finishes and the child's wait returns."
+    (let ((context (make-test-builtins-context)))
+      (host-kit:with-temporary-directory (directory)
+        (let ((child-file (sb-ext:native-namestring
+                           (merge-pathnames "e02-bg-child.txt" directory))))
+          (unwind-protect
+               (progn
+                 (expect (+ 128 sb-unix:sigtstp) :to-equal
+                         (nth-value 1
+                           (nshell.application::%run-terminal-command
+                            context "/bin/sh"
+                            (list "-c"
+                                  (format nil "sleep 1 & kill -STOP 0; wait; printf E02_BG_CHILD_REAPED_1 > '~a'"
+                                          child-file)))))
+                 (assert-builtin-call (context "bg" '("%1"))
+                   :code 0)
+                 (wait-for-file-content child-file "E02_BG_CHILD_REAPED_1"
+                                        :attempts 100 :delay 0.05)
+                 (expect "E02_BG_CHILD_REAPED_1" :to-equal
+                         (and (probe-file child-file)
+                              (host-kit:read-file-string child-file))))
+            (%kill-registered-job-processes context))))))
 
   (it "disown-without-a-job-id-operates-on-the-current-job"
     "Bare disown targets the current job when one exists, and reports a clear error otherwise."

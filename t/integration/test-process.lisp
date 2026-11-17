@@ -390,6 +390,53 @@
             (expect expected :to-equal statuses)
             (expect (if pipefail-p 127 (car (last expected))) :to-equal status)
             (expect (length failed-stages) :to-equal (count #\Newline diagnostics)))))))
+  (it "stopped foreground pipeline is listed as one stopped job and can be killed"
+    "A foreground pipeline whose first stage stops the whole group becomes one Stopped job naming every stage; kill and wait remove it and the shell runs the next command."
+    (let* ((context (make-test-shell-context))
+           (monitor (nshell.application:shell-context-job-monitor context))
+           (registry (nshell.application::shell-context-process-registry context))
+           (commands (list (nshell.domain.parsing:make-command-node
+                            "/bin/sh" '("-c" "kill -STOP 0; sleep 30"))
+                           (nshell.domain.parsing:make-command-node "/bin/cat" nil)))
+           (processes nil))
+      (unwind-protect
+           (progn
+             (expect (+ 128 sb-unix:sigtstp) :to-equal
+                     (nth-value 1 (nshell.application::%run-terminal-pipeline
+                                   context commands nil)))
+             (setf processes
+                   (loop for entry being the hash-values of registry
+                         append (remove-if #'integerp entry)))
+             (let ((listings (nshell.application:jobs monitor)))
+               (expect 1 :to-equal (length listings))
+               (expect "Stopped" :to-equal
+                       (nshell.application:job-listing-status (first listings)))
+               (expect (search " | /bin/cat"
+                               (nshell.application:job-listing-command (first listings)))
+                       :to-be-truthy)
+               (expect 1 :to-equal
+                       (count-if (lambda (line) (search "Stopped" line))
+                                 (uiop:split-string
+                                  (apply #'concatenate 'string
+                                         (mapcar #'nshell.application:format-job-listing
+                                                 listings))
+                                  :separator '(#\Newline)))))
+             (expect 1 :to-equal (hash-table-count registry))
+             (let ((job-id (first (loop for id being the hash-keys of registry collect id))))
+               (expect 2 :to-equal
+                       (length (remove-if #'integerp (gethash job-id registry))))
+               (expect (nshell.application::signal-job job-id :sigterm monitor registry)
+                       :to-be-truthy)
+               (nshell.application:wait-for-job job-id registry monitor)
+               (expect (nshell.application:jobs monitor) :to-be-null)
+               (expect 0 :to-equal (hash-table-count registry)))
+             (expect 0 :to-equal
+                     (nth-value 1 (nshell.application::%run-terminal-pipeline
+                                   context
+                                   (list (nshell.domain.parsing:make-command-node
+                                          "/bin/sh" '("-c" "exit 0")))
+                                   nil))))
+        (nshell.infrastructure.acl:%abort-pipeline (reverse processes) nil))))
   (it "BUG-3 preserves background completion statuses after command-not-found"
     (cl-weave:expect-assertions 50)
     (dolist (failed-stages '((0) (1) (2) (0 1 2)))

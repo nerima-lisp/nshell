@@ -137,32 +137,11 @@
       "path": "D11/approx-cooked-mode-after-crash.json"
     },
     {
-      "id": "D12-ctrl-c-stops-foreground-child",
-      "uc": [
-        "D12"
-      ],
-      "path": "D12/ctrl-c-stops-foreground-child.json"
-    },
-    {
       "id": "E01-ctrl-z-stops-redirected-foreground-job",
       "uc": [
         "E01"
       ],
       "path": "E01/ctrl-z-stops-redirected-foreground-job.json"
-    },
-    {
-      "id": "E02-bg-resumes-stopped-descendant",
-      "uc": [
-        "E02"
-      ],
-      "path": "E02/bg-resumes-stopped-descendant.json"
-    },
-    {
-      "id": "E02-fg-bg-and-jobs",
-      "uc": [
-        "E02"
-      ],
-      "path": "E02/fg-bg-and-jobs.json"
     },
     {
       "id": "T3-R03-fg-resumes-stopped-descendant",
@@ -193,32 +172,11 @@
       "path": "E05/wait-collects-background-status.json"
     },
     {
-      "id": "E06-completion-notification-and-removal",
-      "uc": [
-        "E06"
-      ],
-      "path": "E06/completion-notification-and-removal.json"
-    },
-    {
-      "id": "E07-pipeline-is-one-stopped-job",
-      "uc": [
-        "E07"
-      ],
-      "path": "E07/pipeline-is-one-stopped-job.json"
-    },
-    {
       "id": "E08-ctrl-c-interrupts-whole-pipeline",
       "uc": [
         "E08"
       ],
       "path": "E08/ctrl-c-interrupts-whole-pipeline.json"
-    },
-    {
-      "id": "E09-script-job-state-updates",
-      "uc": [
-        "E09"
-      ],
-      "path": "E09/script-job-state-updates.json"
     },
     {
       "id": "F02-wp-r08-resize-redraw",

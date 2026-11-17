@@ -651,6 +651,7 @@
    (:file "unit/test-machine-noninteractive")
    (:file "unit/test-machine-full-screen")
    (:file "unit/test-machine-mcp")
+   (:file "unit/test-noninteractive-signal-guard")
    (:file "unit/static-check-allowlist")
    (:file "unit/test-static-checks"))
    ;; Not HOST-KIT:SYMBOL-CALL, and no longer UIOP:SYMBOL-CALL either: a .asd is

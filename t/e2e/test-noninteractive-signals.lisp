@@ -37,7 +37,7 @@
                      (/= pgid (sb-posix:getpgrp))))
         (ignore-errors (sb-posix:kill (- pgid) sb-unix:sigkill))))))
 
-(defun %signal-e2e-fixture (directory name &key ignore-term-p)
+(defun %signal-e2e-fixture (directory name &key ignore-term-p quiet-p)
   (let ((script (merge-pathnames (format nil "~A.sh" name) directory))
         (pids (merge-pathnames (format nil "~A.pids" name) directory))
         (trap-file (merge-pathnames (format nil "~A.trap" name) directory)))
@@ -48,7 +48,11 @@
                   (namestring trap-file)))
       (format out "trap 'printf HUP > ~A; exit 0' HUP~%"
               (namestring trap-file))
-      (format out "printf 'partial\\n'~%sleep 30 &~%printf '%s\\n%s\\n' \"$$\" \"$!\" > ~A~%wait~%"
+      ;; QUIET-P for a background job: --json does not capture what a
+      ;; background job writes, which reaches nshell's own stdout.
+      (unless quiet-p
+        (format out "printf 'partial\\n'~%"))
+      (format out "sleep 30 &~%printf '%s\\n%s\\n' \"$$\" \"$!\" > ~A~%wait~%"
               (namestring pids)))
     (values (format nil "sh ~A" (namestring script)) pids trap-file)))
 
@@ -71,8 +75,24 @@
                        (cons "NSHELL_AGENT" names) :test #'string=))
              (%e2e-child-environment)))))
 
+(defun %signal-e2e-child-groups (pid)
+  "Return the process group ids of PID's child processes, as ps reports them."
+  (loop for line in (uiop:split-string
+                     (uiop:run-program '("ps" "-A" "-o" "pid=,ppid=,pgid=")
+                                       :output :string)
+                     :separator '(#\Newline))
+        for fields = (remove "" (uiop:split-string line :separator '(#\Space #\Tab))
+                             :test #'string=)
+        when (and (= (length fields) 3)
+                  (= (parse-integer (second fields)) pid))
+          collect (parse-integer (third fields))))
+
 (defun %signal-e2e-run (directory arguments ready-files signal
-                         &key input agent-p second-signal)
+                         &key input agent-p second-signal ready-children)
+  "Run nshell with ARGUMENTS in DIRECTORY, send it SIGNAL once every file in
+READY-FILES has content and, with READY-CHILDREN, once it has a child, and
+return its stdout, stderr, exit status and the process groups of its
+children at that point."
   (let* ((root (or *noninteractive-signal-source-root*
                    (asdf:system-source-directory :nshell)))
          (stdout (merge-pathnames "stdout" directory))
@@ -80,6 +100,7 @@
          (source-file (merge-pathnames "loaded-source" directory))
          (stdin (merge-pathnames "stdin" directory))
          (program nil)
+         (child-groups nil)
          (bootstrap
            (format nil
                    "(progn
@@ -115,7 +136,11 @@
                    (every (lambda (path)
                             (and (probe-file path)
                                  (plusp (length (%signal-e2e-read path)))))
-                          ready-files)))
+                          ready-files)
+                   (or (not ready-children)
+                       (setf child-groups
+                             (%signal-e2e-child-groups
+                              (sb-ext:process-pid program))))))
             "the command readiness files")
            (expect (truename (string-trim '(#\Newline)
                                          (%signal-e2e-read source-file)))
@@ -130,7 +155,8 @@
            (sb-ext:process-wait program)
            (values (%signal-e2e-read stdout)
                    (%signal-e2e-read stderr)
-                   (sb-ext:process-exit-code program)))
+                   (sb-ext:process-exit-code program)
+                   child-groups))
       (when (and program (sb-ext:process-alive-p program))
         (sb-ext:process-kill program sb-unix:sigkill)
         (sb-ext:process-wait program))
@@ -158,7 +184,7 @@
 
 (describe "noninteractive signal e2e"
   (it "bug4-json-signals-stop-descendants-and-return-one-envelope"
-    (dolist (agent-p '(nil t))
+    (let ((agent-p nil))
       (dolist (signal (list (list sb-unix:sigint "SIGINT")
                            (list sb-unix:sigterm "SIGTERM")
                            (list sb-unix:sighup "SIGHUP")))
@@ -175,13 +201,35 @@
                    (%signal-e2e-expect-gone pids)))
             (%signal-e2e-clean-groups directory))))))
 
+  (it "bug4-agent-json-signals-stop-the-child-and-return-one-envelope"
+    ;; NSHELL_AGENT=1 refuses sh, whose script it cannot check, so the child
+    ;; is cat reading a FIFO no one writes, which classifies :safe and blocks.
+    (dolist (signal (list (list sb-unix:sigint "SIGINT")
+                         (list sb-unix:sigterm "SIGTERM")
+                         (list sb-unix:sighup "SIGHUP")))
+      (host-kit:with-temporary-directory (directory)
+        (let ((fifo (merge-pathnames "fifo" directory)))
+          (sb-posix:mkfifo (namestring fifo) #o600)
+          (multiple-value-bind (stdout stderr status groups)
+              (%signal-e2e-run directory
+                               (list "--json" "--command"
+                                     (format nil "cat ~A" (namestring fifo)))
+                               nil (first signal)
+                               :agent-p t :ready-children t)
+            (let ((envelope (%signal-e2e-expect-envelope stdout stderr status
+                                                         (second signal))))
+              (expect (json-at envelope "safety" "level") :to-equal "safe"))
+            (expect (length groups) :to-equal 1)
+            (%signal-e2e-wait (lambda () (%signal-e2e-group-gone-p (first groups)))
+                              "the interrupted process group to disappear" 3))))))
+
   (it "bug4-json-preserves-partial-output-and-stops-background-groups"
     (host-kit:with-temporary-directory (directory)
       (unwind-protect
            (multiple-value-bind (foreground foreground-pids)
                (%signal-e2e-fixture directory "foreground")
              (multiple-value-bind (background background-pids)
-                 (%signal-e2e-fixture directory "background")
+                 (%signal-e2e-fixture directory "background" :quiet-p t)
                (multiple-value-bind (stdout stderr status)
                    (%signal-e2e-run
                     directory
@@ -193,6 +241,21 @@
                            :to-be-truthy))
                  (%signal-e2e-expect-gone foreground-pids)
                  (%signal-e2e-expect-gone background-pids))))
+        (%signal-e2e-clean-groups directory))))
+
+  (it "bug4-json-sigint-keeps-the-output-of-earlier-commands"
+    (host-kit:with-temporary-directory (directory)
+      (unwind-protect
+           (multiple-value-bind (command pids)
+               (%signal-e2e-fixture directory "child" :quiet-p t)
+             (multiple-value-bind (stdout stderr status)
+                 (%signal-e2e-run directory
+                                  (list "--json" "--command"
+                                        (format nil "echo early; ~A" command))
+                                  (list pids) sb-unix:sigint)
+               (let ((envelope (%signal-e2e-expect-envelope stdout stderr status "SIGINT")))
+                 (expect (json-at envelope "stdout" "text") :to-equal (format nil "early~%")))
+               (%signal-e2e-expect-gone pids)))
         (%signal-e2e-clean-groups directory))))
 
   (it "bug4-json-repeated-signals-do-not-interrupt-cleanup"

@@ -71,6 +71,6 @@ P1 の新しいコードは、`packages/` の再編 (P2 の後) を待たずに�
 - [x] `t/spec` はスクリプトモードで実行する。PATH は固定の bin に絞り、テストを流す環境で記録し直す。v0.7.0 の JSON は出典として残す
 - [x] L7 の行と probe の対応は `t/spec/l7-rows.lisp` に置く
 - [x] golden test と spec は cl-weave のテストとして `NSHELL_BIN` を起動する。`checks.default` にバイナリを渡す
-- [ ] シナリオ JSON コーパスから残す 30〜40 本を選び、golden に移す候補を挙げる (削除は P2)。残すのは PTY 中心で、CI が ID を指定している P12・L02・T06・J05・Q03・Q07・Q08 を含める
+- [x] シナリオ JSON コーパスから残す 30〜40 本を選び、golden に移す候補を挙げる (削除は P2)。残すのは PTY 中心で、CI が ID を指定している P12・L02・T06・J05・Q03・Q07・Q08 を含める。一覧は [P1-7c-scenario-corpus.md](P1-7c-scenario-corpus.md) (残す 39 本)
 
 受け入れ条件: P2 で言語を変えたとき、どの行が変わったかが golden / spec の差分で分かる。

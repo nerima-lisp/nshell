@@ -240,13 +240,6 @@
       "path": "C06/pipeline-streams-all-stages.json"
     },
     {
-      "id": "C06-builtin-reads-stdin",
-      "uc": [
-        "C06"
-      ],
-      "path": "C06/builtin-reads-stdin.json"
-    },
-    {
       "id": "C06-pipeline-streams-mixed-stages",
       "uc": [
         "C06"

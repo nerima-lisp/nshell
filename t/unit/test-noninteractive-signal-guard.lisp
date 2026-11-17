@@ -241,4 +241,66 @@ the thread returns :DELIVERED or :NOT-DELIVERED."
     (let ((envelope (json-command "(MACROLET ((M () (CL:SLEEP 30) NIL)) (M))"
                                   :timeout 1)))
       (expect (json-at envelope "error" "code") :to-equal "E_TIMEOUT")
-      (expect (json-at envelope "stderr" "text") :to-equal ""))))
+      (expect (json-at envelope "stderr" "text") :to-equal "")))
+
+  (it "restores the handlers and starts afresh after every run of an MCP-style session"
+    ;; As run-mcp-server calls it: one shell state kept across runs, one
+    ;; session, NSHELL_AGENT=1 with the approved verdict. The runs happen in a
+    ;; thread other than the initial one, so the interrupt must reach the
+    ;; thread that called RUN-JSON-COMMAND.
+    (with-guard-signal-states ()
+      (dolist (signal (list sb-unix:sigint sb-unix:sigterm))
+        (sb-sys:enable-interrupt signal (lambda (signal info context)
+                                          (declare (ignore signal info context)))))
+      (host-kit:with-temporary-directory (directory)
+        (let* ((ready (format nil "~Aready" (sb-ext:native-namestring directory)))
+               (interrupted (format nil "sh -c 'echo partial; : > ~A; sleep 30'" ready))
+               (signals (list sb-unix:sighup sb-unix:sigint sb-unix:sigterm))
+               (before (mapcar #'%guard-signal-state signals))
+               (results
+                 (sb-thread:join-thread
+                  (sb-thread:make-thread
+                   (lambda ()
+                     (nshell.presentation::%initialize-batch-state)
+                     (loop for (input signal) in (list (list "echo one" nil)
+                                                       (list interrupted sb-unix:sigint)
+                                                       (list "echo three" nil))
+                           for seq from 1
+                           collect
+                           (let ((sender (and signal
+                                              (%simulate-signal-when
+                                               (lambda () (probe-file ready)) signal))))
+                             (multiple-value-bind (json status)
+                                 (nshell.feature.machine:run-json-command
+                                  input :timeout 20
+                                        :environment-agent-p t
+                                        :approved-verdict
+                                        (nshell.feature.machine::%classify-input input)
+                                        :reset-state-p nil
+                                        :session "s_guard" :output-session nil :seq seq)
+                               (list (json-kit:parse json) status
+                                     (and sender (sb-thread:join-thread
+                                                  sender :default nil :timeout 5))
+                                     (mapcar #'%guard-signal-state signals))))))
+                   :name "mcp-style runs")
+                  :default nil :timeout 60)))
+          (expect (length results) :to-equal 3)
+          (loop for (envelope status delivered after) in results
+                for seq from 1
+                do (expect (json-at envelope "session") :to-equal "s_guard")
+                   (expect (json-at envelope "seq") :to-equal seq)
+                   (loop for (disposition handler) in after
+                         for (before-disposition before-handler) in before
+                         do (expect disposition :to-equal before-disposition)
+                            (expect (eq handler before-handler) :to-be-truthy))
+                   (if (= seq 2)
+                       (progn
+                         (expect delivered :to-equal :delivered)
+                         (expect status :to-equal 130)
+                         (expect (json-at envelope "error" "code") :to-equal "E_INTERRUPTED")
+                         (expect (json-at envelope "stdout" "text")
+                                 :to-equal (format nil "partial~%")))
+                       ;; A stop reason never outlives its run.
+                       (progn
+                         (expect status :to-equal 0)
+                         (expect (json-at envelope "ok") :to-equal t)))))))))

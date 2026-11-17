@@ -363,12 +363,12 @@ id as its own group between this check and the signal."
          (sb-posix:syscall-error () nil))))
 
 (defun stop-process-groups (processes &key groups (grace-seconds 0.5))
-  "Send SIGTERM, wait GRACE-SECONDS, then send SIGKILL to each of PROCESSES:
-to its whole process group when it was spawned into a group of its own, and
-to the process alone when it shares this shell's group. GROUPS are further
-process group ids, taken from *PROCESS-GROUP-LOG*, to signal as groups. Each
-target is checked again before each signal (see %SIGNAL-TARGET and
-%RECORDED-GROUP-TARGET); no target is this shell's group or an id <= 0.
+  "Send SIGTERM and SIGCONT, wait GRACE-SECONDS, then send SIGKILL to each of
+PROCESSES: to its whole process group when it was spawned into a group of its
+own, and to the process alone when it shares this shell's group. GROUPS are
+further process group ids, taken from *PROCESS-GROUP-LOG*, to signal as
+groups. Each target is checked again before each signal (see %SIGNAL-TARGET
+and %RECORDED-GROUP-TARGET); no target is this shell's group or an id <= 0.
 
 It neither waits for nor reaps the processes and takes no process lock, so it
 cannot block on a thread that is suspended in their wait."
@@ -390,5 +390,8 @@ cannot block on a thread that is suspended in their wait."
                               (kill-process id signal))))))
       (when (targets)
         (send sb-unix:sigterm)
+        ;; A stopped process acts on SIGTERM only once continued; SIGCONT
+        ;; to one that runs does nothing.
+        (send sb-unix:sigcont)
         (sleep grace-seconds)
         (send sb-unix:sigkill)))))

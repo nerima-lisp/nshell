@@ -28,6 +28,13 @@
           t
           (error condition)))))
 
+(defun %signal-e2e-stopped-p (pid)
+  "True when ps reports PID as stopped (state T)."
+  (let ((state (string-trim '(#\Space #\Newline)
+                            (uiop:run-program (list "ps" "-o" "state=" "-p" (princ-to-string pid))
+                                              :output :string :ignore-error-status t))))
+    (and (plusp (length state)) (char= (char state 0) #\T))))
+
 (defun %signal-e2e-clean-groups (directory)
   (dolist (file (directory (merge-pathnames "*.pids" directory)))
     (let ((pgid (first (%signal-e2e-pids file))))
@@ -88,9 +95,10 @@
           collect (parse-integer (third fields))))
 
 (defun %signal-e2e-run (directory arguments ready-files signal
-                         &key input agent-p second-signal ready-children)
+                         &key input agent-p second-signal ready-children ready-p)
   "Run nshell with ARGUMENTS in DIRECTORY, send it SIGNAL once every file in
-READY-FILES has content and, with READY-CHILDREN, once it has a child, and
+READY-FILES has content, with READY-CHILDREN once it has a child, and with
+READY-P once that function of no arguments returns true, and
 return its stdout, stderr, exit status and the process groups of its
 children at that point."
   (let* ((root (or *noninteractive-signal-source-root*
@@ -137,6 +145,7 @@ children at that point."
                             (and (probe-file path)
                                  (plusp (length (%signal-e2e-read path)))))
                           ready-files)
+                   (or (not ready-p) (funcall ready-p))
                    (or (not ready-children)
                        (setf child-groups
                              (%signal-e2e-child-groups
@@ -257,6 +266,33 @@ children at that point."
                  (expect (json-at envelope "stdout" "text") :to-equal (format nil "early~%")))
                (%signal-e2e-expect-gone pids)))
         (%signal-e2e-clean-groups directory))))
+
+  (it "bug4-json-continues-a-stopped-child-so-its-sigterm-trap-runs"
+    ;; A stopped process acts on SIGTERM only once continued; without SIGCONT
+    ;; the SIGKILL that follows removes it before its trap can run.
+    (host-kit:with-temporary-directory (directory)
+      (let* ((script (merge-pathnames "stopped.sh" directory))
+             (pids (merge-pathnames "stopped.pids" directory))
+             (trap-file (merge-pathnames "stopped.trap" directory))
+             (pid nil))
+        (unwind-protect
+             (progn
+               (with-open-file (out script :direction :output)
+                 (format out "trap 'printf TERM > ~A; exit 0' TERM~%~
+                              printf '%s\\n' \"$$\" > ~A~%kill -STOP $$~%sleep 30~%"
+                         (namestring trap-file) (namestring pids)))
+               (multiple-value-bind (stdout stderr status)
+                   (%signal-e2e-run
+                    directory (list "--json" "--command" (format nil "sh ~A" (namestring script)))
+                    (list pids) sb-unix:sigint
+                    :ready-p (lambda ()
+                               (setf pid (first (%signal-e2e-pids pids)))
+                               (%signal-e2e-stopped-p pid)))
+                 (%signal-e2e-expect-envelope stdout stderr status "SIGINT"))
+               (expect (%signal-e2e-read trap-file) :to-equal "TERM")
+               (%signal-e2e-wait (lambda () (%signal-e2e-group-gone-p pid))
+                                 "the stopped process group to disappear" 3))
+          (%signal-e2e-clean-groups directory)))))
 
   (it "bug4-json-repeated-signals-do-not-interrupt-cleanup"
     (host-kit:with-temporary-directory (directory)

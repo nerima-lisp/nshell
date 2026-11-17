@@ -201,8 +201,13 @@ To compare two nshell builds for startup, key latency, Tab completion, prompt
 redraw, and memory, use the A/B regression gate in
 [`scripts/perf/`](https://github.com/nerima-lisp/nshell/blob/main/scripts/perf/README.md).
 It measures both builds on the same machine and reports confidence intervals
-for their difference, not absolute timings; it is tested on macOS only. None
-of these results by themselves establish a broad "world-fastest" claim.
+for their difference, not absolute timings; it is tested on macOS only. The
+gate judges the startup median, key latency p95 and p99, and prompt redraw p95.
+When given both source trees, it also judges per-key consing and fails when
+every candidate run counts more per-key `stat`, file I/O, or spawn operations
+than every baseline run. Tab completion and memory are recorded but not judged
+in v0.8; they become ratchets in a later phase (P5-3). None of these results by
+themselves establish a broad "world-fastest" claim.
 
 ## Add a test
 

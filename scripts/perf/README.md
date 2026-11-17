@@ -129,14 +129,18 @@ For each metric the gate computes the difference B − A of a statistic (median,
 | Startup median | larger of +5% and +3 ms |
 | Key p95 | larger of +5% and +1 ms |
 | Key p99 | larger of +15% and +2 ms |
+| Prompt p95 | larger of +5% and +1 ms |
 | B3 per-key consing (mean) | +10% |
 | B3 per-key `stat`, file I/O, spawn | fail when every candidate run counts more than every baseline run; scenarios B3 marks `"io_gate":false` are reported, not gated |
 
 With a noise file, each threshold is raised to twice the same-binary variation when that is larger.
 The variation of a metric is `max(|CI low|, |CI high|)` of its A-vs-A difference, stored relative to the noise run's statistic and scaled to arm A of the current compare run.
-When a noise file is given but has no entry for a startup, key or B3 consing metric, that metric is inconclusive: its floor is unknown, and the table threshold alone could fail a difference the noise floor would allow.
+When a noise file is given but has no entry for a startup, key, prompt or B3 consing metric, that metric is inconclusive: its floor is unknown, and the table threshold alone could fail a difference the noise floor would allow.
 The B3 `stat`, file I/O and spawn counts have no noise floor, so they are judged by their rule with or without a noise file.
-Tab, prompt, RSS and key medians are reported with intervals but are not gated.
+With the default sample counts, each arm has 120 prompt samples, so prompt p95 rests on about six samples per arm; `--prompt-blocks` and `--prompt-samples` raise them.
+Because p95 is decided by roughly the top 6 samples of each arm (120 samples per arm by default), a heavy-tailed prompt distribution makes those few samples vary widely, and the smallest regression the gate can detect grows.
+Tab, RSS, and the key and prompt medians are reported with intervals but are not gated.
+In v0.8, Tab and memory (RSS) are only recorded; task P5-3 turns them into ratchets.
 
 ## Outcomes and exit codes
 

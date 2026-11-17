@@ -71,8 +71,8 @@
      "--timeout 超過。プロセスグループごと停止した"
      nil nil)
     ("E_INTERRUPTED" :error 130
-     "Interrupted by SIGINT or a similar signal."
-     "SIGINT などで中断した"
+     "Interrupted by SIGINT, SIGTERM, or SIGHUP. In --json mode, the exit status is 130 for all three signals and output captured so far is returned. Modes without an envelope exit with 128 plus the signal number."
+     "SIGINT・SIGTERM・SIGHUP で中断した。--json ではシグナルによらず終了コード 130 とし、そこまでの出力を返す。エンベロープを出さないモードでは 128+シグナル番号で終了する"
      nil nil)
     ("E_NEEDS_APPROVAL" :error 3
      "A confirm verdict has not been approved."

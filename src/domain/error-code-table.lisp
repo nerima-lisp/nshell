@@ -46,7 +46,8 @@ read with READ and never evaluated."
 scripts/generate-error-codes-doc.lisp. Do not edit by hand. -->~%~
 # Error codes~%~%~
 nshell names each error and warning with a stable code. Errors start with~%~
-`E_` and each one has the exit status listed below. Warnings start with `W_`~%~
+`E_`. The table lists their exit statuses; mode-dependent exceptions are~%~
+specified in each description. Warnings start with `W_`~%~
 and flag input that still runs but may not do what you meant; its behaviour~%~
 changes in a later release, and some of it becomes an error. Messages do not~%~
 show these codes yet.~%~%~

@@ -2,7 +2,8 @@
 # Error codes
 
 nshell names each error and warning with a stable code. Errors start with
-`E_` and each one has the exit status listed below. Warnings start with `W_`
+`E_`. The table lists their exit statuses; mode-dependent exceptions are
+specified in each description. Warnings start with `W_`
 and flag input that still runs but may not do what you meant; its behaviour
 changes in a later release, and some of it becomes an error. Messages do not
 show these codes yet.
@@ -24,7 +25,7 @@ show these codes yet.
 | `E_COMMAND_NOT_FOUND` | 127 | The command was not found. | Use one of the close matches offered as fixes. |
 | `E_PERMISSION` | 126 | Permission denied. | - |
 | `E_TIMEOUT` | 124 | The --timeout limit was exceeded and the whole process group was stopped. | - |
-| `E_INTERRUPTED` | 130 | Interrupted by SIGINT or a similar signal. | - |
+| `E_INTERRUPTED` | 130 | Interrupted by SIGINT, SIGTERM, or SIGHUP. In --json mode, the exit status is 130 for all three signals and output captured so far is returned. Modes without an envelope exit with 128 plus the signal number. | - |
 | `E_NEEDS_APPROVAL` | 3 | A confirm verdict has not been approved. | - |
 | `E_BLOCKED_BY_POLICY` | 4 | Refused by a block verdict. | - |
 | `E_WAITING_FOR_INPUT` | 5 | A child process waited for terminal input; its last output is returned. | - |

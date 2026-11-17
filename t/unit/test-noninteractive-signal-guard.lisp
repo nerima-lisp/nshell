@@ -60,6 +60,49 @@ the thread returns :DELIVERED or :NOT-DELIVERED."
              :not-delivered)))
      :name "simulated signal sender")))
 
+;; The signal the end-of-run rounds aim at a guard as its call ends. SIGHUP's
+;; handler is the last one the guard puts back, so it lands in the guard most
+;; often. Rounds go on until that has happened +END-OF-RUN-DELIVERIES+ times.
+(defparameter +end-of-run-signal+ sb-unix:sighup)
+(defparameter +end-of-run-deliveries+ 200)
+(defparameter +end-of-run-max-rounds+ 50000)
+
+(defun %deliver-when-run-ends (stop signal guard-handler-p ready returning)
+  "Start a thread that sets the car of READY, waits until the car of
+RETURNING is true and STOP's catch is gone, then at once simulates SIGNAL if
+its installed handler is still one GUARD-HANDLER-P accepts. So the signal
+lands while STOP's call is ending. Joining the thread returns :DELIVERED or
+:NOT-DELIVERED."
+  (sb-thread:make-thread
+   (lambda ()
+     (let ((deadline (+ (get-internal-real-time) (* 5 internal-time-units-per-second))))
+       (flet ((spin-while (predicate)
+                (loop while (and (funcall predicate)
+                                 (< (get-internal-real-time) deadline)))))
+         (setf (car ready) t)
+         (spin-while (lambda () (not (car returning))))
+         (spin-while (lambda () (nshell.infrastructure.acl::noninteractive-stop-armed-p stop)))
+         (let ((handler (nshell.infrastructure.acl::lisp-signal-handler signal)))
+           (if (and (functionp handler) (funcall guard-handler-p handler))
+               (progn (funcall handler signal (sb-sys:int-sap 0) (sb-sys:int-sap 0))
+                      :delivered)
+               :not-delivered)))))
+   :name "simulated signal at the end of a run"))
+
+(defun %return-when-ready (ready returning)
+  "A run's thunk: wait for the sender of %DELIVER-WHEN-RUN-ENDS, then return."
+  (let ((deadline (+ (get-internal-real-time) (* 5 internal-time-units-per-second))))
+    (loop until (or (car ready) (>= (get-internal-real-time) deadline))))
+  (setf (car returning) t)
+  :returned)
+
+(defun %install-test-signal-handlers (&optional (handler (lambda (signal info context)
+                                                          (declare (ignore signal info context)))))
+  "Make HANDLER the handler of SIGHUP, SIGINT and SIGTERM, so that nothing this
+test passes on can act on the test process."
+  (dolist (signal (list sb-unix:sighup sb-unix:sigint sb-unix:sigterm))
+    (sb-sys:enable-interrupt signal handler)))
+
 (defun %wait-for-sleep-forever ()
   (loop repeat 500 do (sleep 0.01))
   :not-interrupted)
@@ -148,6 +191,108 @@ the thread returns :DELIVERED or :NOT-DELIVERED."
                 :after-signal (lambda (signal) (list :outer signal)))))
         (expect (reverse steps) :to-equal (list (list :inner sb-unix:sigterm) sb-unix:sigterm))
         (expect result :to-equal (list :outer sb-unix:sigterm)))))
+
+  (it "records in the outer stop a signal that an inner run with another reason leaves alone"
+    ;; An --mcp run that the deadline stops: the run keeps E_TIMEOUT, and the
+    ;; server still ends after it.
+    (with-guard-signal-states ()
+      (let* ((outer (nshell.infrastructure.acl:make-noninteractive-stop))
+             (inner-stop (nshell.infrastructure.acl:make-noninteractive-stop))
+             (inner nil)
+             (result
+               (nshell.infrastructure.acl:call-with-noninteractive-signals
+                outer
+                (lambda ()
+                  (setf inner
+                        (nshell.infrastructure.acl:call-with-noninteractive-signals
+                         inner-stop
+                         (lambda ()
+                           (nshell.infrastructure.acl:claim-noninteractive-stop
+                            inner-stop :timeout)
+                           (expect (%simulate-signal sb-unix:sigterm) :to-equal :delivered)
+                           :timed-out)
+                         :after-signal (lambda (signal) (list :inner signal))))
+                  :outer-finished)
+                :after-signal (lambda (signal) (list :outer signal)))))
+        (expect inner :to-equal :timed-out)
+        (expect (nshell.infrastructure.acl:noninteractive-stop-reason inner-stop)
+                :to-equal :timeout)
+        (expect result :to-equal (list :outer sb-unix:sigterm)))))
+
+  (it "records in the outer stop a signal that reaches an inner call as it ends"
+    ;; The --mcp server: a signal that the run's guard takes after its run is
+    ;; over, before its handlers are back, must still end the server. Each
+    ;; round aims the signal at that moment; it lands just before or after
+    ;; the guard has chosen its result.
+    (with-guard-signal-states ()
+      (%install-test-signal-handlers)
+      (let ((original (nshell.infrastructure.acl::lisp-signal-handler +end-of-run-signal+))
+            (delivered 0)
+            (missed 0))
+        (loop repeat +end-of-run-max-rounds+
+              while (< delivered +end-of-run-deliveries+)
+              do (let ((outer (nshell.infrastructure.acl:make-noninteractive-stop))
+                       (inner (nshell.infrastructure.acl:make-noninteractive-stop))
+                       (ready (list nil))
+                       (returning (list nil))
+                       (outcome nil))
+                   (nshell.infrastructure.acl:call-with-noninteractive-signals
+                    outer
+                    (lambda ()
+                      (let* ((outer-handler (nshell.infrastructure.acl::lisp-signal-handler
+                                             +end-of-run-signal+))
+                             (sender (%deliver-when-run-ends
+                                      inner +end-of-run-signal+
+                                      (lambda (handler)
+                                        (not (or (eq handler original)
+                                                 (eq handler outer-handler))))
+                                      ready returning)))
+                        (nshell.infrastructure.acl:call-with-noninteractive-signals
+                         inner (lambda () (%return-when-ready ready returning))
+                         :after-signal (lambda (signal) (list :inner signal)))
+                        (setf outcome (sb-thread:join-thread sender :default nil :timeout 10))))
+                    :after-signal (lambda (signal) (list :outer signal)))
+                   (when (eq outcome :delivered)
+                     (incf delivered)
+                     (unless (eql (nshell.infrastructure.acl:noninteractive-stop-signal outer)
+                                  +end-of-run-signal+)
+                       (incf missed)))))
+        (expect delivered :to-equal +end-of-run-deliveries+)
+        (expect missed :to-equal 0))))
+
+  (it "passes a signal that reaches a finished run's guard to the handler it replaced"
+    ;; Batch and --json: no enclosing guard, and the run is over. The signal
+    ;; is either the run's (AFTER-SIGNAL) or reaches the handler that is in
+    ;; place again once the call returns, never neither.
+    (with-guard-signal-states ()
+      (let ((passed-on (list 0)))
+        (%install-test-signal-handlers (lambda (signal info context)
+                                         (declare (ignore signal info context))
+                                         (sb-ext:atomic-incf (car passed-on))))
+        (let ((original (nshell.infrastructure.acl::lisp-signal-handler +end-of-run-signal+))
+              (delivered 0)
+              (missed 0))
+          (loop repeat +end-of-run-max-rounds+
+                while (< delivered +end-of-run-deliveries+)
+                do (let* ((stop (nshell.infrastructure.acl:make-noninteractive-stop))
+                          (ready (list nil))
+                          (returning (list nil))
+                          (before (car passed-on))
+                          (sender (%deliver-when-run-ends
+                                   stop +end-of-run-signal+
+                                   (lambda (handler) (not (eq handler original)))
+                                   ready returning))
+                          (result (nshell.infrastructure.acl:call-with-noninteractive-signals
+                                   stop (lambda () (%return-when-ready ready returning))
+                                   :after-signal (lambda (signal) (list :interrupted signal))))
+                          (outcome (sb-thread:join-thread sender :default nil :timeout 10)))
+                     (when (eq outcome :delivered)
+                       (incf delivered)
+                       (unless (or (equal result (list :interrupted +end-of-run-signal+))
+                                   (> (car passed-on) before))
+                         (incf missed)))))
+          (expect delivered :to-equal +end-of-run-deliveries+)
+          (expect missed :to-equal 0)))))
 
   (it "restores the handlers it replaced, the same Lisp functions"
     (with-guard-signal-states ()

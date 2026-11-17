@@ -196,14 +196,18 @@
 ;;; Noninteractive runs (batch, script files and --json): SIGINT, SIGTERM and
 ;;; SIGHUP end the whole run. Only the first stop reason counts, whether it is
 ;;; one of these signals or a reason the run records itself (the --json
-;;; deadline, a full-screen program); a later signal is recorded nowhere and
-;;; does nothing, so it cannot unwind the cleanup of the first one.
+;;; deadline, a full-screen program); a later signal does nothing to the run,
+;;; so it cannot unwind the cleanup of the first one. No signal is dropped
+;;; that something outside the run still has to act on: inside an enclosing
+;;; run (the --mcp server) it is recorded there, and once a run has finished
+;;; without a stop reason it goes to the handler the run replaced.
 
 (defparameter +noninteractive-stop-signals+
   (list sb-unix:sighup sb-unix:sigint sb-unix:sigterm))
 
 (defstruct (noninteractive-stop (:constructor make-noninteractive-stop ()))
   ;; The first stop reason: a signal number, or a keyword the run claimed.
+  ;; :FINISHED means the run ended without one (CALL-WITH-NONINTERACTIVE-SIGNALS).
   (reason nil)
   ;; The thread inside CALL-WITH-NONINTERACTIVE-SIGNALS and its catch tag.
   (thread nil)
@@ -270,16 +274,41 @@ thread (SEAL-INTERRUPTIONS), so nothing can take the unwind over."
           (when before-unwind (funcall before-unwind signal)))
         (throw (noninteractive-stop-tag stop) signal)))))
 
-(defun %noninteractive-signal-received (stop signal)
+(defun %pass-signal-on (signal handler info context)
+  "Act on SIGNAL as HANDLER, a value LISP-SIGNAL-HANDLER returned, would have
+had it been installed when SIGNAL arrived; NIL stands for SIG_DFL."
+  (if handler
+      (funcall handler signal info context)
+      (progn
+        (sb-sys:enable-interrupt signal :default)
+        (kill-process (current-process-id) signal))))
+
+(defun %noninteractive-signal-received (stop signal enclosing replaced info context)
   ;; Runs in whichever thread took the signal. The unwind happens in STOP's
   ;; thread, where the catch is; only the signal that becomes the stop reason
   ;; sends it, so it is sent at most once.
-  (when (claim-noninteractive-stop stop signal)
-    (handler-case
-        (sb-thread:interrupt-thread
-         (noninteractive-stop-thread stop)
-         (lambda () (unwind-to-noninteractive-signal stop)))
-      (error () nil))))
+  ;;
+  ;; ENCLOSING, the stop of the call around STOP's, is never interrupted from
+  ;; here: it runs in the same thread, and its unwind would cut STOP's
+  ;; cleanup short. It only records the signal, and its caller ends once
+  ;; STOP's call has returned. That holds for a signal at any moment STOP's
+  ;; handler is installed, including after STOP's run has a reason or has
+  ;; finished, when STOP itself no longer acts on it.
+  (cond
+    ((claim-noninteractive-stop stop signal)
+     (when enclosing
+       (claim-noninteractive-stop enclosing signal))
+     (handler-case
+         (sb-thread:interrupt-thread
+          (noninteractive-stop-thread stop)
+          (lambda () (unwind-to-noninteractive-signal stop)))
+       (error () nil)))
+    (enclosing
+     (claim-noninteractive-stop enclosing signal))
+    ;; The call has decided its result and is restoring REPLACED: the signal
+    ;; is one for what runs after the call.
+    ((eq (noninteractive-stop-reason stop) :finished)
+     (%pass-signal-on signal replaced info context))))
 
 (sb-alien:define-alien-routine ("install_handler" %runtime-install-handler) sb-alien:void
   (signal sb-alien:int)
@@ -340,18 +369,24 @@ CLAIM-NONINTERACTIVE-STOP) interrupts the calling thread, which calls
 BEFORE-UNWIND with the signal number in the dynamic context it was
 interrupted in, unwinds THUNK, and returns what AFTER-SIGNAL returns for the
 signal number. AFTER-SIGNAL also runs when a signal is recorded after THUNK
-has returned but before this call does. The handlers stay installed while
-AFTER-SIGNAL runs, so another signal cannot end its cleanup.
+has returned but before this call has chosen what to return. The handlers
+stay installed while AFTER-SIGNAL runs, so another signal cannot end its
+cleanup.
 
 A signal ignored on entry stays ignored, as POSIX requires of a
 noninteractive shell (nohup). SBCL itself replaces the dispositions of
 SIGINT and SIGTERM at startup, so only SIGHUP can arrive here ignored.
 
-Inside another such call, this one takes the signals while it runs and, when
-one ends it, records that signal as the outer stop's reason too, without
-interrupting anything: the outer caller finds it with
-NONINTERACTIVE-STOP-SIGNAL once this call has returned. So the --mcp server
-learns that a run ended by a signal must also end the server."
+Inside another such call, this one takes the signals while it runs and
+records each of them as the outer stop's reason too, without interrupting
+anything: the outer caller finds it with NONINTERACTIVE-STOP-SIGNAL once this
+call has returned. That includes a signal this call no longer acts on, during
+the cleanup of another stop reason or after its run has finished. So the
+--mcp server learns that a signal during a run must also end the server.
+
+Outside such a call, a signal that arrives once the run has finished without
+a stop reason, before the handlers are restored, goes to the handler this
+call replaced, as if it had arrived just after the call returned."
   (setf (noninteractive-stop-thread stop) sb-thread:*current-thread*
         (noninteractive-stop-tag stop) (list :noninteractive-stop)
         (noninteractive-stop-before-unwind stop) before-unwind)
@@ -359,8 +394,8 @@ learns that a run ended by a signal must also end the server."
         (enclosing *enclosing-noninteractive-stop*)
         (*enclosing-noninteractive-stop* stop))
     (flet ((handler (signal info context)
-             (declare (ignore info context))
-             (%noninteractive-signal-received stop signal)))
+             (%noninteractive-signal-received
+              stop signal enclosing (cdr (assoc signal installed)) info context)))
       (unwind-protect
            (call-with-sealable-interruptions
             (lambda ()
@@ -382,7 +417,11 @@ learns that a run ended by a signal must also end the server."
                            (sb-sys:without-interrupts
                              (setf (noninteractive-stop-armed-p stop) nil)))
                          nil)))
-                (let ((signal (or signal (noninteractive-stop-signal stop))))
+                ;; From :FINISHED on, a signal is no longer this run's
+                ;; (%NONINTERACTIVE-SIGNAL-RECEIVED).
+                (let ((signal (or signal
+                                  (and (not (claim-noninteractive-stop stop :finished))
+                                       (noninteractive-stop-signal stop)))))
                   (when (and signal enclosing)
                     (claim-noninteractive-stop enclosing signal))
                   (if (and signal after-signal)
@@ -390,5 +429,7 @@ learns that a run ended by a signal must also end the server."
                       (values-list results))))))
         (sb-sys:without-interrupts
           (setf (noninteractive-stop-armed-p stop) nil)
+          ;; Also when something else unwinds THUNK past the catch.
+          (claim-noninteractive-stop stop :finished)
           (dolist (entry installed)
             (reinstall-lisp-signal-handler (car entry) (cdr entry))))))))

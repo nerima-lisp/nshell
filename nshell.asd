@@ -701,6 +701,7 @@
    (:file "e2e/test-smoke-pipeline")
    (:file "e2e/test-history")
    (:file "e2e/test-signals")
+   (:file "e2e/test-noninteractive-signals")
    (:file "e2e/test-job-control")
    (:file "e2e/test-package-route")
    (:file "e2e/test-assistant-mcp")

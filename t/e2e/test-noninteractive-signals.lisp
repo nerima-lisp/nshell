@@ -28,12 +28,14 @@
           t
           (error condition)))))
 
-(defun %signal-e2e-stopped-p (pid)
-  "True when ps reports PID as stopped (state T)."
-  (let ((state (string-trim '(#\Space #\Newline)
-                            (uiop:run-program (list "ps" "-o" "state=" "-p" (princ-to-string pid))
-                                              :output :string :ignore-error-status t))))
-    (and (plusp (length state)) (char= (char state 0) #\T))))
+(defun %signal-e2e-open-fifo-writer (path)
+  "Open the FIFO at PATH for writing without blocking and return the file
+descriptor, or NIL when no process has it open for reading (ENXIO)."
+  (handler-case (sb-posix:open path (logior sb-posix:o-wronly sb-posix:o-nonblock))
+    (sb-posix:syscall-error (condition)
+      (if (= sb-posix:enxio (sb-posix:syscall-errno condition))
+          nil
+          (error condition)))))
 
 (defun %signal-e2e-clean-groups (directory)
   (dolist (file (directory (merge-pathnames "*.pids" directory)))
@@ -82,25 +84,11 @@
                        (cons "NSHELL_AGENT" names) :test #'string=))
              (%e2e-child-environment)))))
 
-(defun %signal-e2e-child-groups (pid)
-  "Return the process group ids of PID's child processes, as ps reports them."
-  (loop for line in (uiop:split-string
-                     (uiop:run-program '("ps" "-A" "-o" "pid=,ppid=,pgid=")
-                                       :output :string)
-                     :separator '(#\Newline))
-        for fields = (remove "" (uiop:split-string line :separator '(#\Space #\Tab))
-                             :test #'string=)
-        when (and (= (length fields) 3)
-                  (= (parse-integer (second fields)) pid))
-          collect (parse-integer (third fields))))
-
 (defun %signal-e2e-run (directory arguments ready-files signal
-                         &key input agent-p second-signal ready-children ready-p)
+                         &key input agent-p second-signal ready-p)
   "Run nshell with ARGUMENTS in DIRECTORY, send it SIGNAL once every file in
-READY-FILES has content, with READY-CHILDREN once it has a child, and with
-READY-P once that function of no arguments returns true, and
-return its stdout, stderr, exit status and the process groups of its
-children at that point."
+READY-FILES has content and, with READY-P, once that function of no
+arguments returns true, and return its stdout, stderr and exit status."
   (let* ((root (or *noninteractive-signal-source-root*
                    (asdf:system-source-directory :nshell)))
          (stdout (merge-pathnames "stdout" directory))
@@ -108,7 +96,6 @@ children at that point."
          (source-file (merge-pathnames "loaded-source" directory))
          (stdin (merge-pathnames "stdin" directory))
          (program nil)
-         (child-groups nil)
          (bootstrap
            (format nil
                    "(progn
@@ -145,11 +132,7 @@ children at that point."
                             (and (probe-file path)
                                  (plusp (length (%signal-e2e-read path)))))
                           ready-files)
-                   (or (not ready-p) (funcall ready-p))
-                   (or (not ready-children)
-                       (setf child-groups
-                             (%signal-e2e-child-groups
-                              (sb-ext:process-pid program))))))
+                   (or (not ready-p) (funcall ready-p))))
             "the command readiness files")
            (expect (truename (string-trim '(#\Newline)
                                          (%signal-e2e-read source-file)))
@@ -164,8 +147,7 @@ children at that point."
            (sb-ext:process-wait program)
            (values (%signal-e2e-read stdout)
                    (%signal-e2e-read stderr)
-                   (sb-ext:process-exit-code program)
-                   child-groups))
+                   (sb-ext:process-exit-code program)))
       (when (and program (sb-ext:process-alive-p program))
         (sb-ext:process-kill program sb-unix:sigkill)
         (sb-ext:process-wait program))
@@ -212,25 +194,34 @@ children at that point."
 
   (it "bug4-agent-json-signals-stop-the-child-and-return-one-envelope"
     ;; NSHELL_AGENT=1 refuses sh, whose script it cannot check, so the child
-    ;; is cat reading a FIFO no one writes, which classifies :safe and blocks.
+    ;; is cat reading a FIFO, which classifies :safe and blocks. The test
+    ;; holds the FIFO's write end open, so cat waits in read; a FIFO opened
+    ;; for writing without blocking fails with ENXIO once no process has it
+    ;; open for reading, which shows that cat is gone.
     (dolist (signal (list (list sb-unix:sigint "SIGINT")
                          (list sb-unix:sigterm "SIGTERM")
                          (list sb-unix:sighup "SIGHUP")))
       (host-kit:with-temporary-directory (directory)
-        (let ((fifo (merge-pathnames "fifo" directory)))
-          (sb-posix:mkfifo (namestring fifo) #o600)
-          (multiple-value-bind (stdout stderr status groups)
-              (%signal-e2e-run directory
-                               (list "--json" "--command"
-                                     (format nil "cat ~A" (namestring fifo)))
-                               nil (first signal)
-                               :agent-p t :ready-children t)
-            (let ((envelope (%signal-e2e-expect-envelope stdout stderr status
-                                                         (second signal))))
-              (expect (json-at envelope "safety" "level") :to-equal "safe"))
-            (expect (length groups) :to-equal 1)
-            (%signal-e2e-wait (lambda () (%signal-e2e-group-gone-p (first groups)))
-                              "the interrupted process group to disappear" 3))))))
+        (let ((fifo (namestring (merge-pathnames "fifo" directory)))
+              (writer nil))
+          (sb-posix:mkfifo fifo #o600)
+          (unwind-protect
+               (multiple-value-bind (stdout stderr status)
+                   (%signal-e2e-run directory
+                                    (list "--json" "--command" (format nil "cat ~A" fifo))
+                                    nil (first signal)
+                                    :agent-p t
+                                    :ready-p (lambda ()
+                                               (setf writer (%signal-e2e-open-fifo-writer fifo))))
+                 (let ((envelope (%signal-e2e-expect-envelope stdout stderr status
+                                                              (second signal))))
+                   (expect (json-at envelope "safety" "level") :to-equal "safe"))
+                 (%signal-e2e-wait (lambda ()
+                                     (let ((probe (%signal-e2e-open-fifo-writer fifo)))
+                                       (when probe (sb-posix:close probe))
+                                       (null probe)))
+                                   "the interrupted cat to close the FIFO" 3))
+            (when writer (sb-posix:close writer)))))))
 
   (it "bug4-json-preserves-partial-output-and-stops-background-groups"
     (host-kit:with-temporary-directory (directory)
@@ -274,20 +265,30 @@ children at that point."
       (let* ((script (merge-pathnames "stopped.sh" directory))
              (pids (merge-pathnames "stopped.pids" directory))
              (trap-file (merge-pathnames "stopped.trap" directory))
+             (resumed (merge-pathnames "stopped.resumed" directory))
              (pid nil))
         (unwind-protect
              (progn
                (with-open-file (out script :direction :output)
+                 ;; RESUMED appears only if the shell goes on past its own
+                 ;; SIGSTOP before the test stops it.
                  (format out "trap 'printf TERM > ~A; exit 0' TERM~%~
-                              printf '%s\\n' \"$$\" > ~A~%kill -STOP $$~%sleep 30~%"
-                         (namestring trap-file) (namestring pids)))
+                              printf '%s\\n' \"$$\" > ~A~%kill -STOP $$~%~
+                              printf resumed > ~A~%sleep 30~%"
+                         (namestring trap-file) (namestring pids)
+                         (namestring resumed)))
                (multiple-value-bind (stdout stderr status)
                    (%signal-e2e-run
                     directory (list "--json" "--command" (format nil "sh ~A" (namestring script)))
                     (list pids) sb-unix:sigint
                     :ready-p (lambda ()
+                               ;; Without ps (the Nix build sandbox has none),
+                               ;; the stop shows as the shell not reaching the
+                               ;; line after kill -STOP within half a second.
                                (setf pid (first (%signal-e2e-pids pids)))
-                               (%signal-e2e-stopped-p pid)))
+                               (sleep 0.5)
+                               (expect (probe-file resumed) :to-be-null)
+                               t))
                  (%signal-e2e-expect-envelope stdout stderr status "SIGINT"))
                (expect (%signal-e2e-read trap-file) :to-equal "TERM")
                (%signal-e2e-wait (lambda () (%signal-e2e-group-gone-p pid))
